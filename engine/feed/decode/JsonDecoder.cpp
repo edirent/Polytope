@@ -6,7 +6,7 @@ DecodedEvent JsonDecoder::decode(const RawPacket& packet) const {
     return DecodedEvent{
         .type = "raw_json",
         .payload = packet.payload,
-        .sequence = packet.sequence,
+        .sequence = packet.header.packet_id,
     };
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -373,6 +374,38 @@ struct RawPacket {
      */
     std::string payload;
 };
+
+/**
+ * @brief Return current wall-clock time in nanoseconds.
+ */
+std::uint64_t now_wall_ns();
+
+/**
+ * @brief Return current monotonic time in nanoseconds.
+ */
+std::uint64_t now_monotonic_ns();
+
+/**
+ * @brief Compute CRC32 checksum over raw bytes.
+ */
+std::uint32_t crc32(const char* data, std::size_t size);
+
+/**
+ * @brief Compute CRC32 checksum over a string payload.
+ */
+std::uint32_t crc32(const std::string& payload);
+
+/**
+ * @brief Construct a complete RawPacket from raw payload bytes.
+ */
+RawPacket make_raw_packet(
+    SourceId source_id,
+    std::uint64_t connection_id,
+    std::uint64_t packet_id,
+    std::string payload,
+    Codec codec = Codec::None,
+    std::uint32_t flags = PacketNone
+);
 
 /**
  * @brief Check whether a flag is set.

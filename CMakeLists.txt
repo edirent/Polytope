@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(Boost REQUIRED COMPONENTS system)
+find_package(OpenSSL REQUIRED)
+find_package(Threads REQUIRED)
+
+enable_testing()
+
 add_executable(trading_engine
     engine/main.cpp
     engine/runtime/Runtime.cpp
@@ -60,3 +66,95 @@ add_executable(trading_engine
 target_include_directories(trading_engine PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
 )
+
+target_link_libraries(trading_engine PRIVATE
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Threads::Threads
+)
+
+add_executable(raw_ingest_tests
+    tests/unit/raw_ingest_tests.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogWriter.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(raw_ingest_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+foreach(test_case
+    WriteThenReadOnePacket
+    WriteThenReadMultiplePackets
+    WriteThenReadRealPolymarketPackets
+    DetectBadMagic
+    DetectCrcMismatch
+    DetectTruncatedHeader
+    DetectTruncatedPayload
+    ResetReader
+)
+    add_test(NAME ${test_case} COMMAND raw_ingest_tests ${test_case})
+endforeach()
+
+add_executable(validate_raw_log
+    tools/validate_raw_log.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(validate_raw_log PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+add_executable(source_runtime_tests
+    tests/unit/source_runtime_tests.cpp
+    engine/feed/source_runtime/WebSocketClient.cpp
+    engine/feed/source_runtime/HeartbeatController.cpp
+    engine/feed/source_runtime/ReconnectController.cpp
+)
+
+target_include_directories(source_runtime_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(source_runtime_tests PRIVATE
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Threads::Threads
+)
+
+foreach(test_case
+    WebSocketEndpointSetting
+    WebSocketConnectCallsOnOpen
+    WebSocketReceivesRawMessage
+    WebSocketSendPreservesPayload
+    WebSocketCloseCallback
+    WebSocketErrorCallbackOnConnectFailure
+    WebSocketErrorCallbackOnReadError
+    HeartbeatOpenAllowsImmediatePing
+    HeartbeatPingSentWaitingPong
+    HeartbeatPongRestoresOk
+    HeartbeatPongTimeout
+    HeartbeatStaleDetection
+    HeartbeatMarketMessageUpdatesLastMessage
+    ReconnectRequestReconnect
+    ReconnectBackoffNotElapsed
+    ReconnectBackoffElapsed
+    ReconnectAttemptState
+    ReconnectSuccessResetsBackoff
+    ReconnectFailureBackoff
+    ReconnectMaxAttemptsDisables
+    ReconnectDuplicateRequestDoesNotRefreshTimer
+    SourceRuntimeOpenSendsSubscription
+    SourceRuntimeRawMessageCapture
+    SourceRuntimePingPongOk
+    SourceRuntimePongTimeoutRequestsReconnect
+    SourceRuntimeStaleFeedRequestsReconnect
+    SourceRuntimeServerCloseRequestsReconnect
+    SourceRuntimeReconnectResubscribes
+)
+    add_test(NAME ${test_case} COMMAND source_runtime_tests ${test_case})
+endforeach()

@@ -1,27 +1,45 @@
 #include "feed/output/ReplayRunner.h"
 
+#include <memory>
+#include <stdexcept>
 #include <utility>
 
 namespace trading_engine::feed {
 
-void ReplayRunner::load(std::vector<RawPacket> packets) {
-    reader_.load(std::move(packets));
+ReplayRunner::ReplayRunner(std::string raw_log_path) {
+    if (!raw_log_path.empty()) {
+        load(std::move(raw_log_path));
+    }
 }
 
-void ReplayRunner::reset() noexcept {
-    reader_.reset();
+void ReplayRunner::load(std::string raw_log_path) {
+    reader_ = std::make_unique<RawLogReader>(std::move(raw_log_path));
+}
+
+void ReplayRunner::reset() {
+    if (reader_) {
+        reader_->reset();
+    }
 }
 
 bool ReplayRunner::replay_next(
     JsonDecoder& decoder,
     EventNormalizer& normalizer,
     EventBus& event_bus) {
-    auto packet = reader_.next();
-    if (!packet.has_value()) {
+    if (!reader_) {
         return false;
     }
 
-    event_bus.publish(normalizer.normalize(decoder.decode(*packet)));
+    auto packet = reader_->next();
+    if (packet.eof()) {
+        return false;
+    }
+
+    if (!packet.ok()) {
+        throw std::runtime_error("ReplayRunner raw read failed: " + packet.message);
+    }
+
+    event_bus.publish(normalizer.normalize(decoder.decode(*packet.packet)));
     return true;
 }
 

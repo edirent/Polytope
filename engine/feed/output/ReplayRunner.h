@@ -6,14 +6,17 @@
 #include "feed/raw_ingest/RawLogReader.h"
 #include "feed/raw_ingest/RawPacket.h"
 
-#include <vector>
+#include <memory>
+#include <string>
 
 namespace trading_engine::feed {
 
 class ReplayRunner {
 public:
-    void load(std::vector<RawPacket> packets);
-    void reset() noexcept;
+    explicit ReplayRunner(std::string raw_log_path = {});
+
+    void load(std::string raw_log_path);
+    void reset();
 
     [[nodiscard]] bool replay_next(
         JsonDecoder& decoder,
@@ -21,7 +24,7 @@ public:
         EventBus& event_bus);
 
 private:
-    RawLogReader reader_;
+    std::unique_ptr<RawLogReader> reader_;
 };
 
 }  // namespace trading_engine::feed
