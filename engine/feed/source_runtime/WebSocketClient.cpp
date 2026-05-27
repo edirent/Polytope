@@ -194,6 +194,9 @@ struct WebSocketClient::Impl {
     bool using_tls{false};
 
     std::atomic<bool> connected{false};
+    std::atomic<bool> disconnect_requested{false};
+    std::atomic<bool> read_loop_running{false};
+    std::atomic<bool> close_callback_emitted{false};
 
     std::mutex send_mutex;
 
@@ -201,6 +204,19 @@ struct WebSocketClient::Impl {
     MessageCallback on_message;
     CloseCallback on_close;
     ErrorCallback on_error;
+};
+
+struct ReadLoopGuard {
+    std::atomic<bool>& running;
+
+    explicit ReadLoopGuard(std::atomic<bool>& running_arg) noexcept
+        : running(running_arg) {
+        running.store(true);
+    }
+
+    ~ReadLoopGuard() {
+        running.store(false);
+    }
 };
 
 WebSocketClient::WebSocketClient(std::string endpoint)
@@ -254,6 +270,8 @@ void WebSocketClient::connect() {
         impl_->ioc.restart();
         impl_->plain_ws.reset();
         impl_->tls_ws.reset();
+        impl_->disconnect_requested.store(false);
+        impl_->close_callback_emitted.store(false);
 
         if (parsed.scheme == "wss") {
             impl_->using_tls = true;
@@ -319,6 +337,8 @@ void WebSocketClient::connect() {
 }
 
 void WebSocketClient::run() {
+    ReadLoopGuard guard(impl_->read_loop_running);
+
     while (impl_->connected.load()) {
         beast::flat_buffer buffer;
 
@@ -345,11 +365,18 @@ void WebSocketClient::run() {
         } catch (const beast::system_error& e) {
             impl_->connected.store(false);
 
-            if (e.code() != websocket::error::closed && impl_->on_error) {
+            if (!impl_->disconnect_requested.load() &&
+                e.code() != websocket::error::closed &&
+                impl_->on_error) {
                 impl_->on_error(e.what());
             }
 
-            if (impl_->on_close) {
+            bool expected = false;
+            if (impl_->close_callback_emitted.compare_exchange_strong(
+                    expected,
+                    true
+                ) &&
+                impl_->on_close) {
                 impl_->on_close();
             }
 
@@ -357,11 +384,16 @@ void WebSocketClient::run() {
         } catch (const std::exception& e) {
             impl_->connected.store(false);
 
-            if (impl_->on_error) {
+            if (!impl_->disconnect_requested.load() && impl_->on_error) {
                 impl_->on_error(e.what());
             }
 
-            if (impl_->on_close) {
+            bool expected = false;
+            if (impl_->close_callback_emitted.compare_exchange_strong(
+                    expected,
+                    true
+                ) &&
+                impl_->on_close) {
                 impl_->on_close();
             }
 
@@ -399,16 +431,35 @@ void WebSocketClient::disconnect() noexcept {
         return;
     }
 
+    impl_->disconnect_requested.store(true);
+
     try {
         beast::error_code ec;
 
-        if (impl_->using_tls && impl_->tls_ws) {
+        if (impl_->read_loop_running.load()) {
+            if (impl_->using_tls && impl_->tls_ws) {
+                auto& socket = beast::get_lowest_layer(*impl_->tls_ws).socket();
+                socket.shutdown(tcp::socket::shutdown_both, ec);
+                ec.clear();
+                socket.close(ec);
+            } else if (impl_->plain_ws) {
+                auto& socket = beast::get_lowest_layer(*impl_->plain_ws).socket();
+                socket.shutdown(tcp::socket::shutdown_both, ec);
+                ec.clear();
+                socket.close(ec);
+            }
+        } else if (impl_->using_tls && impl_->tls_ws) {
             impl_->tls_ws->close(websocket::close_code::normal, ec);
         } else if (impl_->plain_ws) {
             impl_->plain_ws->close(websocket::close_code::normal, ec);
         }
 
-        if (impl_->on_close) {
+        bool expected = false;
+        if (impl_->close_callback_emitted.compare_exchange_strong(
+                expected,
+                true
+            ) &&
+            impl_->on_close) {
             impl_->on_close();
         }
     } catch (...) {
