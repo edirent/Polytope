@@ -1,0 +1,6 @@
+markets:
+  - name: paper
+    venue: paper
+    enabled: true
+    symbols: []
+    quote_currency: USD

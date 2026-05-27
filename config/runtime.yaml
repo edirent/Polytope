@@ -1,0 +1,15 @@
+runtime:
+  mode: paper
+  log_level: INFO
+  threads:
+    feed: 1
+    decode: 1
+    state: 1
+    signal: 1
+    risk: 1
+    execution: 1
+  cpu_affinity:
+    enabled: false
+    cores: []
+  shutdown:
+    drain_timeout_ms: 5000

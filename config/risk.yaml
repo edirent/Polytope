@@ -1,0 +1,9 @@
+risk:
+  enabled: true
+  max_notional_usd: 0
+  max_symbol_exposure_usd: 0
+  max_open_orders: 0
+  vwap_window_seconds: 60
+  kill_switch:
+    enabled: true
+    fail_closed: true

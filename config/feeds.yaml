@@ -1,0 +1,5 @@
+feeds:
+  providers: []
+  reconnect_backoff_ms: 1000
+  sequence_tracking: true
+  capture_raw_messages: false
