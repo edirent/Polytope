@@ -1,5 +1,7 @@
 #pragma once
 
+#include "decode/public/DecodeTypes.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -42,74 +44,7 @@ constexpr std::uint32_t RAW_PACKET_MAGIC = 0x484C5852;  // "HLXR"
  */
 constexpr std::uint16_t RAW_PACKET_VERSION = 1;
 
-/**
- * @brief Identifies the logical data source that produced a packet.
- *
- * This is intentionally an enum instead of a string.
- *
- * A string-based source such as "market", "Market", "POLYMARKET_MARKET",
- * or "polymarket_market" is too loose and error-prone. An enum gives the
- * system a stable internal representation.
- *
- * The source id is used later by:
- *
- * - RawLogReader,
- * - JsonDecoder,
- * - EventNormalizer,
- * - ReplayRunner,
- * - HealthPublisher,
- * - and source-specific routing logic.
- */
-enum class SourceId : std::uint16_t {
-    /**
-     * @brief Default invalid source.
-     *
-     * If a RawPacket still has Unknown after construction, something upstream
-     * failed to label the packet correctly.
-     */
-    Unknown = 0,
-
-    /**
-     * @brief Polymarket public market-data WebSocket.
-     *
-     * Expected event types include:
-     *
-     * - book,
-     * - price_change,
-     * - tick_size_change,
-     * - last_trade_price,
-     * - best_bid_ask,
-     * - new_market,
-     * - market_resolved.
-     */
-    PolymarketMarket = 1,
-
-    /**
-     * @brief Polymarket authenticated user WebSocket.
-     *
-     * Expected event types include:
-     *
-     * - order,
-     * - trade.
-     */
-    PolymarketUser = 2,
-
-    /**
-     * @brief Polymarket sports-data WebSocket.
-     *
-     * Expected event types include:
-     *
-     * - sport_result.
-     */
-    PolymarketSports = 3,
-
-    /**
-     * @brief Polymarket real-time data stream.
-     *
-     * This is treated as an optional/reference stream in the MVP.
-     */
-    PolymarketRTDS = 4
-};
+using SourceId = trading_engine::decode::SourceId;
 
 /**
  * @brief Compression format of the packet payload.

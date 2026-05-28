@@ -1,7 +1,6 @@
 #pragma once
 
-#include "feed/decode/EventNormalizer.h"
-#include "feed/decode/JsonDecoder.h"
+#include "decode/core/DecodePipeline.h"
 #include "feed/raw_ingest/RawLogReader.h"
 #include "feed/raw_ingest/RawPacket.h"
 #include "feed/state/EntityStateStore.h"
@@ -46,8 +45,7 @@ public:
 
 private:
     std::unique_ptr<RawLogReader> reader_;
-    JsonDecoder decoder_;
-    EventNormalizer normalizer_;
+    trading_engine::decode::DecodePipeline pipeline_;
     EntityStateStore state_store_;
 };
 

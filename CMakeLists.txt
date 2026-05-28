@@ -12,6 +12,11 @@ find_package(Threads REQUIRED)
 
 enable_testing()
 
+add_subdirectory(engine/decode)
+
+# Until a smaller engine_decode_public target exists, downstream targets may
+# link engine_decode. State code may include only decode/public headers.
+
 add_executable(trading_engine
     engine/main.cpp
     engine/runtime/Runtime.cpp
@@ -25,8 +30,6 @@ add_executable(trading_engine
     engine/feed/raw_ingest/RawPacket.cpp
     engine/feed/raw_ingest/RawLogWriter.cpp
     engine/feed/raw_ingest/RawLogReader.cpp
-    engine/feed/decode/JsonDecoder.cpp
-    engine/feed/decode/EventNormalizer.cpp
     engine/feed/state/EntityStateStore.cpp
     engine/feed/state/StateHasher.cpp
     engine/feed/integrity/ConsistencyChecker.cpp
@@ -35,10 +38,6 @@ add_executable(trading_engine
     engine/feed/output/EventBus.cpp
     engine/feed/output/HealthPublisher.cpp
     engine/feed/output/ReplayRunner.cpp
-    engine/decode/Decompressor.cpp
-    engine/decode/JsonParser.cpp
-    engine/decode/BinaryParser.cpp
-    engine/decode/Normalizer.cpp
     engine/state/LOBEngine.cpp
     engine/state/SnapshotPublisher.cpp
     engine/state/SettlementState.cpp
@@ -68,6 +67,7 @@ target_include_directories(trading_engine PRIVATE
 )
 
 target_link_libraries(trading_engine PRIVATE
+    engine_decode
     Boost::system
     OpenSSL::SSL
     OpenSSL::Crypto
@@ -180,13 +180,16 @@ endforeach()
 add_executable(health_publisher_tests
     tests/unit/health_publisher_tests.cpp
     engine/feed/output/HealthPublisher.cpp
-    engine/feed/decode/JsonDecoder.cpp
     engine/feed/state/EntityStateStore.cpp
     engine/feed/state/StateHasher.cpp
 )
 
 target_include_directories(health_publisher_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(health_publisher_tests PRIVATE
+    engine_decode
 )
 
 foreach(test_case
@@ -214,6 +217,239 @@ foreach(test_case
 )
     add_test(NAME ${test_case} COMMAND event_bus_tests ${test_case})
 endforeach()
+
+add_executable(decode_json_decoder_tests
+    tests/unit/decode/json_decoder_test.cpp
+)
+
+target_include_directories(decode_json_decoder_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(decode_json_decoder_tests PRIVATE
+    engine_decode
+)
+
+foreach(test_case
+    JsonDecoder_ObjectPayload
+    JsonDecoder_ArrayPayload
+    JsonDecoder_PongIsControl
+    JsonDecoder_ControlIsNotMalformed
+    JsonDecoder_MalformedJson
+    JsonDecoder_UnsupportedScalarJson
+    JsonDecoder_EmptyPayload
+)
+    add_test(NAME ${test_case} COMMAND decode_json_decoder_tests ${test_case})
+endforeach()
+
+add_executable(decode_normalized_event_contract_tests
+    tests/unit/decode/normalized_event_contract_test.cpp
+)
+
+target_include_directories(decode_normalized_event_contract_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(decode_normalized_event_contract_tests PRIVATE
+    engine_decode
+)
+
+foreach(test_case
+    NormalizedEvent_DefaultConstructsSafely
+    NormalizedEvent_HeartbeatHasStableFields
+    NormalizedEvent_SnapshotHasStableEntityId
+    NormalizedEvent_DeltaHasStableEntityId
+    NormalizedEventBatch_CanHoldMultipleEvents
+    NormalizedEventBatch_RejectsOrCapsOverflow
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decode_normalized_event_contract_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decode_event_normalizer_tests
+    tests/unit/decode/event_normalizer_test.cpp
+)
+
+target_include_directories(decode_event_normalizer_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(decode_event_normalizer_tests PRIVATE
+    engine_decode
+)
+
+foreach(test_case
+    EventNormalizer_BookToSnapshot
+    EventNormalizer_PriceChangeToDelta
+    EventNormalizer_ControlPongToHeartbeat
+    EventNormalizer_UnknownToUnknown
+    EventNormalizer_ArrayWrappedPayloadWorks
+    EventNormalizer_OnePacketCanEmitMultipleEvents
+    EventNormalizer_MalformedJsonDoesNotCrash
+    PriceChange_UsesNestedAssetId
+    PriceChange_DoesNotUseTopLevelMarketAsEntityId
+    PriceChange_GroupsOnlySameAssetChanges
+    PriceChange_MultipleAssetsDoNotPolluteOneDelta
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decode_event_normalizer_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decode_normalized_event_compatibility_tests
+    tests/integration/decode/normalized_event_compatibility_test.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+)
+
+target_include_directories(decode_normalized_event_compatibility_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(decode_normalized_event_compatibility_tests PRIVATE
+    engine_decode
+)
+
+foreach(test_case
+    FeedEventNormalizer_EmitsDecodePublicNormalizedEvent
+    FeedNormalizedEventAlias_IsDecodePublicType
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decode_normalized_event_compatibility_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decode_pipeline_tests
+    tests/integration/decode/decode_pipeline_test.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(decode_pipeline_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(decode_pipeline_tests PRIVATE
+    engine_decode
+)
+
+foreach(test_case
+    DecodePipeline_BookProducesSnapshot
+    DecodePipeline_PriceChangeProducesDelta
+    DecodePipeline_ControlProducesHeartbeat
+    DecodePipeline_ArrayWrappedPayloadWorks
+    DecodePipeline_MalformedJsonProducesErrorOrNoCrash
+    DecodePipeline_UnsupportedCodecRejected
+    DecodePipeline_Market39ProducesExpectedCounts
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decode_pipeline_tests ${test_case}
+    )
+endforeach()
+
+add_executable(feed_e2e_decode_pipeline_tests
+    tests/integration/feed/feed_e2e_uses_decode_pipeline_test.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+    engine/feed/state/EntityStateStore.cpp
+    engine/feed/state/StateHasher.cpp
+)
+
+target_include_directories(feed_e2e_decode_pipeline_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(feed_e2e_decode_pipeline_tests PRIVATE
+    engine_decode
+)
+
+add_test(
+    NAME FeedE2E_UsesDecodePipelineMarket39StateStable
+    COMMAND feed_e2e_decode_pipeline_tests
+        FeedE2E_UsesDecodePipelineMarket39StateStable
+)
+
+add_executable(feed_decode_pipeline_tests
+    tests/integration/feed_decode/feed_decode_pipeline_test.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(feed_decode_pipeline_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/feed_decode
+)
+
+target_link_libraries(feed_decode_pipeline_tests PRIVATE
+    engine_decode
+)
+
+add_test(
+    NAME FeedDecodePipeline_Market39CountsStable
+    COMMAND feed_decode_pipeline_tests
+)
+
+add_executable(feed_decode_determinism_tests
+    tests/integration/feed_decode/feed_decode_determinism_test.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(feed_decode_determinism_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/feed_decode
+)
+
+target_link_libraries(feed_decode_determinism_tests PRIVATE
+    engine_decode
+)
+
+add_test(
+    NAME FeedDecodeDeterminism_Market39TraceHashStable
+    COMMAND feed_decode_determinism_tests
+)
+
+add_executable(feed_decode_adapter_tests
+    tests/integration/feed_decode/feed_decode_adapter_test.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+)
+
+target_include_directories(feed_decode_adapter_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/feed_decode
+)
+
+target_link_libraries(feed_decode_adapter_tests PRIVATE
+    engine_decode
+)
+
+add_test(
+    NAME FeedDecodeAdapter_PreservesRawPacketMetadata
+    COMMAND feed_decode_adapter_tests
+)
+
+add_executable(feed_decode_error_tests
+    tests/integration/feed_decode/feed_decode_error_test.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+)
+
+target_include_directories(feed_decode_error_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/feed_decode
+)
+
+target_link_libraries(feed_decode_error_tests PRIVATE
+    engine_decode
+)
+
+add_test(
+    NAME FeedDecodeError_HandlesDecodeFailures
+    COMMAND feed_decode_error_tests
+)
 
 add_executable(validate_raw_log
     tools/validate_raw_log.cpp
@@ -252,12 +488,14 @@ add_executable(verify_polymarket_pipeline
     tools/verify_polymarket_pipeline.cpp
     engine/feed/raw_ingest/RawPacket.cpp
     engine/feed/raw_ingest/RawLogReader.cpp
-    engine/feed/decode/JsonDecoder.cpp
-    engine/feed/decode/EventNormalizer.cpp
 )
 
 target_include_directories(verify_polymarket_pipeline PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(verify_polymarket_pipeline PRIVATE
+    engine_decode
 )
 
 add_test(
@@ -272,14 +510,16 @@ add_executable(replay_raw_log
     engine/feed/output/ReplayRunner.cpp
     engine/feed/raw_ingest/RawPacket.cpp
     engine/feed/raw_ingest/RawLogReader.cpp
-    engine/feed/decode/JsonDecoder.cpp
-    engine/feed/decode/EventNormalizer.cpp
     engine/feed/state/EntityStateStore.cpp
     engine/feed/state/StateHasher.cpp
 )
 
 target_include_directories(replay_raw_log PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(replay_raw_log PRIVATE
+    engine_decode
 )
 
 add_test(
@@ -317,12 +557,14 @@ add_executable(inspect_normalized_events
     tools/inspect_normalized_events.cpp
     engine/feed/raw_ingest/RawPacket.cpp
     engine/feed/raw_ingest/RawLogReader.cpp
-    engine/feed/decode/JsonDecoder.cpp
-    engine/feed/decode/EventNormalizer.cpp
 )
 
 target_include_directories(inspect_normalized_events PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(inspect_normalized_events PRIVATE
+    engine_decode
 )
 
 add_test(
@@ -335,8 +577,6 @@ add_executable(run_feed_e2e
     tools/run_feed_e2e.cpp
     engine/feed/raw_ingest/RawPacket.cpp
     engine/feed/raw_ingest/RawLogReader.cpp
-    engine/feed/decode/JsonDecoder.cpp
-    engine/feed/decode/EventNormalizer.cpp
     engine/feed/state/EntityStateStore.cpp
     engine/feed/state/StateHasher.cpp
     engine/feed/integrity/ConsistencyChecker.cpp
@@ -346,12 +586,30 @@ target_include_directories(run_feed_e2e PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
 )
 
+target_link_libraries(run_feed_e2e PRIVATE
+    engine_decode
+)
+
 add_test(
     NAME FeedE2EFixture
     COMMAND run_feed_e2e
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/polymarket/market_39.raw
         --repeat 1000
         --check-determinism
+)
+
+add_executable(bench_feed_decode_latency
+    tools/bench_feed_decode_latency.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(bench_feed_decode_latency PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(bench_feed_decode_latency PRIVATE
+    engine_decode
 )
 
 add_executable(run_live_feed_smoke

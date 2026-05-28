@@ -1,5 +1,5 @@
-#include "feed/decode/EventNormalizer.h"
-#include "feed/decode/JsonDecoder.h"
+#include "decode/core/DecodePipeline.h"
+#include "feed/decode/DecodeInputAdapter.h"
 #include "feed/integrity/ConsistencyChecker.h"
 #include "feed/raw_ingest/RawLogReader.h"
 #include "feed/state/EntityStateStore.h"
@@ -20,15 +20,15 @@ namespace {
 
 using trading_engine::feed::ConsistencyChecker;
 using trading_engine::feed::EntityStateStore;
-using trading_engine::feed::EventNormalizer;
-using trading_engine::feed::JsonDecodeStatus;
-using trading_engine::feed::JsonDecoder;
-using trading_engine::feed::NormalizationResult;
-using trading_engine::feed::NormalizedEvent;
-using trading_engine::feed::NormalizedEventType;
 using trading_engine::feed::RawLogReader;
 using trading_engine::feed::StateApplyCode;
 using trading_engine::feed::StateApplyResult;
+using trading_engine::feed::to_decode_input_view;
+using trading_engine::decode::DecodePipeline;
+using trading_engine::decode::JsonDecodeKind;
+using trading_engine::decode::NormalizedEvent;
+using trading_engine::decode::NormalizedEventBatch;
+using trading_engine::decode::NormalizedEventType;
 
 struct Percentiles {
     std::uint64_t p50{0};
@@ -137,19 +137,19 @@ Percentiles summarize_latency(const std::vector<std::uint64_t>& values) {
     return summary;
 }
 
-void count_decode_status(JsonDecodeStatus status, FeedE2ESummary& summary) {
+void count_decode_status(JsonDecodeKind status, FeedE2ESummary& summary) {
     switch (status) {
-        case JsonDecodeStatus::JsonObject:
+        case JsonDecodeKind::JsonObject:
             ++summary.decoded_json_object;
             break;
-        case JsonDecodeStatus::JsonArray:
+        case JsonDecodeKind::JsonArray:
             ++summary.decoded_json_array;
             break;
-        case JsonDecodeStatus::NonJsonControl:
+        case JsonDecodeKind::NonJsonControl:
             ++summary.decoded_control;
             break;
-        case JsonDecodeStatus::UnsupportedJson:
-        case JsonDecodeStatus::MalformedJson:
+        case JsonDecodeKind::UnsupportedJson:
+        case JsonDecodeKind::MalformedJson:
             ++summary.decode_errors;
             break;
     }
@@ -174,6 +174,7 @@ void count_event_type(const NormalizedEvent& event, FeedE2ESummary& summary) {
         case NormalizedEventType::StatusChange:
         case NormalizedEventType::LifecycleEvent:
         case NormalizedEventType::TradeEvent:
+        case NormalizedEventType::DecodeError:
             break;
     }
 }
@@ -196,7 +197,7 @@ std::string trace_row(
     out
         << event.packet_id << ','
         << event_index << ','
-        << trading_engine::feed::to_string(event.event_type) << ','
+        << trading_engine::decode::to_string(event.event_type) << ','
         << event.raw_type << ','
         << result.entity_id << ','
         << trading_engine::feed::to_string(result.code) << ','
@@ -269,8 +270,7 @@ RunResult run_once(
     bool collect_trace
 ) {
     RawLogReader reader(raw_path);
-    JsonDecoder decoder;
-    EventNormalizer normalizer;
+    DecodePipeline pipeline;
     EntityStateStore store;
     ConsistencyChecker consistency_checker;
 
@@ -296,34 +296,31 @@ RunResult run_once(
 
         ++result.summary.packets_read;
 
-        const auto decoded = decoder.decode(*raw_result.packet);
+        NormalizedEventBatch batch;
+        const auto decoded = pipeline.decode(
+            to_decode_input_view(*raw_result.packet),
+            &batch
+        );
         const auto t2 = now_ns();
 
-        count_decode_status(decoded.status, result.summary);
-
-        NormalizationResult normalized;
-
-        if (decoded.has_json_event_payload()) {
-            normalized =
-                normalizer.normalize_json(*raw_result.packet, decoded.json);
-        } else if (decoded.has_control_payload()) {
-            normalized =
-                normalizer.normalize_control(
-                    *raw_result.packet,
-                    decoded.control_payload
-                );
-        } else {
-            ++result.summary.decode_errors;
-        }
+        count_decode_status(decoded.payload_kind, result.summary);
 
         const auto t3 = now_ns();
 
-        if (!normalized.ok()) {
+        if (!decoded.ok()) {
+            if (decoded.payload_kind == JsonDecodeKind::JsonObject ||
+                decoded.payload_kind == JsonDecodeKind::JsonArray ||
+                decoded.payload_kind == JsonDecodeKind::NonJsonControl) {
+                ++result.summary.normalization_errors;
+            }
+        }
+
+        if (batch.overflowed) {
             ++result.summary.normalization_errors;
         }
 
         const auto applied = apply_state(
-            normalized.events,
+            batch.events,
             store,
             result.summary,
             trace
@@ -338,7 +335,7 @@ RunResult run_once(
         );
         const auto t5 = now_ns();
 
-        for (const auto& event : normalized.events) {
+        for (const auto& event : batch.events) {
             count_event_type(event, result.summary);
         }
 

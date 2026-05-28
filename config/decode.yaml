@@ -1,0 +1,30 @@
+decode:
+  venue: polymarket
+  source_id: polymarket_market_ws
+
+  codec:
+    default: none
+    allow_gzip: true
+    allow_lz4: false
+    allow_zstd: false
+
+  limits:
+    max_payload_bytes: 1048576
+    max_events_per_packet: 64
+    max_price_levels_per_event: 256
+    max_warnings_per_packet: 8
+
+  behavior:
+    unknown_event_policy: emit_unknown
+    malformed_json_policy: emit_error
+    control_message_policy: emit_heartbeat
+    price_change_asset_routing: nested_asset_id_required
+
+  metrics:
+    enable_latency_histogram: true
+    enable_event_counters: true
+
+  replay:
+    deterministic_hash: true
+    fail_on_malformed_fixture: true
+

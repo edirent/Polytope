@@ -1,5 +1,7 @@
 #include "feed/output/ReplayRunner.h"
 
+#include "feed/decode/DecodeInputAdapter.h"
+
 #include <fstream>
 #include <stdexcept>
 #include <utility>
@@ -122,28 +124,21 @@ ReplaySummary ReplayRunner::replay_to_csv(std::ostream& out) {
 
         ++summary.packets_read;
 
-        const auto decoded = decoder_.decode(*packet.packet);
-        NormalizationResult normalized;
+        trading_engine::decode::NormalizedEventBatch batch;
+        const auto decoded = pipeline_.decode(
+            to_decode_input_view(*packet.packet),
+            &batch
+        );
 
-        if (decoded.has_json_event_payload()) {
-            normalized = normalizer_.normalize_json(*packet.packet, decoded.json);
-        } else if (decoded.has_control_payload()) {
-            normalized =
-                normalizer_.normalize_control(
-                    *packet.packet,
-                    decoded.control_payload
-                );
-        } else {
-            throw std::runtime_error("ReplayRunner decode failed: " + decoded.message);
-        }
-
-        if (!normalized.ok()) {
-            throw std::runtime_error("ReplayRunner normalize failed: " + normalized.error);
+        if (!decoded.ok()) {
+            throw std::runtime_error(
+                "ReplayRunner decode failed: " + decoded.error.message
+            );
         }
 
         std::uint64_t event_index = 0;
 
-        for (const auto& event : normalized.events) {
+        for (const auto& event : batch.events) {
             const StateApplyResult apply_result = state_store_.apply(event);
 
             write_trace_row(

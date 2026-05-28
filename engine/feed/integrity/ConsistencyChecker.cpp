@@ -77,6 +77,13 @@ ConsistencyResult ConsistencyChecker::check_event(
                 "unknown normalized event type"
             );
 
+        case NormalizedEventType::DecodeError:
+            return result(
+                ConsistencyCode::DecodeError,
+                entity_id,
+                "decode error event"
+            );
+
         case NormalizedEventType::TradeEvent:
             if (entity_id.empty()) {
                 return result(

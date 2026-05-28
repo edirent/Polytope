@@ -1,5 +1,5 @@
-#include "feed/decode/EventNormalizer.h"
-#include "feed/decode/JsonDecoder.h"
+#include "decode/core/DecodePipeline.h"
+#include "feed/decode/DecodeInputAdapter.h"
 #include "feed/raw_ingest/RawLogReader.h"
 
 #include <cstdint>
@@ -9,14 +9,14 @@
 
 namespace {
 
-using trading_engine::feed::EventNormalizer;
-using trading_engine::feed::JsonDecodeStatus;
-using trading_engine::feed::JsonDecoder;
-using trading_engine::feed::NormalizationResult;
-using trading_engine::feed::NormalizedEvent;
-using trading_engine::feed::NormalizedEventType;
+using trading_engine::decode::DecodePipeline;
+using trading_engine::decode::JsonDecodeKind;
+using trading_engine::decode::NormalizedEvent;
+using trading_engine::decode::NormalizedEventBatch;
+using trading_engine::decode::NormalizedEventType;
 using trading_engine::feed::RawLogReadResult;
 using trading_engine::feed::RawLogReader;
+using trading_engine::feed::to_decode_input_view;
 
 struct NormalizedInspection {
     std::uint64_t total_packets{0};
@@ -40,24 +40,24 @@ struct NormalizedInspection {
 };
 
 void count_decode_status(
-    JsonDecodeStatus status,
+    JsonDecodeKind status,
     NormalizedInspection& inspection
 ) {
     switch (status) {
-        case JsonDecodeStatus::JsonObject:
+        case JsonDecodeKind::JsonObject:
             ++inspection.decode_json_object;
             break;
 
-        case JsonDecodeStatus::JsonArray:
+        case JsonDecodeKind::JsonArray:
             ++inspection.decode_json_array;
             break;
 
-        case JsonDecodeStatus::NonJsonControl:
+        case JsonDecodeKind::NonJsonControl:
             ++inspection.decode_control;
             break;
 
-        case JsonDecodeStatus::UnsupportedJson:
-        case JsonDecodeStatus::MalformedJson:
+        case JsonDecodeKind::UnsupportedJson:
+        case JsonDecodeKind::MalformedJson:
             ++inspection.decode_errors;
             break;
     }
@@ -99,20 +99,19 @@ void count_event_type(
         case NormalizedEventType::Unknown:
             ++inspection.unknown_events;
             break;
+
+        case NormalizedEventType::DecodeError:
+            ++inspection.unknown_events;
+            break;
     }
 }
 
-void count_normalization_result(
-    const NormalizationResult& result,
+void count_batch(
+    const NormalizedEventBatch& result,
     NormalizedInspection& inspection
 ) {
     inspection.normalization_warnings +=
         static_cast<std::uint64_t>(result.warnings.size());
-
-    if (!result.ok()) {
-        ++inspection.normalization_errors;
-        return;
-    }
 
     for (const auto& event : result.events) {
         count_event_type(event, inspection);
@@ -143,8 +142,7 @@ void print_inspection(const NormalizedInspection& inspection) {
 
 int inspect(const std::string& raw_path) {
     RawLogReader reader(raw_path);
-    JsonDecoder decoder;
-    EventNormalizer normalizer;
+    DecodePipeline pipeline;
     NormalizedInspection inspection;
 
     while (true) {
@@ -160,23 +158,24 @@ int inspect(const std::string& raw_path) {
 
         ++inspection.total_packets;
 
-        const auto decoded = decoder.decode(*raw_result.packet);
-        count_decode_status(decoded.status, inspection);
+        NormalizedEventBatch batch;
+        const auto decoded = pipeline.decode(
+            to_decode_input_view(*raw_result.packet),
+            &batch
+        );
 
-        if (decoded.has_json_event_payload()) {
-            count_normalization_result(
-                normalizer.normalize_json(*raw_result.packet, decoded.json),
-                inspection
-            );
-        } else if (decoded.has_control_payload()) {
-            count_normalization_result(
-                normalizer.normalize_control(
-                    *raw_result.packet,
-                    decoded.control_payload
-                ),
-                inspection
-            );
+        count_decode_status(decoded.payload_kind, inspection);
+
+        if (!decoded.ok()) {
+            if (decoded.payload_kind == JsonDecodeKind::JsonObject ||
+                decoded.payload_kind == JsonDecodeKind::JsonArray ||
+                decoded.payload_kind == JsonDecodeKind::NonJsonControl) {
+                ++inspection.normalization_errors;
+            }
+            continue;
         }
+
+        count_batch(batch, inspection);
     }
 
     print_inspection(inspection);

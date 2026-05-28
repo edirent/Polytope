@@ -1,6 +1,6 @@
 #pragma once
 
-#include "feed/decode/EventNormalizer.h"
+#include "feed/decode/NormalizedEvent.h"
 #include "feed/output/HealthPublisher.h"
 #include "feed/state/EntityStateStore.h"
 

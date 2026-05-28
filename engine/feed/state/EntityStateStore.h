@@ -1,6 +1,6 @@
 #pragma once
 
-#include "feed/decode/EventNormalizer.h"
+#include "decode/public/NormalizedEvent.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +11,12 @@
 #include <vector>
 
 namespace trading_engine::feed {
+
+using trading_engine::decode::BookLevel;
+using trading_engine::decode::NormalizedEvent;
+using trading_engine::decode::NormalizedEventType;
+using trading_engine::decode::NormalizedSide;
+using trading_engine::decode::PriceLevelChange;
 
 /**
  * @brief Lifecycle state of one logical market/entity.

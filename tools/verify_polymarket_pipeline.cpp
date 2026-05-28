@@ -1,5 +1,6 @@
-#include "feed/decode/EventNormalizer.h"
-#include "feed/decode/JsonDecoder.h"
+#include "decode/core/DecodePipeline.h"
+#include "decode/json/JsonDecodeResult.h"
+#include "feed/decode/DecodeInputAdapter.h"
 #include "feed/raw_ingest/RawLogReader.h"
 
 #include <cstdint>
@@ -10,12 +11,14 @@
 
 namespace {
 
-using trading_engine::feed::EventNormalizer;
-using trading_engine::feed::JsonDecoder;
-using trading_engine::feed::NormalizedEvent;
-using trading_engine::feed::NormalizedEventType;
+using trading_engine::decode::DecodePipeline;
+using trading_engine::decode::JsonDecodeKind;
+using trading_engine::decode::NormalizedEvent;
+using trading_engine::decode::NormalizedEventBatch;
+using trading_engine::decode::NormalizedEventType;
 using trading_engine::feed::RawLogReadResult;
 using trading_engine::feed::RawLogReader;
+using trading_engine::feed::to_decode_input_view;
 
 struct PipelineCounts {
     std::uint64_t packets{0};
@@ -52,6 +55,7 @@ void count_event_type(const NormalizedEvent& event, PipelineCounts& counts) {
         case NormalizedEventType::StatusChange:
         case NormalizedEventType::LifecycleEvent:
         case NormalizedEventType::TradeEvent:
+        case NormalizedEventType::DecodeError:
             break;
     }
 }
@@ -103,8 +107,7 @@ bool expect_market_39_counts(const PipelineCounts& counts) {
 
 int verify(const std::string& raw_path, bool expect_market_39) {
     RawLogReader reader(raw_path);
-    JsonDecoder decoder;
-    EventNormalizer normalizer;
+    DecodePipeline pipeline;
     PipelineCounts counts;
     std::vector<NormalizedEvent> normalized_events;
 
@@ -125,41 +128,40 @@ int verify(const std::string& raw_path, bool expect_market_39) {
 
         ++counts.packets;
 
-        const auto decoded = decoder.decode(*read_result.packet);
+        NormalizedEventBatch batch;
+        const auto decoded = pipeline.decode(
+            to_decode_input_view(*read_result.packet),
+            &batch
+        );
 
-        trading_engine::feed::NormalizationResult normalized;
-        if (decoded.has_json_event_payload()) {
+        if (decoded.payload_kind == JsonDecodeKind::JsonObject ||
+            decoded.payload_kind == JsonDecodeKind::JsonArray) {
             ++counts.json_packets;
-            normalized =
-                normalizer.normalize_json(*read_result.packet, decoded.json);
-        } else if (decoded.has_control_payload()) {
+        } else if (decoded.payload_kind == JsonDecodeKind::NonJsonControl) {
             ++counts.control_packets;
-            normalized =
-                normalizer.normalize_control(
-                    *read_result.packet,
-                    decoded.control_payload
-                );
-        } else {
+        }
+
+        if (!decoded.ok()) {
             ++counts.fatal_errors;
             std::cerr
                 << "decode failed at packet_id "
                 << read_result.packet->header.packet_id
-                << ": " << decoded.message
+                << ": " << decoded.error.message
                 << '\n';
             continue;
         }
 
-        if (!normalized.ok()) {
+        if (batch.overflowed) {
             ++counts.fatal_errors;
             std::cerr
                 << "normalize failed at packet_id "
                 << read_result.packet->header.packet_id
-                << ": " << normalized.error
+                << ": too many normalized events in packet"
                 << '\n';
             continue;
         }
 
-        for (const auto& event : normalized.events) {
+        for (const auto& event : batch.events) {
             count_event_type(event, counts);
             normalized_events.push_back(event);
         }

@@ -97,6 +97,7 @@ StateApplyResult EntityStateStore::apply(const NormalizedEvent& event) {
             return apply_heartbeat(event);
 
         case NormalizedEventType::Unknown:
+        case NormalizedEventType::DecodeError:
         default:
             return apply_unknown(event);
     }
