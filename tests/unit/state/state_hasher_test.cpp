@@ -1,4 +1,4 @@
-#include "feed/state/StateHasher.h"
+#include "state/StateHasher.h"
 
 #include <chrono>
 #include <cstdint>
@@ -11,9 +11,9 @@
 
 namespace {
 
-using trading_engine::feed::EntityState;
-using trading_engine::feed::EntityStatus;
-using trading_engine::feed::StateHasher;
+using trading_engine::state::EntityState;
+using trading_engine::state::EntityStatus;
+using trading_engine::state::StateHasher;
 
 [[noreturn]] void fail(const std::string& message) {
     throw std::runtime_error(message);

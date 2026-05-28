@@ -1,0 +1,20 @@
+polygon:
+  ws_url: "${POLYGON_RPC_WS_URL}"
+  http_url: "${POLYGON_RPC_HTTP_URL}"
+
+chain_confirm:
+  enabled: true
+  mode: paper_or_research_only
+
+  log_subscription:
+    include_removed: true
+    narrow_filter: true
+
+  reconciliation:
+    pending_window_ms: 5000
+    max_candidate_matches: 8
+    expire_unmatched_ms: 10000
+
+  backfill:
+    enabled: true
+    block_lag_tolerance: 6
