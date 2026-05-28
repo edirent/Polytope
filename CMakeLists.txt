@@ -16,6 +16,7 @@ add_subdirectory(engine/decode)
 add_subdirectory(engine/chain_confirm)
 add_subdirectory(engine/state)
 add_subdirectory(oracle)
+add_subdirectory(engine/signal)
 
 # Until a smaller engine_decode_public target exists, downstream targets may
 # link engine_decode. State code may include only decode/public headers.
@@ -43,10 +44,6 @@ add_executable(trading_engine
     engine/state/SnapshotPublisher.cpp
     engine/state/SettlementState.cpp
     engine/state/VersionedState.cpp
-    engine/signal/SignalEngine.cpp
-    engine/signal/BundleScanner.cpp
-    engine/signal/EdgeCalculator.cpp
-    engine/signal/OpportunityRanker.cpp
     engine/risk/RiskEngine.cpp
     engine/risk/VWAPSimulator.cpp
     engine/risk/ExposureManager.cpp
@@ -70,6 +67,7 @@ target_include_directories(trading_engine PRIVATE
 target_link_libraries(trading_engine PRIVATE
     engine_state
     engine_decode
+    engine_signal
     Boost::system
     OpenSSL::SSL
     OpenSSL::Crypto
@@ -152,6 +150,244 @@ foreach(test_case
     MarketStateView_ReturnsBookAndChainFields
 )
     add_test(NAME ${test_case} COMMAND market_state_view_tests ${test_case})
+endforeach()
+
+add_executable(signal_types_tests
+    tests/unit/signal/signal_types_test.cpp
+)
+
+target_link_libraries(signal_types_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    SignalConfig_DefaultsAreSafe
+    OpportunityIntent_DefaultIsCandidateOnly
+    SignalRunResult_DefaultCountersZero
+)
+    add_test(NAME ${test_case} COMMAND signal_types_tests ${test_case})
+endforeach()
+
+add_executable(signal_oracle_artifact_reader_tests
+    tests/unit/signal/oracle_artifact_reader_test.cpp
+)
+
+target_link_libraries(signal_oracle_artifact_reader_tests PRIVATE
+    engine_signal
+)
+
+target_compile_definitions(signal_oracle_artifact_reader_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+foreach(test_case
+    OracleArtifactReader_LoadsFixtureBundles
+    OracleArtifactReader_RejectsMissingManifest
+    OracleArtifactReader_RejectsChecksumMismatch
+    OracleArtifactReader_RejectsUnsupportedVersion
+    OracleArtifactReader_RejectsDuplicateBundleId
+)
+    add_test(NAME ${test_case} COMMAND signal_oracle_artifact_reader_tests ${test_case})
+endforeach()
+
+add_executable(signal_market_snapshot_reader_tests
+    tests/unit/signal/market_snapshot_reader_test.cpp
+)
+
+target_link_libraries(signal_market_snapshot_reader_tests PRIVATE
+    engine_signal
+)
+
+target_compile_definitions(signal_market_snapshot_reader_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+foreach(test_case
+    MarketSnapshotReader_ReadsRequiredSnapshots
+    MarketSnapshotReader_RejectsMissingSnapshot
+    MarketSnapshotReader_RejectsRecoveringSnapshot
+    MarketSnapshotReader_RejectsCrossedSnapshot
+    MarketSnapshotReader_RejectsNotUsableForDepth
+    MarketSnapshotReader_RequiresUsableForSignalWhenConfigured
+    MarketSnapshotReader_MarketStateViewAdapterReadsSnapshot
+)
+    add_test(NAME ${test_case} COMMAND signal_market_snapshot_reader_tests ${test_case})
+endforeach()
+
+add_executable(signal_vwap_precheck_tests
+    tests/unit/signal/vwap_precheck_test.cpp
+)
+
+target_link_libraries(signal_vwap_precheck_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    VWAPPrecheck_BuyConsumesAsks
+    VWAPPrecheck_MultiLevelBuyComputesVWAP
+    VWAPPrecheck_RejectsInsufficientDepth
+    VWAPPrecheck_RejectsMissingAskSide
+    VWAPPrecheck_RejectsInvalidQuantity
+    VWAPPrecheck_RejectsUnsupportedSellLegInV0
+)
+    add_test(NAME ${test_case} COMMAND signal_vwap_precheck_tests ${test_case})
+endforeach()
+
+add_executable(signal_fee_model_tests
+    tests/unit/signal/fee_model_test.cpp
+)
+
+target_link_libraries(signal_fee_model_tests PRIVATE
+    engine_signal
+)
+
+add_test(NAME FeeModel_ReturnsDefaultFee
+    COMMAND signal_fee_model_tests FeeModel_ReturnsDefaultFee
+)
+
+add_executable(signal_latency_buffer_model_tests
+    tests/unit/signal/latency_buffer_model_test.cpp
+)
+
+target_link_libraries(signal_latency_buffer_model_tests PRIVATE
+    engine_signal
+)
+
+add_test(NAME LatencyBufferModel_ReturnsDefaultBuffer
+    COMMAND signal_latency_buffer_model_tests LatencyBufferModel_ReturnsDefaultBuffer
+)
+
+add_executable(signal_edge_calculator_tests
+    tests/unit/signal/edge_calculator_test.cpp
+)
+
+target_link_libraries(signal_edge_calculator_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    EdgeCalculator_ComputesPositiveEdge
+    EdgeCalculator_SubtractsFee
+    EdgeCalculator_SubtractsLatencyBuffer
+    EdgeCalculator_RejectsBelowMinEdge
+    EdgeCalculator_HandlesZeroCost
+)
+    add_test(NAME ${test_case} COMMAND signal_edge_calculator_tests ${test_case})
+endforeach()
+
+add_executable(signal_opportunity_ranker_tests
+    tests/unit/signal/opportunity_ranker_test.cpp
+)
+
+target_link_libraries(signal_opportunity_ranker_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    OpportunityRanker_SortsPaperOpportunitiesFirst
+    OpportunityRanker_SortsByEdgeDescending
+    OpportunityRanker_StableTieBreakByBundleId
+    OpportunityRanker_DeterministicOrdering
+)
+    add_test(NAME ${test_case} COMMAND signal_opportunity_ranker_tests ${test_case})
+endforeach()
+
+add_executable(signal_paper_intent_publisher_tests
+    tests/unit/signal/paper_intent_publisher_test.cpp
+)
+
+target_link_libraries(signal_paper_intent_publisher_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    CapturingIntentPublisher_CapturesIntent
+    CapturingIntentPublisher_PreservesOrder
+    JsonlIntentWriter_WritesValidJsonLine
+    JsonlIntentWriter_DoesNotRequireExecution
+)
+    add_test(NAME ${test_case} COMMAND signal_paper_intent_publisher_tests ${test_case})
+endforeach()
+
+add_executable(signal_workflow_small_fixture_tests
+    tests/integration/signal/signal_workflow_small_fixture_test.cpp
+)
+
+target_link_libraries(signal_workflow_small_fixture_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    SignalEngine_ScansBundles
+    SignalEngine_PublishesPaperOpportunityWhenEdgePositive
+)
+    add_test(NAME ${test_case} COMMAND signal_workflow_small_fixture_tests ${test_case})
+endforeach()
+
+add_executable(signal_rejects_bad_state_tests
+    tests/integration/signal/signal_rejects_bad_state_test.cpp
+)
+
+target_link_libraries(signal_rejects_bad_state_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    SignalEngine_PublishesRejections
+    SignalEngine_RejectsBadMarketState
+)
+    add_test(NAME ${test_case} COMMAND signal_rejects_bad_state_tests ${test_case})
+endforeach()
+
+add_executable(signal_rejects_insufficient_depth_tests
+    tests/integration/signal/signal_rejects_insufficient_depth_test.cpp
+)
+
+target_link_libraries(signal_rejects_insufficient_depth_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    SignalEngine_RejectsInsufficientDepth
+    SignalEngine_RejectsLowEdge
+)
+    add_test(NAME ${test_case} COMMAND signal_rejects_insufficient_depth_tests ${test_case})
+endforeach()
+
+add_executable(signal_determinism_tests
+    tests/integration/signal/signal_determinism_test.cpp
+)
+
+target_link_libraries(signal_determinism_tests PRIVATE
+    engine_signal
+)
+
+add_test(NAME SignalEngine_OutputHashDeterministic
+    COMMAND signal_determinism_tests SignalEngine_OutputHashDeterministic
+)
+
+add_executable(verify_signal_workflow_tests
+    tests/integration/signal/verify_signal_workflow_test.cpp
+)
+
+target_compile_definitions(verify_signal_workflow_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    VERIFY_SIGNAL_WORKFLOW_BIN="$<TARGET_FILE:verify_signal_workflow>"
+)
+
+add_dependencies(verify_signal_workflow_tests verify_signal_workflow)
+
+foreach(test_case
+    VerifySignalWorkflow_SmallFixtureRuns
+    VerifySignalWorkflow_Deterministic
+    VerifySignalWorkflow_EmitsSummary
+    VerifySignalWorkflow_DoesNotRequireNetwork
+    VerifySignalWorkflow_PositiveFixtureEmitsPaperOpportunity
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND verify_signal_workflow_tests ${test_case}
+    )
 endforeach()
 
 add_executable(market_state_event_tests

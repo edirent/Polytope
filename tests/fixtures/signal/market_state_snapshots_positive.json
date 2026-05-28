@@ -1,0 +1,60 @@
+{
+  "snapshots": [
+    {
+      "entity_id": "asset_yes",
+      "market_id": "m1",
+      "version": 20,
+      "live": true,
+      "recovering": false,
+      "closed": false,
+      "resolved": false,
+      "crossed": false,
+      "has_bid": true,
+      "has_ask": true,
+      "best_bid_tick": 390000,
+      "best_ask_tick": 400000,
+      "bid_count": 2,
+      "ask_count": 2,
+      "bids": [
+        {"price_tick": 390000, "price": 0.39, "size": 10},
+        {"price_tick": 380000, "price": 0.38, "size": 10}
+      ],
+      "asks": [
+        {"price_tick": 400000, "price": 0.40, "size": 10},
+        {"price_tick": 410000, "price": 0.41, "size": 10}
+      ],
+      "state_hash": 301,
+      "quality": "Good",
+      "usable_for_depth": true,
+      "usable_for_signal": true
+    },
+    {
+      "entity_id": "asset_no",
+      "market_id": "m1",
+      "version": 20,
+      "live": true,
+      "recovering": false,
+      "closed": false,
+      "resolved": false,
+      "crossed": false,
+      "has_bid": true,
+      "has_ask": true,
+      "best_bid_tick": 390000,
+      "best_ask_tick": 400000,
+      "bid_count": 2,
+      "ask_count": 2,
+      "bids": [
+        {"price_tick": 390000, "price": 0.39, "size": 10},
+        {"price_tick": 380000, "price": 0.38, "size": 10}
+      ],
+      "asks": [
+        {"price_tick": 400000, "price": 0.40, "size": 10},
+        {"price_tick": 410000, "price": 0.41, "size": 10}
+      ],
+      "state_hash": 302,
+      "quality": "Good",
+      "usable_for_depth": true,
+      "usable_for_signal": true
+    }
+  ]
+}
