@@ -11,6 +11,11 @@ namespace {
 
 constexpr std::int64_t kPriceScale = 1'000'000;
 
+enum class CtfExchangeSide : std::uint8_t {
+    Buy = 0,
+    Sell = 1
+};
+
 bool is_zero_asset(const std::string& asset_id) {
     return asset_id == "0";
 }
@@ -48,34 +53,106 @@ std::int64_t price_tick_from_ratio(
     return static_cast<std::int64_t>(scaled + 0.5L);
 }
 
-}  // namespace
+void fill_log_metadata(OrderFilledEvent& event, const EthLog& log) {
+    using namespace eth_log_decoder;
 
-OrderFilledDecodeResult OrderFilledDecoder::decode(const EthLog& log) const {
+    event.block_number = log.block_number;
+    event.tx_hash = normalize_hex(log.tx_hash);
+    event.log_index = log.log_index;
+    event.removed = log.removed;
+}
+
+OrderFilledDecodeResult decode_ctf_exchange_v2(const EthLog& log) {
     using namespace eth_log_decoder;
 
     OrderFilledDecodeResult result;
 
-    if (log.topics.empty() ||
-        normalize_hex(log.topics[0]) != normalize_hex(kOrderFilledTopic0)) {
-        result.error = "wrong OrderFilled topic";
-        return result;
-    }
-
     if (log.topics.size() != 4) {
-        result.error = "OrderFilled log must have 4 topics";
+        result.error = "CTF Exchange V2 OrderFilled log must have 4 topics";
         return result;
     }
 
     if (!is_hex_32_word(log.topics[1]) ||
         !is_hex_32_word(log.topics[2]) ||
         !is_hex_32_word(log.topics[3])) {
-        result.error = "OrderFilled indexed topics are malformed";
+        result.error = "CTF Exchange V2 OrderFilled indexed topics are malformed";
+        return result;
+    }
+
+    const auto words = split_data_words(log.data);
+    if (words.size() != 7) {
+        result.error =
+            "CTF Exchange V2 OrderFilled data must contain 7 ABI words";
+        return result;
+    }
+
+    const auto side = uint256_to_u64(words[0]);
+    const auto maker_amount = uint256_to_u64(words[2]);
+    const auto taker_amount = uint256_to_u64(words[3]);
+    const auto fee = uint256_to_u64(words[4]);
+
+    if (!side || *side > 255 || !maker_amount || !taker_amount || !fee) {
+        result.error = "CTF Exchange V2 OrderFilled numeric field overflow";
+        return result;
+    }
+
+    const std::string token_id = uint256_to_decimal_string(words[1]);
+    if (token_id.empty()) {
+        result.error = "CTF Exchange V2 OrderFilled missing token id";
+        return result;
+    }
+
+    result.event.order_hash = normalize_hex(log.topics[1]);
+    result.event.maker = topic_to_address(log.topics[2]);
+    result.event.taker = topic_to_address(log.topics[3]);
+    result.event.side = static_cast<std::uint8_t>(*side);
+    result.event.token_id = token_id;
+    result.event.maker_amount_filled = *maker_amount;
+    result.event.taker_amount_filled = *taker_amount;
+    result.event.fee = *fee;
+    result.event.builder = normalize_hex(words[5]);
+    result.event.metadata = normalize_hex(words[6]);
+    fill_log_metadata(result.event, log);
+
+    if (result.event.side == static_cast<std::uint8_t>(CtfExchangeSide::Buy)) {
+        result.event.maker_asset_id = "0";
+        result.event.taker_asset_id = token_id;
+    } else if (
+        result.event.side == static_cast<std::uint8_t>(CtfExchangeSide::Sell)) {
+        result.event.maker_asset_id = token_id;
+        result.event.taker_asset_id = "0";
+    }
+
+    if (result.event.maker.empty() || result.event.taker.empty()) {
+        result.error = "CTF Exchange V2 OrderFilled log contains malformed addresses";
+        result.event = {};
+        return result;
+    }
+
+    result.ok = true;
+    return result;
+}
+
+OrderFilledDecodeResult decode_legacy_order_filled(const EthLog& log) {
+    using namespace eth_log_decoder;
+
+    OrderFilledDecodeResult result;
+
+    if (log.topics.size() != 4) {
+        result.error = "legacy OrderFilled log must have 4 topics";
+        return result;
+    }
+
+    if (!is_hex_32_word(log.topics[1]) ||
+        !is_hex_32_word(log.topics[2]) ||
+        !is_hex_32_word(log.topics[3])) {
+        result.error = "legacy OrderFilled indexed topics are malformed";
         return result;
     }
 
     const auto words = split_data_words(log.data);
     if (words.size() != 5) {
-        result.error = "OrderFilled data must contain 5 uint256 words";
+        result.error = "legacy OrderFilled data must contain 5 uint256 words";
         return result;
     }
 
@@ -83,7 +160,7 @@ OrderFilledDecodeResult OrderFilledDecoder::decode(const EthLog& log) const {
     auto taker_amount = uint256_to_u64(words[3]);
     auto fee = uint256_to_u64(words[4]);
     if (!maker_amount || !taker_amount || !fee) {
-        result.error = "OrderFilled amount exceeds uint64";
+        result.error = "legacy OrderFilled amount exceeds uint64";
         return result;
     }
 
@@ -92,23 +169,49 @@ OrderFilledDecodeResult OrderFilledDecoder::decode(const EthLog& log) const {
     result.event.taker = topic_to_address(log.topics[3]);
     result.event.maker_asset_id = uint256_to_decimal_string(words[0]);
     result.event.taker_asset_id = uint256_to_decimal_string(words[1]);
+    result.event.token_id = !is_zero_asset(result.event.maker_asset_id)
+        ? result.event.maker_asset_id
+        : result.event.taker_asset_id;
     result.event.maker_amount_filled = *maker_amount;
     result.event.taker_amount_filled = *taker_amount;
     result.event.fee = *fee;
-    result.event.block_number = log.block_number;
-    result.event.tx_hash = normalize_hex(log.tx_hash);
-    result.event.log_index = log.log_index;
-    result.event.removed = log.removed;
+    fill_log_metadata(result.event, log);
 
     if (result.event.maker.empty() || result.event.taker.empty() ||
         result.event.maker_asset_id.empty() ||
         result.event.taker_asset_id.empty()) {
-        result.error = "OrderFilled log contains malformed fields";
+        result.error = "legacy OrderFilled log contains malformed fields";
         result.event = {};
         return result;
     }
 
     result.ok = true;
+    return result;
+}
+
+}  // namespace
+
+OrderFilledDecodeResult OrderFilledDecoder::decode(const EthLog& log) const {
+    using namespace eth_log_decoder;
+
+    OrderFilledDecodeResult result;
+
+    if (log.topics.empty()) {
+        result.error = "wrong OrderFilled topic";
+        return result;
+    }
+
+    const std::string topic0 = normalize_hex(log.topics[0]);
+
+    if (topic0 == normalize_hex(kOrderFilledTopic0)) {
+        return decode_ctf_exchange_v2(log);
+    }
+
+    if (topic0 == normalize_hex(kLegacyOrderFilledTopic0)) {
+        return decode_legacy_order_filled(log);
+    }
+
+    result.error = "wrong OrderFilled topic";
     return result;
 }
 

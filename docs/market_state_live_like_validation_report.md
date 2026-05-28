@@ -133,6 +133,35 @@ Polygon WS eth_subscribe logs
 Polygon HTTP eth_getLogs over the same block range
 ```
 
+ABI note:
+
+```text
+The live CTF Exchange address is Polymarket CTF Exchange V2.
+
+OrderFilled topic0:
+0xd543adfd945773f1a62f74f0ee55a5e3b9b1a28262980ba90b1a89f2ea84d8ee
+
+V2 indexed topics:
+  topic1: orderHash
+  topic2: maker
+  topic3: taker
+
+V2 data fields:
+  side
+  tokenId
+  makerAmountFilled
+  takerAmountFilled
+  fee
+  builder
+  metadata
+```
+
+This is different from the older conditionId/tokenId-indexed shape. For CTF
+Exchange V2, tokenId is not an indexed topic, so token filtering is done after
+HTTP/WS log retrieval by decoding the event data. Generic `--topic1`,
+`--topic2`, and `--topic3` filters are still available for indexed-topic
+experiments.
+
 Contract filter:
 
 ```text
@@ -144,7 +173,7 @@ Accepted command:
 
 ```text
 build/chain_ws_http_parity_smoke \
-  --seconds 300 \
+  --seconds 30 \
   --contract-address 0xE111180000d2663C0091e4f400237545B87B996B
 ```
 
@@ -162,10 +191,14 @@ Result:
 
 ```text
 chain_ws_http_parity_smoke:
-  start_block: 87553994
-  end_block: 87554174
-  ws_logs_seen: 0
-  http_logs_backfilled: 0
+  mode: live_parity
+  start_block: 87554893
+  end_block: 87554909
+  ws_logs_seen: 1611
+  http_logs_backfilled: 1611
+  ws_logs_filtered_out: 0
+  http_logs_filtered_out: 0
+  decoded_order_fills: 3326
   missing_from_ws: 0
   extra_in_ws: 0
   duplicates: 0
@@ -181,15 +214,100 @@ Assessment:
 accepted: true
 subscription_opened: true
 http_backfill_ok: true
+ws_http_counts_equal: true
 missing_from_ws: 0
 extra_in_ws: 0
 duplicates: 0
 decode_errors: 0
 ```
 
-This was an empty parity interval: no matching OrderFilled logs appeared in the
-selected block range. That is still a valid WS/HTTP parity result for the tested
-range because both sources agreed on zero logs.
+The live parity comparator intentionally starts at the first full block after
+subscription setup and ignores the most recent two blocks at shutdown. This
+avoids counting subscription/open and shutdown boundary logs as false
+WS/HTTP mismatches.
+
+## 2B. Historical Non-empty Chain Backfill
+
+Purpose:
+
+```text
+Avoid blind live-window validation.
+Force the chain confirmation pipeline through a known historical block that
+contains real CTF Exchange V2 OrderFilled logs.
+```
+
+Accepted command:
+
+```text
+build/chain_ws_http_parity_smoke \
+  --seconds 1 \
+  --start-block 86408470 \
+  --end-block 86408470 \
+  --require-logs
+```
+
+Result:
+
+```text
+chain_ws_http_parity_smoke:
+  mode: historical_backfill
+  start_block: 86408470
+  end_block: 86408470
+  ws_logs_seen: 0
+  http_logs_backfilled: 141
+  ws_logs_filtered_out: 0
+  http_logs_filtered_out: 0
+  decoded_order_fills: 141
+  missing_from_ws: 0
+  extra_in_ws: 0
+  duplicates: 0
+  decode_errors: 0
+  removed_logs: 0
+  subscription_opened: false
+  http_ok: true
+```
+
+Token-filtered command:
+
+```text
+build/chain_ws_http_parity_smoke \
+  --seconds 1 \
+  --start-block 86408470 \
+  --end-block 86408470 \
+  --token-id 15633047470204997596942995214398956213394532924233275212304274396386988607753 \
+  --require-logs
+```
+
+Token-filtered result:
+
+```text
+chain_ws_http_parity_smoke:
+  mode: historical_backfill
+  start_block: 86408470
+  end_block: 86408470
+  ws_logs_seen: 0
+  http_logs_backfilled: 5
+  ws_logs_filtered_out: 0
+  http_logs_filtered_out: 136
+  decoded_order_fills: 141
+  missing_from_ws: 0
+  extra_in_ws: 0
+  duplicates: 0
+  decode_errors: 0
+  removed_logs: 0
+  subscription_opened: false
+  http_ok: true
+```
+
+Assessment:
+
+```text
+accepted: true
+historical non-empty backfill works: true
+real OrderFilled logs decoded: 141
+tokenId post-filter works: true
+decode_errors: 0
+```
 
 ## 3. multi_asset_synthetic_workflow
 
@@ -294,6 +412,7 @@ Accepted:
 ```text
 run_market_state_live_smoke with active order-book token
 chain_ws_http_parity_smoke over a live Polygon block range
+historical non-empty OrderFilled backfill and tokenId filtering
 multi_asset_synthetic_workflow
 default ctest suite
 ```
@@ -301,7 +420,6 @@ default ctest suite
 Still not proven:
 
 ```text
-live OrderFilled classification for the selected asset during a non-empty fill window
 long-running WS/HTTP parity over many hours
 multi-market live contamination behavior
 strategy usefulness of the resulting state
@@ -316,5 +434,7 @@ Market State live-like validation v1 is accepted for:
   synthetic multi-asset state isolation
 
 It should not yet be treated as proof of live chain fill coverage because the
-accepted 300 second Polygon parity interval contained zero matching logs.
+accepted live parity smoke is still a short window. Historical non-empty
+backfill proves the decoder/backfill path on real chain logs, and the short
+live parity run proves strict WS/HTTP equality for the sampled block range.
 ```

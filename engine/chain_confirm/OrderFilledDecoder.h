@@ -23,7 +23,26 @@ struct ConfirmedFillDecodeResult {
 
 class OrderFilledDecoder {
 public:
+    /**
+     * Polymarket CTF Exchange V2:
+     *
+     *   OrderFilled(
+     *       bytes32 indexed orderHash,
+     *       address indexed maker,
+     *       address indexed taker,
+     *       uint8 side,
+     *       uint256 tokenId,
+     *       uint256 makerAmountFilled,
+     *       uint256 takerAmountFilled,
+     *       uint256 fee,
+     *       bytes32 builder,
+     *       bytes32 metadata
+     *   )
+     */
     static constexpr const char* kOrderFilledTopic0 =
+        "0xd543adfd945773f1a62f74f0ee55a5e3b9b1a28262980ba90b1a89f2ea84d8ee";
+
+    static constexpr const char* kLegacyOrderFilledTopic0 =
         "0xd0a08e8c493f9c94f29311604c9de1b4e8c8d4c06bd0c789af57f2d65bfec0f6";
 
     [[nodiscard]] OrderFilledDecodeResult decode(

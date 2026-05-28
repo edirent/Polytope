@@ -1,4 +1,5 @@
 #include "chain_confirm/EthLog.h"
+#include "chain_confirm/EthLogDecoder.h"
 #include "chain_confirm/OrderFilledDecoder.h"
 #include "feed/source_runtime/WebSocketClient.h"
 
@@ -13,6 +14,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -26,26 +28,40 @@ namespace json = boost::json;
 
 using trading_engine::chain_confirm::EthLog;
 using trading_engine::chain_confirm::OrderFilledDecoder;
+using trading_engine::chain_confirm::eth_log_decoder::normalize_hex;
 using trading_engine::feed::WebSocketClient;
 
 constexpr std::uint64_t kNsPerSecond = 1'000'000'000ULL;
+constexpr const char* kPolymarketCtfExchangeV2 =
+    "0xE111180000d2663C0091e4f400237545B87B996B";
 
 struct Config {
     std::uint64_t seconds{60};
     std::string polygon_ws_url;
     std::string polygon_http_url;
-    std::string contract_address;
+    std::string contract_address{kPolymarketCtfExchangeV2};
+    std::string topic0{OrderFilledDecoder::kOrderFilledTopic0};
+    std::string topic1;
+    std::string topic2;
+    std::string topic3;
+    std::string token_id;
     std::uint64_t from_block{0};
     std::uint64_t to_block{0};
     std::uint64_t http_block_chunk{10};
+    std::uint64_t live_block_lag{2};
     bool explicit_range{false};
+    bool require_logs{false};
 };
 
 struct Report {
+    std::string mode;
     std::uint64_t start_block{0};
     std::uint64_t end_block{0};
     std::uint64_t ws_logs_seen{0};
     std::uint64_t http_logs_backfilled{0};
+    std::uint64_t ws_logs_filtered_out{0};
+    std::uint64_t http_logs_filtered_out{0};
+    std::uint64_t decoded_order_fills{0};
     std::uint64_t missing_from_ws{0};
     std::uint64_t extra_in_ws{0};
     std::uint64_t duplicates{0};
@@ -139,8 +155,16 @@ std::string escape_json(const std::string& value) {
     return out;
 }
 
+std::string topic_json_value(const std::string& value) {
+    if (value.empty()) {
+        return "null";
+    }
+
+    return "\"" + escape_json(normalize_hex(value)) + "\"";
+}
+
 std::string log_filter_json(
-    const std::string& contract_address,
+    const Config& config,
     std::uint64_t from_block = 0,
     std::uint64_t to_block = 0,
     bool include_range = false
@@ -154,39 +178,46 @@ std::string log_filter_json(
         needs_comma = true;
     }
 
-    if (!contract_address.empty()) {
+    if (!config.contract_address.empty()) {
         if (needs_comma) {
             filter += ",";
         }
-        filter += "\"address\":\"" + escape_json(contract_address) + "\"";
+        filter += "\"address\":\"" + escape_json(config.contract_address) + "\"";
         needs_comma = true;
     }
 
     if (needs_comma) {
         filter += ",";
     }
-    filter += "\"topics\":[\"";
-    filter += OrderFilledDecoder::kOrderFilledTopic0;
-    filter += "\"]}";
+    filter += "\"topics\":[";
+    filter += topic_json_value(config.topic0);
+    if (!config.topic1.empty() ||
+        !config.topic2.empty() ||
+        !config.topic3.empty()) {
+        filter += "," + topic_json_value(config.topic1);
+        filter += "," + topic_json_value(config.topic2);
+        filter += "," + topic_json_value(config.topic3);
+    }
+    filter += "]}";
     return filter;
 }
 
-std::string subscription_message(const std::string& contract_address) {
+std::string subscription_message(const Config& config) {
     return
         std::string{
             R"({"jsonrpc":"2.0","id":1,"method":"eth_subscribe","params":["logs",)"
         } +
-        log_filter_json(contract_address) + "]}";
+        log_filter_json(config) + "]}";
 }
 
 std::string eth_get_logs_body(
-    const std::string& contract_address,
+    const Config& config,
     std::uint64_t from_block,
     std::uint64_t to_block
 ) {
     return
         std::string{R"({"jsonrpc":"2.0","id":1,"method":"eth_getLogs","params":[)"} +
-        log_filter_json(contract_address, from_block, to_block, true) +
+        log_filter_json(config, from_block, to_block, true) +
         R"(]})";
 }
 
@@ -273,7 +304,7 @@ std::vector<EthLog> http_get_logs_range(
 ) {
     const std::string response = curl_rpc(
         config.polygon_http_url,
-        eth_get_logs_body(config.contract_address, from_block, to_block)
+        eth_get_logs_body(config, from_block, to_block)
     );
     boost::json::error_code error;
     const auto parsed = json::parse(response, error);
@@ -336,6 +367,71 @@ std::vector<EthLog> http_get_logs(
     return logs;
 }
 
+struct LogFilterResult {
+    std::set<std::string> keys;
+    std::uint64_t filtered_out{0};
+    std::uint64_t decoded{0};
+    std::uint64_t decode_errors{0};
+    std::uint64_t removed{0};
+};
+
+bool decoded_log_matches(
+    const Config& config,
+    const EthLog& log,
+    OrderFilledDecoder& decoder,
+    std::uint64_t* decoded_count,
+    std::uint64_t* decode_error_count
+) {
+    const auto decoded = decoder.decode(log);
+    if (!decoded.ok) {
+        ++(*decode_error_count);
+        return false;
+    }
+
+    ++(*decoded_count);
+
+    if (!config.token_id.empty() &&
+        decoded.event.token_id != config.token_id) {
+        return false;
+    }
+
+    return true;
+}
+
+LogFilterResult filter_logs(
+    const Config& config,
+    const std::vector<EthLog>& logs,
+    OrderFilledDecoder& decoder
+) {
+    LogFilterResult result;
+
+    for (const auto& log : logs) {
+        std::uint64_t decoded_count = 0;
+        std::uint64_t decode_errors = 0;
+        const bool matched = decoded_log_matches(
+            config,
+            log,
+            decoder,
+            &decoded_count,
+            &decode_errors
+        );
+        result.decoded += decoded_count;
+        result.decode_errors += decode_errors;
+
+        if (!matched) {
+            ++result.filtered_out;
+            continue;
+        }
+
+        result.keys.insert(log_key(log));
+        if (log.removed) {
+            ++result.removed;
+        }
+    }
+
+    return result;
+}
+
 Config parse_args(int argc, char** argv) {
     Config config;
     if (const char* ws = std::getenv("POLYGON_RPC_WS_URL")) {
@@ -358,16 +454,30 @@ Config parse_args(int argc, char** argv) {
         };
         if (arg == "--seconds") {
             config.seconds = std::stoull(value("--seconds"));
-        } else if (arg == "--from-block") {
+        } else if (arg == "--from-block" || arg == "--start-block") {
             config.from_block = std::stoull(value("--from-block"));
             config.explicit_range = true;
-        } else if (arg == "--to-block") {
+        } else if (arg == "--to-block" || arg == "--end-block") {
             config.to_block = std::stoull(value("--to-block"));
             config.explicit_range = true;
         } else if (arg == "--contract-address") {
             config.contract_address = value("--contract-address");
+        } else if (arg == "--topic0") {
+            config.topic0 = value("--topic0");
+        } else if (arg == "--topic1") {
+            config.topic1 = value("--topic1");
+        } else if (arg == "--topic2") {
+            config.topic2 = value("--topic2");
+        } else if (arg == "--topic3") {
+            config.topic3 = value("--topic3");
+        } else if (arg == "--token-id") {
+            config.token_id = value("--token-id");
         } else if (arg == "--http-block-chunk") {
             config.http_block_chunk = std::stoull(value("--http-block-chunk"));
+        } else if (arg == "--live-block-lag") {
+            config.live_block_lag = std::stoull(value("--live-block-lag"));
+        } else if (arg == "--require-logs") {
+            config.require_logs = true;
         } else if (arg == "--ws-url") {
             config.polygon_ws_url = value("--ws-url");
         } else if (arg == "--http-url") {
@@ -375,7 +485,9 @@ Config parse_args(int argc, char** argv) {
         } else if (arg == "--help" || arg == "-h") {
             throw std::runtime_error(
                 "usage: chain_ws_http_parity_smoke --seconds N "
-                "[--contract-address ADDRESS] [--from-block N --to-block N]"
+                "[--contract-address ADDRESS] "
+                "[--start-block N --end-block N] "
+                "[--token-id TOKEN_ID] [--require-logs]"
             );
         } else {
             throw std::runtime_error("unknown argument: " + arg);
@@ -391,6 +503,9 @@ Config parse_args(int argc, char** argv) {
     if (config.seconds == 0) {
         throw std::runtime_error("--seconds must be greater than zero");
     }
+    if (config.topic0.empty()) {
+        throw std::runtime_error("--topic0 must not be empty");
+    }
     if (config.http_block_chunk == 0) {
         throw std::runtime_error("--http-block-chunk must be greater than zero");
     }
@@ -402,11 +517,18 @@ Config parse_args(int argc, char** argv) {
 
 void print_report(const Report& report) {
     std::cout << "chain_ws_http_parity_smoke:\n";
+    std::cout << "  mode: " << report.mode << '\n';
     std::cout << "  start_block: " << report.start_block << '\n';
     std::cout << "  end_block: " << report.end_block << '\n';
     std::cout << "  ws_logs_seen: " << report.ws_logs_seen << '\n';
     std::cout << "  http_logs_backfilled: "
               << report.http_logs_backfilled << '\n';
+    std::cout << "  ws_logs_filtered_out: "
+              << report.ws_logs_filtered_out << '\n';
+    std::cout << "  http_logs_filtered_out: "
+              << report.http_logs_filtered_out << '\n';
+    std::cout << "  decoded_order_fills: "
+              << report.decoded_order_fills << '\n';
     std::cout << "  missing_from_ws: " << report.missing_from_ws << '\n';
     std::cout << "  extra_in_ws: " << report.extra_in_ws << '\n';
     std::cout << "  duplicates: " << report.duplicates << '\n';
@@ -419,103 +541,157 @@ void print_report(const Report& report) {
 
 int run(const Config& config) {
     Report report;
-    std::set<std::string> ws_keys;
+    report.mode = config.explicit_range ? "historical_backfill" : "live_parity";
+
+    std::map<std::string, std::uint64_t> ws_keys;
     std::set<std::string> duplicate_keys;
     std::atomic<bool> opened{false};
+    std::atomic<std::uint64_t> ws_start_block_filter{
+        config.explicit_range
+            ? config.from_block
+            : std::numeric_limits<std::uint64_t>::max()
+    };
     std::atomic<std::uint64_t> decode_errors{0};
+    std::atomic<std::uint64_t> filtered_out{0};
+    std::atomic<std::uint64_t> decoded_order_fills{0};
     std::atomic<std::uint64_t> removed_logs{0};
     std::mutex keys_mutex;
+    OrderFilledDecoder decoder;
 
-    const std::uint64_t start_block = config.explicit_range
+    std::uint64_t start_block = config.explicit_range
         ? config.from_block
-        : eth_block_number(config.polygon_http_url);
+        : 0;
 
-    WebSocketClient ws(config.polygon_ws_url);
-    ws.set_on_open([&]() {
-        opened.store(true);
-        ws.send(subscription_message(config.contract_address));
-    });
-    ws.set_on_message([&](const std::string& payload) {
-        boost::json::error_code error;
-        const auto parsed = json::parse(payload, error);
-        if (error || !parsed.is_object()) {
-            decode_errors.fetch_add(1);
-            return;
-        }
-        const auto& object = parsed.as_object();
-        const auto params_it = object.find("params");
-        if (params_it == object.end() || !params_it->value().is_object()) {
-            return;
-        }
-        const auto& params = params_it->value().as_object();
-        const auto result_it = params.find("result");
-        if (result_it == params.end() || !result_it->value().is_object()) {
-            return;
-        }
-        try {
-            const EthLog log = eth_log_from_json(result_it->value().as_object());
-            if (log.block_number < start_block) {
+    if (!config.explicit_range) {
+        WebSocketClient ws(config.polygon_ws_url);
+        ws.set_on_open([&]() {
+            opened.store(true);
+            ws.send(subscription_message(config));
+        });
+        ws.set_on_message([&](const std::string& payload) {
+            boost::json::error_code error;
+            const auto parsed = json::parse(payload, error);
+            if (error || !parsed.is_object()) {
+                decode_errors.fetch_add(1);
                 return;
             }
-            if (log.removed) {
-                removed_logs.fetch_add(1);
+            const auto& object = parsed.as_object();
+            const auto params_it = object.find("params");
+            if (params_it == object.end() || !params_it->value().is_object()) {
+                return;
             }
-            std::lock_guard<std::mutex> lock(keys_mutex);
-            const auto [_, inserted] = ws_keys.insert(log_key(log));
-            if (!inserted) {
-                duplicate_keys.insert(log_key(log));
+            const auto& params = params_it->value().as_object();
+            const auto result_it = params.find("result");
+            if (result_it == params.end() || !result_it->value().is_object()) {
+                return;
             }
-        } catch (...) {
+            try {
+                const EthLog log =
+                    eth_log_from_json(result_it->value().as_object());
+                const auto filter_start = ws_start_block_filter.load();
+                if (log.block_number < filter_start) {
+                    return;
+                }
+
+                std::uint64_t decoded_count = 0;
+                std::uint64_t decode_error_count = 0;
+                const bool matched = decoded_log_matches(
+                    config,
+                    log,
+                    decoder,
+                    &decoded_count,
+                    &decode_error_count
+                );
+                decoded_order_fills.fetch_add(decoded_count);
+                decode_errors.fetch_add(decode_error_count);
+
+                if (!matched) {
+                    filtered_out.fetch_add(1);
+                    return;
+                }
+
+                if (log.removed) {
+                    removed_logs.fetch_add(1);
+                }
+                std::lock_guard<std::mutex> lock(keys_mutex);
+                const auto [_, inserted] =
+                    ws_keys.emplace(log_key(log), log.block_number);
+                if (!inserted) {
+                    duplicate_keys.insert(log_key(log));
+                }
+            } catch (...) {
+                decode_errors.fetch_add(1);
+            }
+        });
+        ws.set_on_error([&](const std::string&) {
+            decode_errors.fetch_add(1);
+        });
+
+        ws.connect();
+        std::thread ws_thread([&]() {
+            try {
+                ws.run();
+            } catch (...) {
+                decode_errors.fetch_add(1);
+            }
+        });
+
+        const auto wait_deadline = now_ns() + 10 * kNsPerSecond;
+        while (!opened.load() && now_ns() < wait_deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        if (!opened.load()) {
             decode_errors.fetch_add(1);
         }
-    });
-    ws.set_on_error([&](const std::string&) {
-        decode_errors.fetch_add(1);
-    });
 
-    ws.connect();
-    std::thread ws_thread([&]() {
-        try {
-            ws.run();
-        } catch (...) {
-            decode_errors.fetch_add(1);
+        start_block = eth_block_number(config.polygon_http_url) + 1;
+        ws_start_block_filter.store(start_block);
+
+        const auto deadline = now_ns() + config.seconds * kNsPerSecond;
+        while (now_ns() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-    });
-
-    const auto deadline = now_ns() + config.seconds * kNsPerSecond;
-    while (now_ns() < deadline) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    ws.disconnect();
-    if (ws_thread.joinable()) {
-        ws_thread.join();
+        ws.disconnect();
+        if (ws_thread.joinable()) {
+            ws_thread.join();
+        }
     }
 
     const std::uint64_t end_block = config.explicit_range
         ? config.to_block
-        : eth_block_number(config.polygon_http_url);
+        : [&]() {
+            const auto latest = eth_block_number(config.polygon_http_url);
+            if (latest > config.live_block_lag) {
+                return latest - config.live_block_lag;
+            }
+            return latest;
+        }();
 
     const auto http_logs = http_get_logs(config, start_block, end_block);
-    std::set<std::string> http_keys;
-    std::uint64_t http_removed = 0;
-    for (const auto& log : http_logs) {
-        http_keys.insert(log_key(log));
-        if (log.removed) {
-            ++http_removed;
-        }
-    }
+    const auto http = filter_logs(config, http_logs, decoder);
+    const std::set<std::string>& http_keys = http.keys;
 
     {
         std::lock_guard<std::mutex> lock(keys_mutex);
-        report.ws_logs_seen = static_cast<std::uint64_t>(ws_keys.size());
-        for (const auto& key : http_keys) {
-            if (ws_keys.find(key) == ws_keys.end()) {
-                ++report.missing_from_ws;
+        std::set<std::string> comparable_ws_keys;
+        for (const auto& [key, block_number] : ws_keys) {
+            if (block_number >= start_block && block_number <= end_block) {
+                comparable_ws_keys.insert(key);
             }
         }
-        for (const auto& key : ws_keys) {
-            if (http_keys.find(key) == http_keys.end()) {
-                ++report.extra_in_ws;
+
+        report.ws_logs_seen =
+            static_cast<std::uint64_t>(comparable_ws_keys.size());
+        if (!config.explicit_range) {
+            for (const auto& key : http_keys) {
+                if (comparable_ws_keys.find(key) == comparable_ws_keys.end()) {
+                    ++report.missing_from_ws;
+                }
+            }
+            for (const auto& key : comparable_ws_keys) {
+                if (http_keys.find(key) == http_keys.end()) {
+                    ++report.extra_in_ws;
+                }
             }
         }
         report.duplicates = static_cast<std::uint64_t>(duplicate_keys.size());
@@ -523,16 +699,27 @@ int run(const Config& config) {
 
     report.start_block = start_block;
     report.end_block = end_block;
-    report.http_logs_backfilled = static_cast<std::uint64_t>(http_logs.size());
-    report.decode_errors = decode_errors.load();
-    report.removed_logs = removed_logs.load() + http_removed;
+    report.http_logs_backfilled = static_cast<std::uint64_t>(http.keys.size());
+    report.ws_logs_filtered_out = filtered_out.load();
+    report.http_logs_filtered_out = http.filtered_out;
+    report.decoded_order_fills = decoded_order_fills.load() + http.decoded;
+    report.decode_errors = decode_errors.load() + http.decode_errors;
+    report.removed_logs = removed_logs.load() + http.removed;
     report.subscription_opened = opened.load();
     report.http_ok = true;
     print_report(report);
 
-    const bool passed = report.subscription_opened &&
-        report.http_ok &&
-        report.decode_errors == 0;
+    const bool has_required_logs =
+        !config.require_logs || report.http_logs_backfilled > 0 ||
+        report.ws_logs_seen > 0;
+    const bool parity_ok = config.explicit_range ||
+        (report.missing_from_ws == 0 && report.extra_in_ws == 0);
+
+    const bool passed = report.http_ok &&
+        report.decode_errors == 0 &&
+        has_required_logs &&
+        parity_ok &&
+        (config.explicit_range || report.subscription_opened);
     return passed ? 0 : 1;
 }
 

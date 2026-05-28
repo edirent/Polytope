@@ -71,11 +71,13 @@ EthLog buy_log(bool removed = false) {
         topic_address("2222222222222222222222222222222222222222")
     };
     log.data = join_data({
-        0,      // makerAssetId: buy-side semantics
-        12345,  // takerAssetId
+        0,      // side: BUY
+        12345,  // tokenId
         500,    // maker amount
         1000,   // taker amount
-        7
+        7,      // fee
+        0,      // builder
+        0       // metadata
     });
     log.block_number = 123;
     log.tx_hash = word(0xfeed);
@@ -87,11 +89,13 @@ EthLog buy_log(bool removed = false) {
 EthLog sell_log() {
     EthLog log = buy_log();
     log.data = join_data({
-        12345,  // makerAssetId
-        0,      // takerAssetId: sell-side semantics
+        1,      // side: SELL
+        12345,  // tokenId
         1000,   // maker amount
         500,    // taker amount
-        7
+        7,      // fee
+        0,      // builder
+        0       // metadata
     });
     return log;
 }
@@ -101,6 +105,8 @@ void OrderFilledDecoder_DecodesFields() {
     const auto decoded = decoder.decode(buy_log());
 
     expect_true(decoded.ok, "decode ok");
+    expect_equal(decoded.event.token_id, std::string{"12345"}, "token id");
+    expect_equal(decoded.event.side, static_cast<std::uint8_t>(0), "side");
     expect_equal(decoded.event.maker_asset_id, std::string{"0"}, "maker asset");
     expect_equal(decoded.event.taker_asset_id, std::string{"12345"}, "taker asset");
     expect_equal(decoded.event.maker_amount_filled, 500ULL, "maker amount");
@@ -109,6 +115,34 @@ void OrderFilledDecoder_DecodesFields() {
     expect_equal(decoded.event.block_number, 123ULL, "block number");
     expect_equal(decoded.event.log_index, 4U, "log index");
     expect_false(decoded.event.removed, "removed");
+}
+
+void OrderFilledDecoder_DecodesLegacyFields() {
+    EthLog log;
+    log.topics = {
+        OrderFilledDecoder::kLegacyOrderFilledTopic0,
+        word(0xabc),
+        topic_address("1111111111111111111111111111111111111111"),
+        topic_address("2222222222222222222222222222222222222222")
+    };
+    log.data = join_data({
+        0,      // makerAssetId: buy-side semantics
+        12345,  // takerAssetId
+        500,
+        1000,
+        7
+    });
+    log.block_number = 123;
+    log.tx_hash = word(0xfeed);
+    log.log_index = 4;
+
+    const OrderFilledDecoder decoder;
+    const auto decoded = decoder.decode(log);
+
+    expect_true(decoded.ok, "decode ok");
+    expect_equal(decoded.event.token_id, std::string{"12345"}, "token id");
+    expect_equal(decoded.event.maker_asset_id, std::string{"0"}, "maker asset");
+    expect_equal(decoded.event.taker_asset_id, std::string{"12345"}, "taker asset");
 }
 
 void OrderFilledDecoder_RejectsWrongTopic() {
@@ -176,6 +210,7 @@ using TestFn = void (*)();
 const std::unordered_map<std::string, TestFn>& tests() {
     static const std::unordered_map<std::string, TestFn> test_map{
         {"OrderFilledDecoder_DecodesFields", &OrderFilledDecoder_DecodesFields},
+        {"OrderFilledDecoder_DecodesLegacyFields", &OrderFilledDecoder_DecodesLegacyFields},
         {"OrderFilledDecoder_RejectsWrongTopic", &OrderFilledDecoder_RejectsWrongTopic},
         {"OrderFilledDecoder_HandlesRemovedLog", &OrderFilledDecoder_HandlesRemovedLog},
         {"OrderFilledDecoder_DirectionFromAssetFields", &OrderFilledDecoder_DirectionFromAssetFields}
