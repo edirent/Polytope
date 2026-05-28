@@ -1,0 +1,28 @@
+{
+  "bundles": [
+    {
+      "bundle_id": 1,
+      "required_true_mask": 1,
+      "required_false_mask": 0,
+      "invalid_mask": 0,
+      "guaranteed_payout_tick": 1000000,
+      "min_edge_tick": 0,
+      "legs": [
+        {
+          "market_id": "m1",
+          "asset_id": "asset_yes",
+          "side": "Buy",
+          "quantity_lots": 1,
+          "max_price_tick": 500000
+        },
+        {
+          "market_id": "m1",
+          "asset_id": "asset_no",
+          "side": "Buy",
+          "quantity_lots": 1,
+          "max_price_tick": 500000
+        }
+      ]
+    }
+  ]
+}

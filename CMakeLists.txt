@@ -15,6 +15,7 @@ enable_testing()
 add_subdirectory(engine/decode)
 add_subdirectory(engine/chain_confirm)
 add_subdirectory(engine/state)
+add_subdirectory(oracle)
 
 # Until a smaller engine_decode_public target exists, downstream targets may
 # link engine_decode. State code may include only decode/public headers.
@@ -314,6 +315,428 @@ foreach(test_case
 )
     add_test(NAME ${test_case} COMMAND lob_shard_tests ${test_case})
 endforeach()
+
+add_executable(oracle_manifest_tests
+    tests/unit/oracle/oracle_manifest_test.cpp
+)
+
+target_link_libraries(oracle_manifest_tests PRIVATE
+    oracle_core
+)
+
+foreach(test_case
+    ArtifactManifest_DefaultsAreSafe
+    OracleErrorCode_DefaultNone
+)
+    add_test(NAME ${test_case} COMMAND oracle_manifest_tests ${test_case})
+endforeach()
+
+add_executable(oracle_cmake_smoke_tests
+    tests/unit/oracle/oracle_cmake_smoke_test.cpp
+)
+
+target_link_libraries(oracle_cmake_smoke_tests PRIVATE
+    oracle_tools
+)
+
+add_test(
+    NAME OracleBuild_NoLlmRequired
+    COMMAND oracle_cmake_smoke_tests OracleBuild_NoLlmRequired
+)
+
+add_executable(oracle_market_description_loader_tests
+    tests/unit/oracle/market_description_loader_test.cpp
+)
+
+target_link_libraries(oracle_market_description_loader_tests PRIVATE
+    oracle_ingestion
+)
+
+target_compile_definitions(oracle_market_description_loader_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+foreach(test_case
+    RawMarketRecord_LoadsFixture
+    RawMarketRecord_RejectsMissingMarketId
+    RawMarketRecord_RejectsMismatchedOutcomeAssetCount
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_market_description_loader_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_market_universe_builder_tests
+    tests/unit/oracle/market_universe_builder_test.cpp
+)
+
+target_link_libraries(oracle_market_universe_builder_tests PRIVATE
+    oracle_ingestion
+)
+
+foreach(test_case
+    MarketUniverseBuilder_DeduplicatesMarkets
+    MarketUniverseBuilder_PreservesAssetIdsAsString
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_market_universe_builder_tests ${test_case}
+    )
+endforeach()
+
+add_test(
+    NAME FetchMarketUniverseFixture
+    COMMAND fetch_market_universe
+        --fixture ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/oracle/raw_markets_small.jsonl
+        --out ${CMAKE_CURRENT_BINARY_DIR}/raw_market_snapshot.jsonl
+)
+
+add_executable(oracle_rulebook_tests
+    tests/unit/oracle/rulebook_test.cpp
+)
+
+target_link_libraries(oracle_rulebook_tests PRIVATE
+    oracle_rules
+)
+
+target_compile_definitions(oracle_rulebook_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+foreach(test_case
+    RuleDraft_DefaultRequiresManualReview
+    Rulebook_LoadsApprovedRules
+    Rulebook_RejectsUnapprovedRulesForCompiler
+)
+    add_test(NAME ${test_case} COMMAND oracle_rulebook_tests ${test_case})
+endforeach()
+
+add_executable(oracle_rule_validator_tests
+    tests/unit/oracle/rule_validator_test.cpp
+)
+
+target_link_libraries(oracle_rule_validator_tests PRIVATE
+    oracle_rules
+)
+
+foreach(test_case
+    RuleValidator_RejectsUnknownVariable
+    RuleValidator_RejectsDuplicateRuleId
+    RuleValidator_RejectsEmptyVariableSet
+    RuleValidator_ApprovedFixtureIsCompilerReady
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_rule_validator_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_manual_rule_editor_tests
+    tests/unit/oracle/manual_rule_editor_test.cpp
+)
+
+target_link_libraries(oracle_manual_rule_editor_tests PRIVATE
+    oracle_rules
+)
+
+add_test(
+    NAME ManualRuleEditor_RoundTripsRulebook
+    COMMAND oracle_manual_rule_editor_tests ManualRuleEditor_RoundTripsRulebook
+)
+
+add_executable(oracle_llm_rule_extractor_tests
+    tests/unit/oracle/llm_rule_extractor_test.cpp
+)
+
+target_link_libraries(oracle_llm_rule_extractor_tests PRIVATE
+    oracle_llm
+)
+
+foreach(test_case
+    StubRuleExtractor_NoNetwork
+    StubRuleExtractor_ReturnsDisabled
+    StubRuleExtractor_DoesNotProduceValidatedRules
+    ClaudeRuleExtractor_DisabledByDefault
+    ClaudeRuleExtractor_MissingApiKeyWhenEnabled
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_llm_rule_extractor_tests ${test_case}
+    )
+endforeach()
+
+add_test(
+    NAME ClaudeRuleExtractorManual
+    COMMAND oracle_llm_rule_extractor_tests ClaudeRuleExtractorManual
+)
+set_tests_properties(ClaudeRuleExtractorManual PROPERTIES
+    DISABLED TRUE
+    LABELS manual
+)
+
+add_executable(oracle_boolean_constraint_builder_tests
+    tests/unit/oracle/boolean_constraint_builder_test.cpp
+)
+
+target_link_libraries(oracle_boolean_constraint_builder_tests PRIVATE
+    oracle_compiler
+)
+
+foreach(test_case
+    BooleanConstraintBuilder_ExactlyOne
+    BooleanConstraintBuilder_AtMostOne
+    BooleanConstraintBuilder_AtLeastOne
+    BooleanConstraintBuilder_Implies
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_boolean_constraint_builder_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_constraint_compiler_tests
+    tests/unit/oracle/constraint_compiler_test.cpp
+)
+
+target_link_libraries(oracle_constraint_compiler_tests PRIVATE
+    oracle_compiler
+)
+
+foreach(test_case
+    ConstraintCompiler_ExactlyOne
+    ConstraintCompiler_AtMostOne
+    ConstraintCompiler_AtLeastOne
+    ConstraintCompiler_Implies
+    ConstraintCompiler_RejectsUnapprovedRules
+    ConstraintCompiler_RejectsUnknownVariable
+    ConstraintCompiler_DeterministicVariableOrdering
+    ConstraintCompiler_DeterministicConstraintHash
+    ConstraintCompiler_WritesMatrixArtifacts
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_constraint_compiler_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_feasibility_checker_tests
+    tests/unit/oracle/feasibility_checker_test.cpp
+)
+
+target_link_libraries(oracle_feasibility_checker_tests PRIVATE
+    oracle_enumerate
+)
+
+foreach(test_case
+    FeasibilityChecker_SatisfiesExactlyOne
+    FeasibilityChecker_DetectsContradiction
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_feasibility_checker_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_state_enumerator_tests
+    tests/unit/oracle/state_enumerator_test.cpp
+)
+
+target_link_libraries(oracle_state_enumerator_tests PRIVATE
+    oracle_enumerate
+)
+
+target_compile_definitions(oracle_state_enumerator_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+foreach(test_case
+    StateEnumerator_ExactlyOneTwoVarsProducesTwoStates
+    StateEnumerator_ExactlyOneThreeVarsProducesThreeStates
+    StateEnumerator_AtMostOneThreeVarsProducesFourStates
+    StateEnumerator_RejectsMoreThan32Vars
+    StateEnumerator_DeterministicStateOrdering
+    StateEnumerator_ContradictoryRulebookProducesZeroStates
+    StateEnumerator_ValidFixtureProducesFeasibleStates
+    StateEnumerator_ContradictoryCompiledRulebookProducesZeroStates
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_state_enumerator_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_payoff_matrix_builder_tests
+    tests/unit/oracle/payoff_matrix_builder_test.cpp
+)
+
+target_link_libraries(oracle_payoff_matrix_builder_tests PRIVATE
+    oracle_payoff
+)
+
+foreach(test_case
+    PayoffMatrixBuilder_BinaryOutcomeTruePaysOne
+    PayoffMatrixBuilder_BinaryOutcomeFalsePaysZero
+    PayoffMatrixBuilder_HasRowsForAllStates
+    PayoffMatrixBuilder_HasColumnsForAllAssets
+    PayoffMatrixBuilder_RejectsUnknownAsset
+    PayoffMatrixBuilder_DeterministicHash
+    PayoffMatrixBuilder_WritesArtifacts
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_payoff_matrix_builder_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_bundle_validator_tests
+    tests/unit/oracle/bundle_validator_test.cpp
+)
+
+target_link_libraries(oracle_bundle_validator_tests PRIVATE
+    oracle_bundles
+)
+
+foreach(test_case
+    BundleValidator_AcceptsValidBundle
+    BundleValidator_RejectsUnknownAsset
+    BundleValidator_RejectsZeroLegs
+    BundleValidator_RejectsTooManyLegs
+    BundleValidator_RejectsConflictingMasks
+    BundleValidator_RejectsDuplicateBundleId
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_bundle_validator_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_candidate_bundle_generator_tests
+    tests/unit/oracle/candidate_bundle_generator_test.cpp
+)
+
+target_link_libraries(oracle_candidate_bundle_generator_tests PRIVATE
+    oracle_bundles
+)
+
+target_compile_definitions(oracle_candidate_bundle_generator_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+foreach(test_case
+    CandidateBundleGenerator_LoadsFixtureBundles
+    CandidateBundleGenerator_DeterministicHash
+    CandidateBundleGenerator_ExportsArtifact
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_candidate_bundle_generator_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_artifact_exporter_tests
+    tests/unit/oracle/artifact_exporter_test.cpp
+)
+
+target_link_libraries(oracle_artifact_exporter_tests PRIVATE
+    oracle_artifact
+)
+
+foreach(test_case
+    ArtifactExporter_WritesAllFiles
+    ArtifactExporter_WritesManifest
+    ArtifactExporter_WritesChecksums
+    ArtifactExporter_DeterministicOutput
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_artifact_exporter_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_artifact_loader_tests
+    tests/unit/oracle/artifact_loader_test.cpp
+)
+
+target_link_libraries(oracle_artifact_loader_tests PRIVATE
+    oracle_artifact
+)
+
+foreach(test_case
+    ArtifactLoader_RoundTripsArtifact
+    ArtifactLoader_RejectsChecksumMismatch
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_artifact_loader_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_artifact_roundtrip_tests
+    tests/integration/oracle/oracle_artifact_roundtrip_test.cpp
+)
+
+target_link_libraries(oracle_artifact_roundtrip_tests PRIVATE
+    oracle_artifact
+)
+
+add_test(
+    NAME OracleArtifactRoundTrip_WritesAndLoads
+    COMMAND oracle_artifact_roundtrip_tests OracleArtifactRoundTrip_WritesAndLoads
+)
+
+add_executable(oracle_workflow_small_fixture_tests
+    tests/integration/oracle/oracle_workflow_small_fixture_test.cpp
+)
+
+target_compile_definitions(oracle_workflow_small_fixture_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    VERIFY_ORACLE_WORKFLOW_BIN="$<TARGET_FILE:verify_oracle_workflow>"
+)
+
+add_dependencies(oracle_workflow_small_fixture_tests verify_oracle_workflow)
+
+foreach(test_case
+    OracleWorkflow_SmallFixtureCompiles
+    OracleWorkflow_LlmDisabledStillPasses
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_workflow_small_fixture_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_determinism_tests
+    tests/integration/oracle/oracle_determinism_test.cpp
+)
+
+target_compile_definitions(oracle_determinism_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    VERIFY_ORACLE_WORKFLOW_BIN="$<TARGET_FILE:verify_oracle_workflow>"
+)
+
+add_dependencies(oracle_determinism_tests verify_oracle_workflow)
+
+add_test(
+    NAME OracleWorkflow_DeterministicHashes
+    COMMAND oracle_determinism_tests OracleWorkflow_DeterministicHashes
+)
+
+add_executable(oracle_contradiction_fails_tests
+    tests/integration/oracle/oracle_contradiction_fails_test.cpp
+)
+
+target_compile_definitions(oracle_contradiction_fails_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    VERIFY_ORACLE_WORKFLOW_BIN="$<TARGET_FILE:verify_oracle_workflow>"
+)
+
+add_dependencies(oracle_contradiction_fails_tests verify_oracle_workflow)
+
+add_test(
+    NAME OracleWorkflow_ContradictionFails
+    COMMAND oracle_contradiction_fails_tests OracleWorkflow_ContradictionFails
+)
 
 add_executable(order_filled_decoder_tests
     tests/unit/chain_confirm/order_filled_decoder_test.cpp
