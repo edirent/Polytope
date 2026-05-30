@@ -10,7 +10,9 @@ add_library(engine_state
     core/GlobalBitmaskState.cpp
     core/MarketStateEvent.cpp
     core/MarketStateEventAdapter.cpp
+    core/MarketStateEventFilter.cpp
     core/MarketStateStore.cpp
+    core/StateUniverse.cpp
     quality/BookQualityState.cpp
     quality/DataQualityGate.cpp
     quality/ReconciliationState.cpp

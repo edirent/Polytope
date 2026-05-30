@@ -1,0 +1,5 @@
+{"intent_id":1,"expected":"Approved"}
+{"intent_id":104,"expected":"ExpiredIntent"}
+{"intent_id":103,"expected":"DuplicateIntent"}
+{"intent_id":105,"expected":"StaleBook"}
+{"intent_id":107,"expected":"PartialFillRisk"}

@@ -17,6 +17,8 @@ add_subdirectory(engine/chain_confirm)
 add_subdirectory(engine/state)
 add_subdirectory(oracle)
 add_subdirectory(engine/signal)
+add_subdirectory(engine/risk)
+add_subdirectory(engine/execution)
 
 # Until a smaller engine_decode_public target exists, downstream targets may
 # link engine_decode. State code may include only decode/public headers.
@@ -68,6 +70,8 @@ target_link_libraries(trading_engine PRIVATE
     engine_state
     engine_decode
     engine_signal
+    engine_risk
+    engine_execution
     Boost::system
     OpenSSL::SSL
     OpenSSL::Crypto
@@ -168,6 +172,232 @@ foreach(test_case
     SignalMetrics_ObserveScanLatency
 )
     add_test(NAME ${test_case} COMMAND signal_types_tests ${test_case})
+endforeach()
+
+add_executable(risk_contract_tests
+    tests/unit/risk/risk_contract_test.cpp
+)
+
+target_link_libraries(risk_contract_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    RiskPolicySnapshot_DefaultsAreSafe
+    RiskDecision_DefaultReject
+    ApprovedIntent_RequiresReservationId
+    RiskPolicySnapshot_HashDeterministic
+    RiskConfig_DefaultsAreSafe
+    RiskResult_DefaultCountersZero
+    RiskAuditTrace_DefaultsAreSafe
+)
+    add_test(NAME ${test_case} COMMAND risk_contract_tests ${test_case})
+endforeach()
+
+add_executable(risk_metrics_tests
+    tests/unit/risk/risk_metrics_test.cpp
+)
+
+target_link_libraries(risk_metrics_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    RiskMetrics_DefaultCountersZero
+    RiskMetrics_HasCounterForEveryWorkflowRejectReason
+    RiskMetrics_ObserveEvaluateLatency
+)
+    add_test(NAME ${test_case} COMMAND risk_metrics_tests ${test_case})
+endforeach()
+
+add_executable(risk_intent_validator_tests
+    tests/unit/risk/intent_validator_test.cpp
+)
+
+target_link_libraries(risk_intent_validator_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    IntentValidator_AcceptsCompleteOpportunity
+    IntentValidator_RejectsCandidateOnly
+    IntentValidator_RejectsExpiredIntent
+    IntentEvidenceVerifier_RejectsMissingArtifactHash
+    IntentEvidenceVerifier_RejectsMissingSnapshotHash
+    IntentEvidenceVerifier_RejectsEmptyIdempotencyKey
+)
+    add_test(NAME ${test_case} COMMAND risk_intent_validator_tests ${test_case})
+endforeach()
+
+add_executable(risk_reservation_book_tests
+    tests/unit/risk/reservation_book_test.cpp
+)
+
+target_link_libraries(risk_reservation_book_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    ReservationBook_ApprovedDecisionReserves
+    ReservationBook_RejectsUnapprovedDecision
+    ReservationBook_RejectsDuplicateIdempotencyKey
+    ReservationBook_ExpireOldReleasesLedger
+    ReservationBook_ReleaseFreesIdempotencyKey
+    ReservationBook_ReservationIsNotOrder
+)
+    add_test(NAME ${test_case} COMMAND risk_reservation_book_tests ${test_case})
+endforeach()
+
+add_executable(risk_cheap_guard_tests
+    tests/unit/risk/cheap_guard_test.cpp
+)
+
+target_link_libraries(risk_cheap_guard_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    KillSwitchGuard_RejectsWhenEnabled
+    IntentExpiryGuard_RejectsExpired
+    DuplicateIntentGuard_RejectsRepeatedIdempotencyKey
+    RateLimitGuard_RejectsOverLimit
+    CheapGuardFailure_ShortCircuitsBeforeVwap
+    CheapGuardRejectCountersAreCorrect
+)
+    add_test(NAME ${test_case} COMMAND risk_cheap_guard_tests ${test_case})
+endforeach()
+
+add_executable(risk_market_state_guard_tests
+    tests/unit/risk/market_state_guard_test.cpp
+)
+
+target_link_libraries(risk_market_state_guard_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    MarketStateGuard_RejectsRecovering
+    MarketStateGuard_RejectsCrossed
+    MarketStateGuard_RejectsClosed
+    MarketStateGuard_RejectsMissingSnapshot
+    MarketStateGuard_RejectsNotUsableForDepth
+    MarketStateGuard_RejectsResolved
+    MarketStateGuard_RejectsHalted
+    SnapshotFreshnessGuard_RejectsTooOld
+    SnapshotFreshnessGuard_AllowsFreshDifferentVersionButRequiresReprice
+)
+    add_test(NAME ${test_case} COMMAND risk_market_state_guard_tests ${test_case})
+endforeach()
+
+add_executable(risk_cost_revalidator_tests
+    tests/unit/risk/cost_revalidator_test.cpp
+)
+
+target_link_libraries(risk_cost_revalidator_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    CostRevalidator_RecomputesVWAPFromLatestSnapshot
+    CostRevalidator_RejectsInsufficientDepth
+    CostRevalidator_RejectsCostDriftTooHigh
+    CostRevalidator_AllowsSmallCostDrift
+    CostRevalidator_RejectsReducedBundleQty
+)
+    add_test(NAME ${test_case} COMMAND risk_cost_revalidator_tests ${test_case})
+endforeach()
+
+add_executable(risk_edge_guard_tests
+    tests/unit/risk/edge_guard_test.cpp
+)
+
+target_link_libraries(risk_edge_guard_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    EdgeGuard_ApprovesAboveThreshold
+    EdgeGuard_RejectsLowTotalEdge
+    EdgeGuard_RejectsLowUnitEdge
+    EdgeGuard_RejectsLowBps
+    MaxLossGuard_RejectsCostAboveLimit
+)
+    add_test(NAME ${test_case} COMMAND risk_edge_guard_tests ${test_case})
+endforeach()
+
+add_executable(risk_exposure_inventory_guard_tests
+    tests/unit/risk/exposure_inventory_guard_test.cpp
+)
+
+target_link_libraries(risk_exposure_inventory_guard_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    ExposureGuard_AllowsWithinLimit
+    ExposureGuard_RejectsTotalLimit
+    ExposureGuard_RejectsMarketLimit
+    InventoryGuard_RejectsAssetLotsLimit
+)
+    add_test(NAME ${test_case} COMMAND risk_exposure_inventory_guard_tests ${test_case})
+endforeach()
+
+add_executable(risk_partial_fill_guard_tests
+    tests/unit/risk/partial_fill_guard_test.cpp
+)
+
+target_link_libraries(risk_partial_fill_guard_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    PartialFillGuard_AllowsSingleLeg
+    PartialFillGuard_RejectsMultiLegBarelyEnoughDepth
+    PartialFillGuard_UsesReservationQty
+    PartialFillGuard_InterfaceHasUnhedgedLossPlaceholder
+)
+    add_test(NAME ${test_case} COMMAND risk_partial_fill_guard_tests ${test_case})
+endforeach()
+
+add_executable(risk_engine_core_tests
+    tests/unit/risk/risk_engine_core_test.cpp
+)
+
+target_link_libraries(risk_engine_core_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    RiskEngine_ApprovesSafeIntentAndCreatesReservation
+    RiskEngine_RejectsExpiredBeforeVWAP
+    RiskEngine_RejectsDuplicateBeforeVWAP
+    RiskEngine_RejectsStaleBook
+    RiskEngine_RejectsCostDrift
+    RiskEngine_RejectsExposureLimit
+    RiskEngine_RejectsPartialFillRisk
+    RiskEngine_KillSwitchRejectsAll
+    RiskEngine_OutputHashDeterministic
+)
+    add_test(NAME ${test_case} COMMAND risk_engine_core_tests ${test_case})
+endforeach()
+
+add_executable(risk_publisher_tests
+    tests/unit/risk/risk_publisher_test.cpp
+)
+
+target_link_libraries(risk_publisher_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    RiskAuditTrace_RecordsEveryExecutedGuard
+    RiskAuditTrace_StopsAtRejectingGuard
+    CapturingRiskPublisher_CapturesDecisionAndTrace
+    CapturingApprovedIntentPublisher_CapturesApprovedIntent
+    JsonlRiskDecisionWriter_WritesAuditTrace
+    JsonlRiskDecisionWriter_DoesNotContainOrderFields
+)
+    add_test(NAME ${test_case} COMMAND risk_publisher_tests ${test_case})
 endforeach()
 
 add_executable(signal_opportunity_intent_tests
@@ -581,6 +811,31 @@ foreach(test_case
     )
 endforeach()
 
+add_executable(verify_risk_workflow_tests
+    tests/integration/risk/verify_risk_workflow_test.cpp
+)
+
+target_compile_definitions(verify_risk_workflow_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    VERIFY_RISK_WORKFLOW_BIN="$<TARGET_FILE:verify_risk_workflow>"
+)
+
+add_dependencies(verify_risk_workflow_tests verify_risk_workflow)
+
+foreach(test_case
+    VerifyRiskWorkflow_PositiveApproves
+    VerifyRiskWorkflow_RejectionsCoverRequiredReasons
+    VerifyRiskWorkflow_KillSwitchRejects
+    VerifyRiskWorkflow_TightExposureRejects
+    VerifyRiskWorkflow_Deterministic
+    VerifyRiskWorkflow_EmitsSummary
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND verify_risk_workflow_tests ${test_case}
+    )
+endforeach()
+
 add_executable(market_state_event_tests
     tests/unit/state/market_state_event_test.cpp
 )
@@ -603,6 +858,32 @@ foreach(test_case
     MarketStateEvent_MetadataPreserved
 )
     add_test(NAME ${test_case} COMMAND market_state_event_tests ${test_case})
+endforeach()
+
+add_executable(market_state_event_filter_tests
+    tests/unit/state/market_state_event_filter_test.cpp
+)
+
+target_include_directories(market_state_event_filter_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(market_state_event_filter_tests PRIVATE
+    engine_state
+)
+
+foreach(test_case
+    MarketStateEventFilter_PassesActiveAssetSnapshot
+    MarketStateEventFilter_PassesActiveAssetDelta
+    MarketStateEventFilter_FiltersPairedAssetDelta
+    MarketStateEventFilter_FiltersExternalAsset
+    MarketStateEventFilter_PassesHeartbeat
+    MarketStateEventFilter_PassesLifecycleForActiveMarket
+    MarketStateEventFilter_FiltersLifecycleForInactiveMarket
+    PairedAssetDeltaIsFilteredBeforeStateStore
+    TargetAssetDeltaBeforeSnapshotIsNotFiltered
+)
+    add_test(NAME ${test_case} COMMAND market_state_event_filter_tests ${test_case})
 endforeach()
 
 add_executable(lob_writer_tests
@@ -1965,6 +2246,23 @@ target_link_libraries(bench_market_state_latency PRIVATE
     engine_decode
 )
 
+add_executable(inspect_state_errors
+    tools/inspect_state_errors.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(inspect_state_errors PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(inspect_state_errors PRIVATE
+    engine_state
+    engine_decode
+    engine_signal
+)
+
 add_executable(verify_market_state_workflow
     tools/verify_market_state_workflow.cpp
     engine/feed/raw_ingest/RawPacket.cpp
@@ -2019,6 +2317,30 @@ target_include_directories(run_market_state_live_smoke PRIVATE
 target_link_libraries(run_market_state_live_smoke PRIVATE
     engine_state
     engine_decode
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Threads::Threads
+)
+
+add_executable(run_worldcup_feed_to_execution
+    tools/run_worldcup_feed_to_execution.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogWriter.cpp
+    engine/feed/source_runtime/WebSocketClient.cpp
+)
+
+target_include_directories(run_worldcup_feed_to_execution PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(run_worldcup_feed_to_execution PRIVATE
+    engine_decode
+    engine_state
+    engine_signal
+    engine_risk
+    engine_execution
     Boost::system
     OpenSSL::SSL
     OpenSSL::Crypto

@@ -1,0 +1,5 @@
+{"intent_id":14843576973620217568,"bundle_id":1,"approved":true,"reject_reason":0,"reject_detail":"","reservation_id":1,"risk_total_cost_tick":1556488773,"risk_bundle_qty":214666,"output_hash":3966450050967537464}
+{"intent_id":14843576973620217568,"bundle_id":1,"approved":false,"reject_reason":22,"reject_detail":"duplicate idempotency_key","reservation_id":0,"risk_total_cost_tick":0,"risk_bundle_qty":0,"output_hash":13824623631334921842}
+{"intent_id":18076916797836495984,"bundle_id":1,"approved":true,"reject_reason":0,"reject_detail":"","reservation_id":2,"risk_total_cost_tick":1556488773,"risk_bundle_qty":214666,"output_hash":12709808993289913575}
+{"intent_id":894438403076238794,"bundle_id":1,"approved":true,"reject_reason":0,"reject_detail":"","reservation_id":3,"risk_total_cost_tick":1556488773,"risk_bundle_qty":214666,"output_hash":5465255387179887406}
+{"intent_id":894438403076238794,"bundle_id":1,"approved":false,"reject_reason":22,"reject_detail":"duplicate idempotency_key","reservation_id":0,"risk_total_cost_tick":0,"risk_bundle_qty":0,"output_hash":8225871581727150334}

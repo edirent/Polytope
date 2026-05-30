@@ -1,0 +1,6 @@
+build/run_worldcup_feed_to_execution \
+  --seconds 10800 \
+  --scan-interval-ms 5000 \
+  --event-id 30615 \
+  --oracle-artifact runs/worldcup_30615_full_20260530_062519/oracle_artifact_30615_top8 \
+  --out-dir runs/worldcup_feed_to_execute_20260530_091659

@@ -1,0 +1,19 @@
+#pragma once
+
+#include "engine/risk/guards/IRiskGuard.h"
+#include "engine/risk/public/RiskPolicySnapshot.h"
+#include "engine/state/MarketStateSnapshot.h"
+
+namespace trading_engine::risk {
+
+class SnapshotFreshnessGuard {
+public:
+    [[nodiscard]] GuardResult check(
+        const state::MarketStateSnapshot& snapshot,
+        const signal::OpportunityIntent& intent,
+        const RiskPolicySnapshot& policy,
+        std::uint64_t now_ns
+    ) const;
+};
+
+}  // namespace trading_engine::risk

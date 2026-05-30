@@ -1,0 +1,25 @@
+{
+  "now_ns": 1500,
+  "policy": {
+    "policy_version": 1,
+    "risk_enabled": true,
+    "kill_switch_enabled": false,
+    "min_post_risk_total_edge_tick": 0,
+    "min_post_risk_unit_edge_tick": 0,
+    "min_edge_bps": 0,
+    "max_total_cost_tick": 0,
+    "max_single_market_exposure_tick": 0,
+    "max_total_exposure_tick": 0,
+    "max_inventory_lots_per_asset": 0,
+    "max_book_age_ns": 1000,
+    "max_intent_age_ns": 1000,
+    "max_snapshot_skew_ns": 0,
+    "max_allowed_cost_drift_tick": 1000,
+    "max_slippage_tick": 0,
+    "max_unhedged_loss_tick": 0,
+    "min_depth_margin_ratio": 1.2,
+    "max_pending_intents_per_bundle": 100,
+    "max_pending_intents_total": 1000,
+    "max_approvals_per_second": 100
+  }
+}

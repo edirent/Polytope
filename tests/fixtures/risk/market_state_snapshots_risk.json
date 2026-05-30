@@ -1,0 +1,160 @@
+{
+  "snapshots": [
+    {
+      "entity_id": "asset_yes",
+      "market_id": "market_yes",
+      "version": 7,
+      "last_book_update_ns": 1400,
+      "live": true,
+      "recovering": false,
+      "closed": false,
+      "resolved": false,
+      "crossed": false,
+      "has_bid": true,
+      "has_ask": true,
+      "best_bid_tick": 790,
+      "best_ask_tick": 800,
+      "bid_count": 1,
+      "ask_count": 1,
+      "bids": [
+        {"price_tick": 790, "price": 0.00079, "size": 100}
+      ],
+      "asks": [
+        {"price_tick": 800, "price": 0.00080, "size": 100}
+      ],
+      "state_hash": 111,
+      "usable_for_depth": true,
+      "usable_for_signal": true
+    },
+    {
+      "entity_id": "asset_exposure",
+      "market_id": "market_exposure",
+      "version": 7,
+      "last_book_update_ns": 1400,
+      "live": true,
+      "recovering": false,
+      "closed": false,
+      "resolved": false,
+      "crossed": false,
+      "has_bid": true,
+      "has_ask": true,
+      "best_bid_tick": 290,
+      "best_ask_tick": 300,
+      "bid_count": 1,
+      "ask_count": 1,
+      "bids": [
+        {"price_tick": 290, "price": 0.00029, "size": 100}
+      ],
+      "asks": [
+        {"price_tick": 300, "price": 0.00030, "size": 100}
+      ],
+      "state_hash": 444,
+      "usable_for_depth": true,
+      "usable_for_signal": true
+    },
+    {
+      "entity_id": "asset_stale",
+      "market_id": "market_stale",
+      "version": 7,
+      "last_book_update_ns": 100,
+      "live": true,
+      "recovering": false,
+      "closed": false,
+      "resolved": false,
+      "crossed": false,
+      "has_bid": true,
+      "has_ask": true,
+      "best_bid_tick": 790,
+      "best_ask_tick": 800,
+      "bid_count": 1,
+      "ask_count": 1,
+      "bids": [
+        {"price_tick": 790, "price": 0.00079, "size": 100}
+      ],
+      "asks": [
+        {"price_tick": 800, "price": 0.00080, "size": 100}
+      ],
+      "state_hash": 333,
+      "usable_for_depth": true,
+      "usable_for_signal": true
+    },
+    {
+      "entity_id": "asset_partial_a",
+      "market_id": "market_partial",
+      "version": 7,
+      "last_book_update_ns": 1400,
+      "live": true,
+      "recovering": false,
+      "closed": false,
+      "resolved": false,
+      "crossed": false,
+      "has_bid": true,
+      "has_ask": true,
+      "best_bid_tick": 90,
+      "best_ask_tick": 100,
+      "bid_count": 1,
+      "ask_count": 1,
+      "bids": [
+        {"price_tick": 90, "price": 0.00009, "size": 20}
+      ],
+      "asks": [
+        {"price_tick": 100, "price": 0.00010, "size": 20}
+      ],
+      "state_hash": 555,
+      "usable_for_depth": true,
+      "usable_for_signal": true
+    },
+    {
+      "entity_id": "asset_partial_b",
+      "market_id": "market_partial",
+      "version": 7,
+      "last_book_update_ns": 1400,
+      "live": true,
+      "recovering": false,
+      "closed": false,
+      "resolved": false,
+      "crossed": false,
+      "has_bid": true,
+      "has_ask": true,
+      "best_bid_tick": 90,
+      "best_ask_tick": 100,
+      "bid_count": 1,
+      "ask_count": 1,
+      "bids": [
+        {"price_tick": 90, "price": 0.00009, "size": 10}
+      ],
+      "asks": [
+        {"price_tick": 100, "price": 0.00010, "size": 10}
+      ],
+      "state_hash": 555,
+      "usable_for_depth": true,
+      "usable_for_signal": true
+    },
+    {
+      "entity_id": "asset_thin",
+      "market_id": "market_thin",
+      "version": 7,
+      "last_book_update_ns": 1400,
+      "live": true,
+      "recovering": false,
+      "closed": false,
+      "resolved": false,
+      "crossed": false,
+      "has_bid": true,
+      "has_ask": true,
+      "best_bid_tick": 790,
+      "best_ask_tick": 800,
+      "bid_count": 1,
+      "ask_count": 1,
+      "bids": [
+        {"price_tick": 790, "price": 0.00079, "size": 5}
+      ],
+      "asks": [
+        {"price_tick": 800, "price": 0.00080, "size": 5}
+      ],
+      "state_hash": 666,
+      "usable_for_depth": true,
+      "usable_for_signal": true
+    }
+  ]
+}

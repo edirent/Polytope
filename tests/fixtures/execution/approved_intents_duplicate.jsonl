@@ -1,0 +1,2 @@
+{"source_intent_id":4,"decision_id":1004,"reservation_id":5004,"bundle_id":40,"approved_bundle_qty":10,"idempotency_key":"exec-duplicate-key"}
+{"source_intent_id":5,"decision_id":1005,"reservation_id":5005,"bundle_id":41,"approved_bundle_qty":10,"idempotency_key":"exec-duplicate-key"}

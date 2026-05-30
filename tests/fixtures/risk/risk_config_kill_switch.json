@@ -1,0 +1,12 @@
+{
+  "now_ns": 1500,
+  "policy": {
+    "policy_version": 2,
+    "risk_enabled": true,
+    "kill_switch_enabled": true,
+    "max_book_age_ns": 1000,
+    "max_allowed_cost_drift_tick": 1000,
+    "min_depth_margin_ratio": 1.2,
+    "max_approvals_per_second": 100
+  }
+}

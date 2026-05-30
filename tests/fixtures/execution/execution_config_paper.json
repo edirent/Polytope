@@ -1,0 +1,11 @@
+{
+  "now_ns": 1500,
+  "execution": {
+    "mode": "paper",
+    "paper_mode": "PaperAtomic",
+    "allow_partial_fill_paper": false,
+    "max_child_orders_per_plan": 16,
+    "max_order_age_ns": 1000000000,
+    "default_time_in_force_ns": 1000000000
+  }
+}
