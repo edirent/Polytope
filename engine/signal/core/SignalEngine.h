@@ -4,6 +4,8 @@
 #include "engine/signal/edge/TheoreticalEdgeCalculator.h"
 #include "engine/signal/pricing/VWAPPrecheck.h"
 #include "engine/signal/public/SignalConfig.h"
+#include "engine/signal/publish/IntentDeduper.h"
+#include "engine/signal/publish/IntentRateLimiter.h"
 #include "engine/signal/publish/IIntentPublisher.h"
 #include "engine/signal/rank/OpportunityRanker.h"
 #include "engine/signal/reader/MarketSnapshotReader.h"
@@ -20,7 +22,9 @@ public:
         const VWAPPrecheck* vwap,
         const TheoreticalEdgeCalculator* edge_calculator,
         const OpportunityRanker* ranker,
-        IIntentPublisher* publisher
+        IIntentPublisher* publisher,
+        IntentDeduper* deduper = nullptr,
+        IntentRateLimiter* rate_limiter = nullptr
     );
 
     [[nodiscard]] SignalRunResult scan_once(
@@ -36,6 +40,9 @@ private:
     const TheoreticalEdgeCalculator* edge_calculator_ = nullptr;
     const OpportunityRanker* ranker_ = nullptr;
     IIntentPublisher* publisher_ = nullptr;
+    IntentDeduper* deduper_ = nullptr;
+    IntentRateLimiter default_rate_limiter_;
+    IntentRateLimiter* external_rate_limiter_ = nullptr;
 };
 
 }  // namespace trading_engine::signal

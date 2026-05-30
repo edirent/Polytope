@@ -164,8 +164,114 @@ foreach(test_case
     SignalConfig_DefaultsAreSafe
     OpportunityIntent_DefaultIsCandidateOnly
     SignalRunResult_DefaultCountersZero
+    SignalMetrics_DefaultCountersZero
+    SignalMetrics_ObserveScanLatency
 )
     add_test(NAME ${test_case} COMMAND signal_types_tests ${test_case})
+endforeach()
+
+add_executable(signal_opportunity_intent_tests
+    tests/unit/signal/opportunity_intent_test.cpp
+)
+
+target_link_libraries(signal_opportunity_intent_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    OpportunityIntent_DefaultLifecycleFieldsSafe
+    OpportunityIntent_HasArtifactHashes
+    OpportunityIntent_HasSnapshotVersion
+    OpportunityIntent_HasExpiry
+    OpportunityIntent_HasIdempotencyKey
+)
+    add_test(NAME ${test_case} COMMAND signal_opportunity_intent_tests ${test_case})
+endforeach()
+
+add_executable(signal_intent_builder_tests
+    tests/unit/signal/intent_builder_test.cpp
+)
+
+target_link_libraries(signal_intent_builder_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    IntentBuilder_FillsLifecycleFields
+    IntentBuilder_FillsArtifactHashes
+    IntentBuilder_FillsSnapshotVersion
+    IntentBuilder_GeneratesStableIdempotencyKey
+    IntentBuilder_ExpiresAtCreatedPlusTtl
+)
+    add_test(NAME ${test_case} COMMAND signal_intent_builder_tests ${test_case})
+endforeach()
+
+add_executable(signal_intent_deduper_tests
+    tests/unit/signal/intent_deduper_test.cpp
+)
+
+target_link_libraries(signal_intent_deduper_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    IntentDeduper_AllowsFirstIntent
+    IntentDeduper_RejectsDuplicateWithinTtl
+    IntentDeduper_AllowsAfterTtl
+    IntentDeduper_DifferentKeyAllowed
+)
+    add_test(NAME ${test_case} COMMAND signal_intent_deduper_tests ${test_case})
+endforeach()
+
+add_executable(signal_intent_rate_limiter_tests
+    tests/unit/signal/intent_rate_limiter_test.cpp
+)
+
+target_link_libraries(signal_intent_rate_limiter_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    RateLimiter_AllowsUnderLimit
+    RateLimiter_RejectsOverLimit
+    RateLimiter_ResetsNextSecond
+)
+    add_test(NAME ${test_case} COMMAND signal_intent_rate_limiter_tests ${test_case})
+endforeach()
+
+add_executable(signal_bundle_registry_tests
+    tests/unit/signal/bundle_registry_test.cpp
+)
+
+target_link_libraries(signal_bundle_registry_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    BundleRegistry_LoadsBundles
+    BundleRegistry_BuildsAssetIndex
+    BundleRegistry_FindsBundleById
+    BundleRegistry_RejectsDuplicateBundleId
+)
+    add_test(NAME ${test_case} COMMAND signal_bundle_registry_tests ${test_case})
+endforeach()
+
+add_executable(signal_candidate_bundle_scanner_tests
+    tests/unit/signal/candidate_bundle_scanner_test.cpp
+)
+
+target_link_libraries(signal_candidate_bundle_scanner_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    CandidateBundleScanner_FullScanReturnsAll
+    CandidateBundleScanner_DirtyAssetReturnsAffectedBundlesOnly
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND signal_candidate_bundle_scanner_tests ${test_case}
+    )
 endforeach()
 
 add_executable(signal_oracle_artifact_reader_tests
@@ -204,14 +310,40 @@ target_compile_definitions(signal_market_snapshot_reader_tests PRIVATE
 
 foreach(test_case
     MarketSnapshotReader_ReadsRequiredSnapshots
+    MarketSnapshotReader_ReadsUniqueAssetSnapshots
+    MarketSnapshotReader_ReturnsSnapshotVersion
     MarketSnapshotReader_RejectsMissingSnapshot
     MarketSnapshotReader_RejectsRecoveringSnapshot
     MarketSnapshotReader_RejectsCrossedSnapshot
     MarketSnapshotReader_RejectsNotUsableForDepth
     MarketSnapshotReader_RequiresUsableForSignalWhenConfigured
+    MarketSnapshotReader_UsesConsistencyGuard
     MarketSnapshotReader_MarketStateViewAdapterReadsSnapshot
+    MarketSnapshotReader_RejectsStaleWhenScanNowExceedsMaxAge
 )
     add_test(NAME ${test_case} COMMAND signal_market_snapshot_reader_tests ${test_case})
+endforeach()
+
+add_executable(signal_snapshot_consistency_guard_tests
+    tests/unit/signal/snapshot_consistency_guard_test.cpp
+)
+
+target_link_libraries(signal_snapshot_consistency_guard_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    SnapshotGuard_AcceptsConsistentSnapshots
+    SnapshotGuard_RejectsMissingSnapshot
+    SnapshotGuard_RejectsStaleSnapshot
+    SnapshotGuard_RejectsCrossedSnapshot
+    SnapshotGuard_RejectsVersionSkewTooLarge
+    SnapshotGuard_AllowsBoundedSkew
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND signal_snapshot_consistency_guard_tests ${test_case}
+    )
 endforeach()
 
 add_executable(signal_vwap_precheck_tests
@@ -222,6 +354,26 @@ target_link_libraries(signal_vwap_precheck_tests PRIVATE
     engine_signal
 )
 
+add_executable(signal_price_vector_builder_tests
+    tests/unit/signal/price_vector_builder_test.cpp
+)
+
+target_link_libraries(signal_price_vector_builder_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    PriceVectorBuilder_BuyLegUsesAsks
+    PriceVectorBuilder_SellLegUnsupportedInV0
+    PriceVectorBuilder_RejectsMissingSnapshot
+    PriceVectorBuilder_RejectsInvalidQuantity
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND signal_price_vector_builder_tests ${test_case}
+    )
+endforeach()
+
 foreach(test_case
     VWAPPrecheck_BuyConsumesAsks
     VWAPPrecheck_MultiLevelBuyComputesVWAP
@@ -229,6 +381,12 @@ foreach(test_case
     VWAPPrecheck_RejectsMissingAskSide
     VWAPPrecheck_RejectsInvalidQuantity
     VWAPPrecheck_RejectsUnsupportedSellLegInV0
+    VWAPPrecheck_ComputesExecutableQtyPerLeg
+    VWAPPrecheck_BundleQtyIsMinAcrossLegs
+    VWAPPrecheck_TotalCostUsesBundleQty
+    VWAPPrecheck_RejectsIfAnyLegInsufficient
+    VWAPPrecheck_ComputesWorstPrice
+    VWAPPrecheck_ComputesAvgCost
 )
     add_test(NAME ${test_case} COMMAND signal_vwap_precheck_tests ${test_case})
 endforeach()
@@ -271,6 +429,13 @@ foreach(test_case
     EdgeCalculator_SubtractsLatencyBuffer
     EdgeCalculator_RejectsBelowMinEdge
     EdgeCalculator_HandlesZeroCost
+    EdgeCalculator_ComputesUnitEdge
+    EdgeCalculator_ComputesTotalEdgeWithBundleQty
+    EdgeCalculator_RejectsBelowMinUnitEdge
+    EdgeCalculator_RejectsBelowMinTotalEdge
+    EdgeCalculator_RejectsBelowMinEdgeBps
+    EdgeCalculator_RejectsBelowMinBundleQty
+    EdgeCalculator_SubtractsSlippageBuffer
 )
     add_test(NAME ${test_case} COMMAND signal_edge_calculator_tests ${test_case})
 endforeach()
@@ -285,9 +450,11 @@ target_link_libraries(signal_opportunity_ranker_tests PRIVATE
 
 foreach(test_case
     OpportunityRanker_SortsPaperOpportunitiesFirst
-    OpportunityRanker_SortsByEdgeDescending
-    OpportunityRanker_StableTieBreakByBundleId
-    OpportunityRanker_DeterministicOrdering
+    OpportunityRanker_SortsByTotalEdge
+    OpportunityRanker_TieBreaksByEdgeBps
+    OpportunityRanker_TieBreaksByBundleQty
+    OpportunityRanker_StableFinalTieBreak
+    OpportunityRanker_DoesNotMutateIntentContent
 )
     add_test(NAME ${test_case} COMMAND signal_opportunity_ranker_tests ${test_case})
 endforeach()
@@ -320,8 +487,28 @@ target_link_libraries(signal_workflow_small_fixture_tests PRIVATE
 foreach(test_case
     SignalEngine_ScansBundles
     SignalEngine_PublishesPaperOpportunityWhenEdgePositive
+    SignalEngine_DedupesDuplicatePaperOpportunity
+    SignalEngine_RateLimitsPublishedIntent
 )
     add_test(NAME ${test_case} COMMAND signal_workflow_small_fixture_tests ${test_case})
+endforeach()
+
+add_executable(signal_engine_v05_workflow_tests
+    tests/integration/signal/signal_engine_v05_workflow_test.cpp
+)
+
+target_link_libraries(signal_engine_v05_workflow_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    SignalEngine_PublishesOpportunityWithLifecycleFields
+    SignalEngine_DedupesRepeatedOpportunity
+    SignalEngine_RateLimitsManyOpportunities
+    SignalEngine_RejectsSnapshotVersionSkew
+    SignalEngine_ComputesBundleQtyAndTotalEdge
+)
+    add_test(NAME ${test_case} COMMAND signal_engine_v05_workflow_tests ${test_case})
 endforeach()
 
 add_executable(signal_rejects_bad_state_tests
@@ -373,6 +560,10 @@ add_executable(verify_signal_workflow_tests
 target_compile_definitions(verify_signal_workflow_tests PRIVATE
     POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
     VERIFY_SIGNAL_WORKFLOW_BIN="$<TARGET_FILE:verify_signal_workflow>"
+)
+
+target_link_libraries(verify_signal_workflow_tests PRIVATE
+    oracle_core
 )
 
 add_dependencies(verify_signal_workflow_tests verify_signal_workflow)
@@ -603,6 +794,25 @@ foreach(test_case
     )
 endforeach()
 
+add_executable(oracle_market_api_client_tests
+    tests/unit/oracle/market_api_client_test.cpp
+)
+
+target_link_libraries(oracle_market_api_client_tests PRIVATE
+    oracle_ingestion
+)
+
+foreach(test_case
+    MarketApiClient_ParsesGammaMarket
+    MarketApiClient_RejectsMalformedGammaResponse
+    MarketApiClient_SkipsOrderbookDisabledMarket
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_market_api_client_tests ${test_case}
+    )
+endforeach()
+
 add_executable(oracle_market_universe_builder_tests
     tests/unit/oracle/market_universe_builder_test.cpp
 )
@@ -676,10 +886,16 @@ target_link_libraries(oracle_manual_rule_editor_tests PRIVATE
     oracle_rules
 )
 
-add_test(
-    NAME ManualRuleEditor_RoundTripsRulebook
-    COMMAND oracle_manual_rule_editor_tests ManualRuleEditor_RoundTripsRulebook
+foreach(test_case
+    ManualRuleEditor_RoundTripsRulebook
+    ManualRuleEditor_RoundTripsRuleDrafts
+    ManualRuleEditor_ApprovesDraftsIntoRulebook
 )
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_manual_rule_editor_tests ${test_case}
+    )
+endforeach()
 
 add_executable(oracle_llm_rule_extractor_tests
     tests/unit/oracle/llm_rule_extractor_test.cpp
@@ -693,8 +909,17 @@ foreach(test_case
     StubRuleExtractor_NoNetwork
     StubRuleExtractor_ReturnsDisabled
     StubRuleExtractor_DoesNotProduceValidatedRules
-    ClaudeRuleExtractor_DisabledByDefault
-    ClaudeRuleExtractor_MissingApiKeyWhenEnabled
+    OpenRouterRuleExtractor_DisabledByDefault
+    OpenRouterRuleExtractor_MissingApiKeyWhenEnabled
+    OpenRouterRuleExtractor_UsesLlama33FreeModel
+    OpenRouterRuleExtractor_ModelCanBeOverridden
+    OpenRouterRuleExtractor_MaxTokensCanBeOverridden
+    OpenRouterRuleExtractor_ParsesDraftJson
+    OpenRouterRuleExtractor_ParsesChatCompletionResponse
+    OpenRouterRuleExtractor_ParsesChatCompletionContentArray
+    OpenRouterRuleExtractor_ExtractsJsonFromProse
+    OpenRouterRuleExtractor_InvalidJsonDiagnosticIncludesContent
+    OpenRouterRuleExtractor_EmptyContentDiagnosticIncludesChoice
 )
     add_test(
         NAME ${test_case}
@@ -703,10 +928,10 @@ foreach(test_case
 endforeach()
 
 add_test(
-    NAME ClaudeRuleExtractorManual
-    COMMAND oracle_llm_rule_extractor_tests ClaudeRuleExtractorManual
+    NAME OpenRouterRuleExtractorManual
+    COMMAND oracle_llm_rule_extractor_tests OpenRouterRuleExtractorManual
 )
-set_tests_properties(ClaudeRuleExtractorManual PROPERTIES
+set_tests_properties(OpenRouterRuleExtractorManual PROPERTIES
     DISABLED TRUE
     LABELS manual
 )
@@ -742,6 +967,8 @@ target_link_libraries(oracle_constraint_compiler_tests PRIVATE
 foreach(test_case
     ConstraintCompiler_ExactlyOne
     ConstraintCompiler_AtMostOne
+    ConstraintCompiler_MutuallyExclusiveExclusiveOnlyBuildsAtMostOne
+    ConstraintCompiler_MutuallyExclusiveExhaustiveBuildsExactlyOne
     ConstraintCompiler_AtLeastOne
     ConstraintCompiler_Implies
     ConstraintCompiler_RejectsUnapprovedRules
@@ -753,6 +980,44 @@ foreach(test_case
     add_test(
         NAME ${test_case}
         COMMAND oracle_constraint_compiler_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_market_intrinsic_constraint_builder_tests
+    tests/unit/oracle/market_intrinsic_constraint_builder_test.cpp
+)
+
+target_link_libraries(oracle_market_intrinsic_constraint_builder_tests PRIVATE
+    oracle_compiler
+)
+
+foreach(test_case
+    BinaryMarket_GeneratesYesNoExactlyOne
+    WorldCup_96AssetsAdds48ComplementConstraints
+    ComplementConstraintsAreDeterministic
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_market_intrinsic_constraint_builder_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_component_partitioner_tests
+    tests/unit/oracle/component_partitioner_test.cpp
+)
+
+target_link_libraries(oracle_component_partitioner_tests PRIVATE
+    oracle_compiler
+)
+
+foreach(test_case
+    ComponentPartitioner_AtMostOneClassifiedAsSemanticComponent
+    ComponentPartitioner_SplitsIndependentRules
+    ComponentPartitioner_ExhaustiveMutualExclusionWithComplementsIsExactlyOne
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_component_partitioner_tests ${test_case}
     )
 endforeach()
 
@@ -799,6 +1064,26 @@ foreach(test_case
     add_test(
         NAME ${test_case}
         COMMAND oracle_state_enumerator_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_feasible_state_oracle_tests
+    tests/unit/oracle/feasible_state_oracle_test.cpp
+)
+
+target_link_libraries(oracle_feasible_state_oracle_tests PRIVATE
+    oracle_enumerate
+)
+
+foreach(test_case
+    ExactlyOneOracle_YesBasketMinPaysOne
+    ExactlyOneOracle_NoBasketMinPaysNMinusOne
+    AtMostOneOracle_NoBasketMinPaysNMinusOne
+    AtMostOneOracle_YesBasketCanAllLose
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_feasible_state_oracle_tests ${test_case}
     )
 endforeach()
 
@@ -863,10 +1148,33 @@ foreach(test_case
     CandidateBundleGenerator_LoadsFixtureBundles
     CandidateBundleGenerator_DeterministicHash
     CandidateBundleGenerator_ExportsArtifact
+    CandidateBundleGenerator_GeneratesBuyAllOutcomesBundle
+    CandidateBundleGenerator_SkipsSplitResolutionText
 )
     add_test(
         NAME ${test_case}
         COMMAND oracle_candidate_bundle_generator_tests ${test_case}
+    )
+endforeach()
+
+add_executable(oracle_combinatorial_bundle_generator_tests
+    tests/unit/oracle/combinatorial_bundle_generator_test.cpp
+)
+
+target_link_libraries(oracle_combinatorial_bundle_generator_tests PRIVATE
+    oracle_bundles
+)
+
+foreach(test_case
+    CombinatorialBundleGenerator_ExactlyOneGeneratesYesAndNoBaskets
+    CombinatorialBundleGenerator_AtMostOneGeneratesOnlyNoBasket
+    CombinatorialBundleGenerator_DoesNotGenerateAtMostOneYesBasket
+    CombinatorialBundleGenerator_SkipsSingleMarketTrivialRule
+    CombinatorialBundleGenerator_SkipsTooManyLegs
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND oracle_combinatorial_bundle_generator_tests ${test_case}
     )
 endforeach()
 
@@ -935,6 +1243,8 @@ add_dependencies(oracle_workflow_small_fixture_tests verify_oracle_workflow)
 foreach(test_case
     OracleWorkflow_SmallFixtureCompiles
     OracleWorkflow_LlmDisabledStillPasses
+    OracleWorkflow_GeneratesCombinatorialBundlesFromRulebook
+    OracleWorkflow_LargeAtMostOneUsesComponentOracle
 )
     add_test(
         NAME ${test_case}

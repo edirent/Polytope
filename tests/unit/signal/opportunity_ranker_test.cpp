@@ -31,14 +31,19 @@ void expect_equal(
 OpportunityIntent intent(
     std::uint64_t intent_id,
     std::uint64_t bundle_id,
-    std::int64_t edge_tick,
-    IntentStatus status
+    IntentStatus status,
+    std::int64_t total_edge_tick = 0,
+    std::int64_t edge_bps = 0,
+    std::int64_t bundle_qty = 0
 ) {
     OpportunityIntent out;
     out.intent_id = intent_id;
     out.bundle_id = bundle_id;
-    out.estimated_edge_tick = edge_tick;
     out.status = status;
+    out.estimated_edge_tick = total_edge_tick;
+    out.total_edge_tick = total_edge_tick;
+    out.edge_bps = edge_bps;
+    out.bundle_qty = bundle_qty;
     return out;
 }
 
@@ -55,9 +60,9 @@ std::vector<std::uint64_t> intent_ids(
 
 void OpportunityRanker_SortsPaperOpportunitiesFirst() {
     std::vector<OpportunityIntent> intents{
-        intent(1, 1, 1'000'000, IntentStatus::RejectedLowEdge),
-        intent(2, 2, 10, IntentStatus::PaperOpportunity),
-        intent(3, 3, 500'000, IntentStatus::RejectedBadMarketState)
+        intent(1, 1, IntentStatus::RejectedLowEdge, 1'000'000, 10, 10),
+        intent(2, 2, IntentStatus::PaperOpportunity, 10, 1, 1),
+        intent(3, 3, IntentStatus::RejectedBadMarketState, 500'000, 5, 5)
     };
 
     OpportunityRanker{}.rank(&intents);
@@ -65,11 +70,11 @@ void OpportunityRanker_SortsPaperOpportunitiesFirst() {
     expect_equal(intents[0].intent_id, 2ULL, "paper first");
 }
 
-void OpportunityRanker_SortsByEdgeDescending() {
+void OpportunityRanker_SortsByTotalEdge() {
     std::vector<OpportunityIntent> intents{
-        intent(1, 1, 10, IntentStatus::PaperOpportunity),
-        intent(2, 2, 30, IntentStatus::PaperOpportunity),
-        intent(3, 3, 20, IntentStatus::PaperOpportunity)
+        intent(1, 1, IntentStatus::PaperOpportunity, 10, 100, 100),
+        intent(2, 2, IntentStatus::PaperOpportunity, 30, 1, 1),
+        intent(3, 3, IntentStatus::PaperOpportunity, 20, 1'000, 1'000)
     };
 
     OpportunityRanker{}.rank(&intents);
@@ -77,11 +82,11 @@ void OpportunityRanker_SortsByEdgeDescending() {
     expect_equal(intent_ids(intents), std::vector<std::uint64_t>{2, 3, 1}, "order");
 }
 
-void OpportunityRanker_StableTieBreakByBundleId() {
+void OpportunityRanker_TieBreaksByEdgeBps() {
     std::vector<OpportunityIntent> intents{
-        intent(1, 30, 100, IntentStatus::PaperOpportunity),
-        intent(2, 10, 100, IntentStatus::PaperOpportunity),
-        intent(3, 20, 100, IntentStatus::PaperOpportunity)
+        intent(1, 1, IntentStatus::PaperOpportunity, 100, 10, 100),
+        intent(2, 2, IntentStatus::PaperOpportunity, 100, 30, 1),
+        intent(3, 3, IntentStatus::PaperOpportunity, 100, 20, 1'000)
     };
 
     OpportunityRanker{}.rank(&intents);
@@ -89,18 +94,30 @@ void OpportunityRanker_StableTieBreakByBundleId() {
     expect_equal(intent_ids(intents), std::vector<std::uint64_t>{2, 3, 1}, "order");
 }
 
-void OpportunityRanker_DeterministicOrdering() {
+void OpportunityRanker_TieBreaksByBundleQty() {
+    std::vector<OpportunityIntent> intents{
+        intent(1, 1, IntentStatus::PaperOpportunity, 100, 10, 10),
+        intent(2, 2, IntentStatus::PaperOpportunity, 100, 10, 30),
+        intent(3, 3, IntentStatus::PaperOpportunity, 100, 10, 20)
+    };
+
+    OpportunityRanker{}.rank(&intents);
+
+    expect_equal(intent_ids(intents), std::vector<std::uint64_t>{2, 3, 1}, "order");
+}
+
+void OpportunityRanker_StableFinalTieBreak() {
     std::vector<OpportunityIntent> first{
-        intent(4, 2, 100, IntentStatus::RejectedLowEdge),
-        intent(3, 1, 100, IntentStatus::PaperOpportunity),
-        intent(2, 1, 100, IntentStatus::PaperOpportunity),
-        intent(1, 1, 200, IntentStatus::PaperOpportunity)
+        intent(4, 2, IntentStatus::RejectedLowEdge, 100, 10, 10),
+        intent(3, 1, IntentStatus::PaperOpportunity, 100, 10, 10),
+        intent(2, 1, IntentStatus::PaperOpportunity, 100, 10, 10),
+        intent(1, 1, IntentStatus::PaperOpportunity, 200, 1, 1)
     };
     std::vector<OpportunityIntent> second{
-        intent(1, 1, 200, IntentStatus::PaperOpportunity),
-        intent(4, 2, 100, IntentStatus::RejectedLowEdge),
-        intent(2, 1, 100, IntentStatus::PaperOpportunity),
-        intent(3, 1, 100, IntentStatus::PaperOpportunity)
+        intent(1, 1, IntentStatus::PaperOpportunity, 200, 1, 1),
+        intent(4, 2, IntentStatus::RejectedLowEdge, 100, 10, 10),
+        intent(2, 1, IntentStatus::PaperOpportunity, 100, 10, 10),
+        intent(3, 1, IntentStatus::PaperOpportunity, 100, 10, 10)
     };
 
     OpportunityRanker ranker;
@@ -112,6 +129,26 @@ void OpportunityRanker_DeterministicOrdering() {
     expect_equal(intent_ids(second), expected, "second order");
 }
 
+void OpportunityRanker_DoesNotMutateIntentContent() {
+    std::vector<OpportunityIntent> intents{
+        intent(1, 2, IntentStatus::PaperOpportunity, 100, 20, 10),
+        intent(2, 1, IntentStatus::PaperOpportunity, 200, 10, 5)
+    };
+    intents[0].idempotency_key = "key-1";
+    intents[0].proof_ref = "proof-1";
+    intents[1].idempotency_key = "key-2";
+    intents[1].proof_ref = "proof-2";
+
+    OpportunityRanker{}.rank(&intents);
+
+    expect_equal(intents[0].intent_id, 2ULL, "first id");
+    expect_equal(intents[0].idempotency_key, std::string{"key-2"}, "first key");
+    expect_equal(intents[0].proof_ref, std::string{"proof-2"}, "first proof");
+    expect_equal(intents[1].intent_id, 1ULL, "second id");
+    expect_equal(intents[1].idempotency_key, std::string{"key-1"}, "second key");
+    expect_equal(intents[1].proof_ref, std::string{"proof-1"}, "second proof");
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -121,16 +158,24 @@ const std::unordered_map<std::string, TestFn>& tests() {
             &OpportunityRanker_SortsPaperOpportunitiesFirst
         },
         {
-            "OpportunityRanker_SortsByEdgeDescending",
-            &OpportunityRanker_SortsByEdgeDescending
+            "OpportunityRanker_SortsByTotalEdge",
+            &OpportunityRanker_SortsByTotalEdge
         },
         {
-            "OpportunityRanker_StableTieBreakByBundleId",
-            &OpportunityRanker_StableTieBreakByBundleId
+            "OpportunityRanker_TieBreaksByEdgeBps",
+            &OpportunityRanker_TieBreaksByEdgeBps
         },
         {
-            "OpportunityRanker_DeterministicOrdering",
-            &OpportunityRanker_DeterministicOrdering
+            "OpportunityRanker_TieBreaksByBundleQty",
+            &OpportunityRanker_TieBreaksByBundleQty
+        },
+        {
+            "OpportunityRanker_StableFinalTieBreak",
+            &OpportunityRanker_StableFinalTieBreak
+        },
+        {
+            "OpportunityRanker_DoesNotMutateIntentContent",
+            &OpportunityRanker_DoesNotMutateIntentContent
         }
     };
     return test_map;

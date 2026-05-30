@@ -11,6 +11,7 @@
 namespace {
 
 using trading_engine::oracle::CandidateBundleGenerator;
+using trading_engine::oracle::RawMarketRecord;
 
 [[noreturn]] void fail(const std::string& message) {
     throw std::runtime_error(message);
@@ -105,6 +106,48 @@ void CandidateBundleGenerator_ExportsArtifact() {
     std::filesystem::remove(out_path);
 }
 
+RawMarketRecord raw_market(
+    std::string market_id,
+    std::string description
+) {
+    RawMarketRecord record;
+    record.market_id = std::move(market_id);
+    record.title = "Fixture market";
+    record.description = std::move(description);
+    record.outcomes = {"Yes", "No"};
+    record.asset_ids = {"asset_yes", "asset_no"};
+    return record;
+}
+
+void CandidateBundleGenerator_GeneratesBuyAllOutcomesBundle() {
+    CandidateBundleGenerator generator;
+    const auto result = generator.generate_buy_all_outcomes(
+        {raw_market("m1", "This market resolves Yes or No.")},
+        known_markets(),
+        known_assets()
+    );
+
+    expect_true(result.ok(), "generate ok");
+    expect_equal(result.bundles.size(), 1U, "bundle count");
+    expect_equal(result.bundles.front().leg_count, 2U, "leg count");
+    expect_equal(result.bundles.front().legs[0].asset_id, std::string{"asset_yes"}, "asset yes");
+    expect_equal(result.bundles.front().legs[1].asset_id, std::string{"asset_no"}, "asset no");
+    expect_true(result.bundle_hash != 0, "bundle hash");
+}
+
+void CandidateBundleGenerator_SkipsSplitResolutionText() {
+    CandidateBundleGenerator generator;
+    const auto result = generator.generate_buy_all_outcomes(
+        {raw_market("m1", "If neither occurs, this market resolves to 50-50.")},
+        known_markets(),
+        known_assets()
+    );
+
+    expect_true(result.ok(), "generate ok");
+    expect_true(result.bundles.empty(), "bundle skipped");
+    expect_true(!result.warnings.empty(), "warning");
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -120,6 +163,14 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "CandidateBundleGenerator_ExportsArtifact",
             &CandidateBundleGenerator_ExportsArtifact
+        },
+        {
+            "CandidateBundleGenerator_GeneratesBuyAllOutcomesBundle",
+            &CandidateBundleGenerator_GeneratesBuyAllOutcomesBundle
+        },
+        {
+            "CandidateBundleGenerator_SkipsSplitResolutionText",
+            &CandidateBundleGenerator_SkipsSplitResolutionText
         }
     };
     return test_map;

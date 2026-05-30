@@ -113,6 +113,19 @@ ConstraintCompilationResult ConstraintCompiler::compile(
 
         BooleanConstraintBuildResult built;
         switch (rule.type) {
+            case RuleType::MutuallyExclusive:
+                if (rule_is_exhaustive(rule.coverage)) {
+                    built = builder.exactly_one(
+                        rule.variable_ids,
+                        variable_index
+                    );
+                } else {
+                    built = builder.at_most_one(
+                        rule.variable_ids,
+                        variable_index
+                    );
+                }
+                break;
             case RuleType::ExactlyOne:
                 built = builder.exactly_one(
                     rule.variable_ids,

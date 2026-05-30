@@ -40,7 +40,7 @@ void OracleBuild_NoLlmRequired() {
         "kLlmBuildEnabled"
     );
 
-    (void)std::getenv("ANTHROPIC_API_KEY");
+    (void)std::getenv("OPENROUTER_API_KEY");
 
     ArtifactManifest manifest;
     CandidateBundle bundle;

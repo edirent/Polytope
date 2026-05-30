@@ -1,4 +1,4 @@
-#include "oracle/llm/ClaudeRuleExtractor.h"
+#include "oracle/llm/OpenRouterRuleExtractor.h"
 #include "oracle/llm/StubRuleExtractor.h"
 #include "oracle/rules/ValidatedRule.h"
 
@@ -11,12 +11,16 @@
 
 namespace {
 
-using trading_engine::oracle::ClaudeRuleExtractor;
 using trading_engine::oracle::LLMExtractionStatus;
 using trading_engine::oracle::LLMRuleExtractionRequest;
+using trading_engine::oracle::OpenRouterRuleExtractor;
 using trading_engine::oracle::RuleDraft;
+using trading_engine::oracle::RuleType;
 using trading_engine::oracle::StubRuleExtractor;
 using trading_engine::oracle::ValidatedRule;
+using trading_engine::oracle::build_openrouter_rule_extraction_prompt;
+using trading_engine::oracle::parse_openrouter_chat_response;
+using trading_engine::oracle::parse_rule_drafts_json;
 
 [[noreturn]] void fail(const std::string& message) {
     throw std::runtime_error(message);
@@ -47,6 +51,7 @@ LLMRuleExtractionRequest request() {
         .title = "Winner?",
         .description = "Fixture market",
         .outcomes = {"YES", "NO"},
+        .asset_ids = {"asset_yes", "asset_no"},
         .resolution_source = "fixture"
     });
     return out;
@@ -85,8 +90,8 @@ void StubRuleExtractor_DoesNotProduceValidatedRules() {
     expect_true(result.drafts.empty(), "drafts empty");
 }
 
-void ClaudeRuleExtractor_DisabledByDefault() {
-    ClaudeRuleExtractor extractor;
+void OpenRouterRuleExtractor_DisabledByDefault() {
+    OpenRouterRuleExtractor extractor;
     const auto result = extractor.extract(request());
 
     expect_equal(
@@ -97,10 +102,10 @@ void ClaudeRuleExtractor_DisabledByDefault() {
     expect_true(result.drafts.empty(), "drafts empty");
 }
 
-void ClaudeRuleExtractor_MissingApiKeyWhenEnabled() {
-    ClaudeRuleExtractor extractor(
+void OpenRouterRuleExtractor_MissingApiKeyWhenEnabled() {
+    OpenRouterRuleExtractor extractor(
         true,
-        "__POLYTOPE_MISSING_ANTHROPIC_API_KEY__"
+        "__POLYTOPE_MISSING_OPENROUTER_API_KEY__"
     );
     const auto result = extractor.extract(request());
 
@@ -112,8 +117,206 @@ void ClaudeRuleExtractor_MissingApiKeyWhenEnabled() {
     expect_true(result.drafts.empty(), "drafts empty");
 }
 
-void ClaudeRuleExtractorManual() {
-    ClaudeRuleExtractor extractor;
+void OpenRouterRuleExtractor_UsesLlama33FreeModel() {
+    OpenRouterRuleExtractor extractor(false);
+
+    expect_true(
+        extractor.api_key_env_var() == "OPENROUTER_API_KEY",
+        "api key env var"
+    );
+    expect_true(
+        std::string{OpenRouterRuleExtractor::kModelEnvVar} ==
+            "OPENROUTER_MODEL",
+        "model env var"
+    );
+    expect_true(
+        std::string{OpenRouterRuleExtractor::kMaxTokensEnvVar} ==
+            "OPENROUTER_MAX_TOKENS",
+        "max tokens env var"
+    );
+    expect_true(
+        extractor.model() == "meta-llama/llama-3.3-70b-instruct:free",
+        "model"
+    );
+    expect_true(
+        extractor.max_tokens() == OpenRouterRuleExtractor::kDefaultMaxTokens,
+        "max tokens"
+    );
+    expect_true(
+        extractor.endpoint() ==
+            "https://openrouter.ai/api/v1/chat/completions",
+        "endpoint"
+    );
+}
+
+void OpenRouterRuleExtractor_ModelCanBeOverridden() {
+    OpenRouterRuleExtractor extractor(
+        false,
+        OpenRouterRuleExtractor::kDefaultApiKeyEnvVar,
+        "openrouter/test-model"
+    );
+
+    expect_true(extractor.model() == "openrouter/test-model", "model");
+}
+
+void OpenRouterRuleExtractor_MaxTokensCanBeOverridden() {
+    OpenRouterRuleExtractor extractor(
+        false,
+        OpenRouterRuleExtractor::kDefaultApiKeyEnvVar,
+        OpenRouterRuleExtractor::kDefaultModel,
+        OpenRouterRuleExtractor::kChatCompletionsEndpoint,
+        128
+    );
+
+    expect_true(extractor.max_tokens() == 128, "max tokens");
+}
+
+void OpenRouterRuleExtractor_PromptRequiresCombinatorialRules() {
+    auto input = request();
+    input.markets.push_back({
+        .market_id = "m2",
+        .event_id = "e1",
+        .title = "Other winner?",
+        .description = "Same event fixture market",
+        .outcomes = {"YES", "NO"},
+        .asset_ids = {"asset2_yes", "asset2_no"},
+        .resolution_source = "fixture"
+    });
+
+    const auto prompt = build_openrouter_rule_extraction_prompt(input);
+    expect_true(
+        prompt.find("DO NOT generate trivial intra-market constraints") !=
+            std::string::npos,
+        "no trivial directive"
+    );
+    expect_true(
+        prompt.find("ONLY COMBINATORIAL CONSTRAINTS") != std::string::npos,
+        "combinatorial directive"
+    );
+    expect_true(
+        prompt.find("event_id: e1") != std::string::npos,
+        "event group"
+    );
+    expect_true(
+        prompt.find("variable_id: m1:YES") != std::string::npos,
+        "variable id"
+    );
+    expect_true(
+        prompt.find("asset_id: asset_yes") != std::string::npos,
+        "asset audit context"
+    );
+}
+
+void OpenRouterRuleExtractor_ParsesDraftJson() {
+    const auto result = parse_rule_drafts_json(R"json(
+        {
+          "drafts": [
+            {
+              "rule_id": "draft_exactly_one_m1",
+              "type": "ExactlyOne",
+              "variable_ids": ["m1:YES", "m1:NO"],
+              "source_text": "YES and NO are the market outcomes",
+              "rationale": "binary market outcomes are exhaustive",
+              "requires_manual_review": false
+            }
+          ]
+        }
+    )json");
+
+    expect_equal(result.status, LLMExtractionStatus::Ok, "status");
+    expect_true(result.drafts.size() == 1, "draft count");
+    expect_true(result.drafts.front().requires_manual_review, "manual review");
+    expect_true(
+        result.drafts.front().type == RuleType::ExactlyOne,
+        "rule type"
+    );
+}
+
+void OpenRouterRuleExtractor_ParsesChatCompletionResponse() {
+    const auto result = parse_openrouter_chat_response(R"json(
+        {
+          "choices": [
+            {
+              "message": {
+                "content": "```json\n{\"drafts\":[{\"rule_id\":\"draft_1\",\"type\":\"ExactlyOne\",\"variable_ids\":[\"m1:YES\",\"m1:NO\"],\"source_text\":\"fixture\",\"rationale\":\"binary\",\"requires_manual_review\":true}]}\n```"
+              }
+            }
+          ]
+        }
+    )json");
+
+    expect_equal(result.status, LLMExtractionStatus::Ok, "status");
+    expect_true(result.drafts.size() == 1, "draft count");
+    expect_true(result.drafts.front().rule_id == "draft_1", "rule id");
+}
+
+void OpenRouterRuleExtractor_ParsesChatCompletionContentArray() {
+    const auto result = parse_openrouter_chat_response(R"json(
+        {
+          "choices": [
+            {
+              "message": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "{\"drafts\":[{\"rule_id\":\"draft_array\",\"type\":\"ExactlyOne\",\"variable_ids\":[\"m1:YES\",\"m1:NO\"],\"source_text\":\"fixture\",\"rationale\":\"binary\",\"requires_manual_review\":true}]}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+    )json");
+
+    expect_equal(result.status, LLMExtractionStatus::Ok, "status");
+    expect_true(result.drafts.size() == 1, "draft count");
+    expect_true(result.drafts.front().rule_id == "draft_array", "rule id");
+}
+
+void OpenRouterRuleExtractor_ExtractsJsonFromProse() {
+    const auto result = parse_rule_drafts_json(R"json(
+        Here is the JSON:
+        {"drafts":[{"rule_id":"draft_prose","type":"ExactlyOne","variable_ids":["m1:YES","m1:NO"],"source_text":"fixture","rationale":"binary","requires_manual_review":true}]}
+    )json");
+
+    expect_equal(result.status, LLMExtractionStatus::Ok, "status");
+    expect_true(result.drafts.size() == 1, "draft count");
+    expect_true(result.drafts.front().rule_id == "draft_prose", "rule id");
+}
+
+void OpenRouterRuleExtractor_InvalidJsonDiagnosticIncludesContent() {
+    const auto result = parse_rule_drafts_json("not json at all");
+
+    expect_equal(result.status, LLMExtractionStatus::InvalidResponse, "status");
+    expect_true(
+        result.diagnostic.find("not json at all") != std::string::npos,
+        "diagnostic"
+    );
+}
+
+void OpenRouterRuleExtractor_EmptyContentDiagnosticIncludesChoice() {
+    const auto result = parse_openrouter_chat_response(R"json(
+        {
+          "choices": [
+            {
+              "finish_reason": "length",
+              "message": {
+                "content": ""
+              }
+            }
+          ]
+        }
+    )json");
+
+    expect_equal(result.status, LLMExtractionStatus::InvalidResponse, "status");
+    expect_true(
+        result.diagnostic.find("finish_reason") != std::string::npos,
+        "diagnostic"
+    );
+}
+
+void OpenRouterRuleExtractorManual() {
+    OpenRouterRuleExtractor extractor;
     const auto result = extractor.extract(request());
 
     expect_true(
@@ -139,14 +342,54 @@ const std::unordered_map<std::string, TestFn>& tests() {
             &StubRuleExtractor_DoesNotProduceValidatedRules
         },
         {
-            "ClaudeRuleExtractor_DisabledByDefault",
-            &ClaudeRuleExtractor_DisabledByDefault
+            "OpenRouterRuleExtractor_DisabledByDefault",
+            &OpenRouterRuleExtractor_DisabledByDefault
         },
         {
-            "ClaudeRuleExtractor_MissingApiKeyWhenEnabled",
-            &ClaudeRuleExtractor_MissingApiKeyWhenEnabled
+            "OpenRouterRuleExtractor_MissingApiKeyWhenEnabled",
+            &OpenRouterRuleExtractor_MissingApiKeyWhenEnabled
         },
-        {"ClaudeRuleExtractorManual", &ClaudeRuleExtractorManual}
+        {
+            "OpenRouterRuleExtractor_UsesLlama33FreeModel",
+            &OpenRouterRuleExtractor_UsesLlama33FreeModel
+        },
+        {
+            "OpenRouterRuleExtractor_ModelCanBeOverridden",
+            &OpenRouterRuleExtractor_ModelCanBeOverridden
+        },
+        {
+            "OpenRouterRuleExtractor_MaxTokensCanBeOverridden",
+            &OpenRouterRuleExtractor_MaxTokensCanBeOverridden
+        },
+        {
+            "OpenRouterRuleExtractor_PromptRequiresCombinatorialRules",
+            &OpenRouterRuleExtractor_PromptRequiresCombinatorialRules
+        },
+        {
+            "OpenRouterRuleExtractor_ParsesDraftJson",
+            &OpenRouterRuleExtractor_ParsesDraftJson
+        },
+        {
+            "OpenRouterRuleExtractor_ParsesChatCompletionResponse",
+            &OpenRouterRuleExtractor_ParsesChatCompletionResponse
+        },
+        {
+            "OpenRouterRuleExtractor_ParsesChatCompletionContentArray",
+            &OpenRouterRuleExtractor_ParsesChatCompletionContentArray
+        },
+        {
+            "OpenRouterRuleExtractor_ExtractsJsonFromProse",
+            &OpenRouterRuleExtractor_ExtractsJsonFromProse
+        },
+        {
+            "OpenRouterRuleExtractor_InvalidJsonDiagnosticIncludesContent",
+            &OpenRouterRuleExtractor_InvalidJsonDiagnosticIncludesContent
+        },
+        {
+            "OpenRouterRuleExtractor_EmptyContentDiagnosticIncludesChoice",
+            &OpenRouterRuleExtractor_EmptyContentDiagnosticIncludesChoice
+        },
+        {"OpenRouterRuleExtractorManual", &OpenRouterRuleExtractorManual}
     };
     return test_map;
 }
@@ -178,7 +421,7 @@ int main(int argc, char** argv) {
 
     int failures = 0;
     for (const auto& [name, _] : tests()) {
-        if (name == "ClaudeRuleExtractorManual") {
+        if (name == "OpenRouterRuleExtractorManual") {
             continue;
         }
         failures += run_test(name) == 0 ? 0 : 1;

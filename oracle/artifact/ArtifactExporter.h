@@ -19,6 +19,10 @@ struct OracleArtifactContents {
 
     std::vector<std::byte> variables_bin;
     std::vector<std::byte> constraints_bin;
+    std::vector<std::byte> components_bin;
+    std::vector<std::byte> component_constraints_bin;
+    std::vector<std::byte> oracle_descriptors_bin;
+    std::vector<std::byte> bundle_templates_bin;
     std::vector<std::byte> feasible_states_bin;
     std::vector<std::byte> payoff_matrix_bin;
     std::vector<std::byte> candidate_bundles_bin;

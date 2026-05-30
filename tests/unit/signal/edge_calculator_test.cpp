@@ -10,8 +10,12 @@ namespace {
 
 using trading_engine::oracle::CandidateBundle;
 using trading_engine::signal::CostResult;
+using trading_engine::signal::EdgeFailureReason;
+using trading_engine::signal::EdgeBreakdown;
 using trading_engine::signal::FeeModel;
 using trading_engine::signal::LatencyBufferModel;
+using trading_engine::signal::SignalConfig;
+using trading_engine::signal::SlippageBufferModel;
 using trading_engine::signal::TheoreticalEdgeCalculator;
 
 [[noreturn]] void fail(const std::string& message) {
@@ -52,20 +56,27 @@ CandidateBundle bundle(
     return out;
 }
 
-CostResult cost(std::int64_t total_cost_tick) {
+CostResult cost(
+    std::int64_t cost_per_bundle_tick,
+    std::int64_t bundle_qty = 1
+) {
     CostResult out;
-    out.enough_depth = true;
-    out.total_cost_tick = total_cost_tick;
+    out.executable = true;
+    out.bundle_qty = bundle_qty;
+    out.avg_cost_tick = cost_per_bundle_tick;
+    out.total_cost_tick = cost_per_bundle_tick * bundle_qty;
     return out;
 }
 
 TheoreticalEdgeCalculator calculator(
     std::int64_t fee_tick,
-    std::int64_t latency_buffer_tick
+    std::int64_t latency_buffer_tick,
+    std::int64_t slippage_buffer_tick = 0
 ) {
     return TheoreticalEdgeCalculator{
         FeeModel{fee_tick},
-        LatencyBufferModel{latency_buffer_tick}
+        LatencyBufferModel{latency_buffer_tick},
+        SlippageBufferModel{slippage_buffer_tick}
     };
 }
 
@@ -75,8 +86,9 @@ void EdgeCalculator_ComputesPositiveEdge() {
         cost(900'000)
     );
 
-    expect_equal(edge.estimated_edge_tick, 100'000LL, "edge");
-    expect_true(edge.above_threshold, "above threshold");
+    expect_equal(edge.unit_edge_tick, 100'000LL, "unit edge");
+    expect_equal(edge.total_edge_tick, 100'000LL, "total edge");
+    expect_true(edge.passed, "passed");
 }
 
 void EdgeCalculator_SubtractsFee() {
@@ -85,8 +97,8 @@ void EdgeCalculator_SubtractsFee() {
         cost(900'000)
     );
 
-    expect_equal(edge.fee_tick, 10'000LL, "fee");
-    expect_equal(edge.estimated_edge_tick, 90'000LL, "edge");
+    expect_equal(edge.fee_per_bundle_tick, 10'000LL, "fee");
+    expect_equal(edge.unit_edge_tick, 90'000LL, "edge");
 }
 
 void EdgeCalculator_SubtractsLatencyBuffer() {
@@ -95,8 +107,12 @@ void EdgeCalculator_SubtractsLatencyBuffer() {
         cost(900'000)
     );
 
-    expect_equal(edge.latency_buffer_tick, 25'000LL, "latency");
-    expect_equal(edge.estimated_edge_tick, 75'000LL, "edge");
+    expect_equal(
+        edge.latency_buffer_per_bundle_tick,
+        25'000LL,
+        "latency"
+    );
+    expect_equal(edge.unit_edge_tick, 75'000LL, "edge");
 }
 
 void EdgeCalculator_RejectsBelowMinEdge() {
@@ -105,9 +121,13 @@ void EdgeCalculator_RejectsBelowMinEdge() {
         cost(900'000)
     );
 
-    expect_equal(edge.estimated_edge_tick, 80'000LL, "edge");
-    expect_equal(edge.min_edge_tick, 90'000LL, "min edge");
-    expect_false(edge.above_threshold, "above threshold");
+    expect_equal(edge.unit_edge_tick, 80'000LL, "edge");
+    expect_equal(
+        edge.failure_reason,
+        EdgeFailureReason::BelowMinUnitEdge,
+        "failure"
+    );
+    expect_false(edge.passed, "passed");
 }
 
 void EdgeCalculator_HandlesZeroCost() {
@@ -116,9 +136,125 @@ void EdgeCalculator_HandlesZeroCost() {
         cost(0)
     );
 
-    expect_equal(edge.total_cost_tick, 0LL, "cost");
-    expect_equal(edge.estimated_edge_tick, 1'000'000LL, "edge");
-    expect_true(edge.above_threshold, "above threshold");
+    expect_equal(edge.vwap_cost_per_bundle_tick, 0LL, "cost");
+    expect_equal(edge.unit_edge_tick, 1'000'000LL, "edge");
+    expect_true(edge.passed, "passed");
+}
+
+void EdgeCalculator_ComputesUnitEdge() {
+    const auto edge = calculator(10'000, 20'000, 5'000).calculate(
+        bundle(1'000'000),
+        cost(900'000)
+    );
+
+    expect_equal(edge.guaranteed_payout_per_bundle_tick, 1'000'000LL, "payout");
+    expect_equal(edge.vwap_cost_per_bundle_tick, 900'000LL, "cost");
+    expect_equal(edge.unit_edge_tick, 65'000LL, "unit edge");
+}
+
+void EdgeCalculator_ComputesTotalEdgeWithBundleQty() {
+    const auto edge = calculator(0, 0).calculate(
+        bundle(1'000'000),
+        cost(900'000, 7)
+    );
+
+    expect_equal(edge.bundle_qty, 7LL, "bundle qty");
+    expect_equal(edge.unit_edge_tick, 100'000LL, "unit edge");
+    expect_equal(edge.total_edge_tick, 700'000LL, "total edge");
+}
+
+void EdgeCalculator_RejectsBelowMinUnitEdge() {
+    SignalConfig config;
+    config.min_unit_edge_tick = 120'000;
+
+    const auto edge = calculator(0, 0).calculate(
+        bundle(1'000'000),
+        cost(900'000, 10),
+        config
+    );
+
+    expect_equal(edge.unit_edge_tick, 100'000LL, "unit edge");
+    expect_equal(
+        edge.failure_reason,
+        EdgeFailureReason::BelowMinUnitEdge,
+        "failure"
+    );
+    expect_false(edge.passed, "passed");
+}
+
+void EdgeCalculator_RejectsBelowMinTotalEdge() {
+    SignalConfig config;
+    config.min_total_edge_tick = 1'100'000;
+
+    const auto edge = calculator(0, 0).calculate(
+        bundle(1'000'000),
+        cost(900'000, 10),
+        config
+    );
+
+    expect_equal(edge.total_edge_tick, 1'000'000LL, "total edge");
+    expect_equal(
+        edge.failure_reason,
+        EdgeFailureReason::BelowMinTotalEdge,
+        "failure"
+    );
+    expect_false(edge.passed, "passed");
+}
+
+void EdgeCalculator_RejectsBelowMinEdgeBps() {
+    SignalConfig config;
+    config.min_edge_bps = 1'200;
+
+    const auto edge = calculator(0, 0).calculate(
+        bundle(1'000'000),
+        cost(900'000, 10),
+        config
+    );
+
+    expect_equal(edge.edge_bps, 1'111LL, "edge bps");
+    expect_equal(
+        edge.failure_reason,
+        EdgeFailureReason::BelowMinEdgeBps,
+        "failure"
+    );
+    expect_false(edge.passed, "passed");
+}
+
+void EdgeCalculator_RejectsBelowMinBundleQty() {
+    SignalConfig config;
+    config.min_bundle_qty = 11;
+
+    const auto edge = calculator(0, 0).calculate(
+        bundle(1'000'000),
+        cost(900'000, 10),
+        config
+    );
+
+    expect_equal(edge.bundle_qty, 10LL, "bundle qty");
+    expect_equal(
+        edge.failure_reason,
+        EdgeFailureReason::BelowMinBundleQty,
+        "failure"
+    );
+    expect_false(edge.passed, "passed");
+}
+
+void EdgeCalculator_SubtractsSlippageBuffer() {
+    SignalConfig config;
+    config.slippage_buffer_tick = 15'000;
+
+    const auto edge = calculator(0, 0).calculate(
+        bundle(1'000'000),
+        cost(900'000),
+        config
+    );
+
+    expect_equal(
+        edge.slippage_buffer_per_bundle_tick,
+        15'000LL,
+        "slippage"
+    );
+    expect_equal(edge.unit_edge_tick, 85'000LL, "unit edge");
 }
 
 using TestFn = void (*)();
@@ -138,7 +274,35 @@ const std::unordered_map<std::string, TestFn>& tests() {
             "EdgeCalculator_RejectsBelowMinEdge",
             &EdgeCalculator_RejectsBelowMinEdge
         },
-        {"EdgeCalculator_HandlesZeroCost", &EdgeCalculator_HandlesZeroCost}
+        {"EdgeCalculator_HandlesZeroCost", &EdgeCalculator_HandlesZeroCost},
+        {
+            "EdgeCalculator_ComputesUnitEdge",
+            &EdgeCalculator_ComputesUnitEdge
+        },
+        {
+            "EdgeCalculator_ComputesTotalEdgeWithBundleQty",
+            &EdgeCalculator_ComputesTotalEdgeWithBundleQty
+        },
+        {
+            "EdgeCalculator_RejectsBelowMinUnitEdge",
+            &EdgeCalculator_RejectsBelowMinUnitEdge
+        },
+        {
+            "EdgeCalculator_RejectsBelowMinTotalEdge",
+            &EdgeCalculator_RejectsBelowMinTotalEdge
+        },
+        {
+            "EdgeCalculator_RejectsBelowMinEdgeBps",
+            &EdgeCalculator_RejectsBelowMinEdgeBps
+        },
+        {
+            "EdgeCalculator_RejectsBelowMinBundleQty",
+            &EdgeCalculator_RejectsBelowMinBundleQty
+        },
+        {
+            "EdgeCalculator_SubtractsSlippageBuffer",
+            &EdgeCalculator_SubtractsSlippageBuffer
+        }
     };
     return test_map;
 }

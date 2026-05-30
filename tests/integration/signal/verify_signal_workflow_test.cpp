@@ -1,3 +1,5 @@
+#include <boost/json.hpp>
+
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
@@ -8,6 +10,8 @@
 #include <unordered_map>
 
 namespace {
+
+namespace json = boost::json;
 
 [[noreturn]] void fail(const std::string& message) {
     throw std::runtime_error(message);
@@ -46,6 +50,31 @@ std::string read_file(const std::filesystem::path& path) {
         std::istreambuf_iterator<char>{input},
         std::istreambuf_iterator<char>{}
     };
+}
+
+json::value parse_json(
+    const std::string& text,
+    const std::string& label
+) {
+    boost::json::error_code error;
+    auto parsed = json::parse(text, error);
+    if (error) {
+        fail("failed to parse " + label + ": " + error.message());
+    }
+    return parsed;
+}
+
+bool json_number_gt_zero(const json::value& value) {
+    if (value.is_uint64()) {
+        return value.as_uint64() > 0;
+    }
+    if (value.is_int64()) {
+        return value.as_int64() > 0;
+    }
+    if (value.is_double()) {
+        return value.as_double() > 0.0;
+    }
+    return false;
 }
 
 std::string base_command(
@@ -176,13 +205,49 @@ void VerifySignalWorkflow_EmitsSummary() {
     for (const std::string section : {
              "signal_workflow:",
              "quality_gate:",
+             "snapshot:",
              "settlement:",
              "vwap:",
              "edge:",
              "intents:",
+             "intent_lifecycle:",
+             "metrics:",
              "hashes:"
          }) {
         expect_true(text.find(section) != std::string::npos, section);
+    }
+    for (const std::string field : {
+             "consistency_checked:",
+             "rejected_snapshot_skew:",
+             "rejected_stale_snapshot:",
+             "bundle_qty_min:",
+             "bundle_qty_max:",
+             "unit_edge_min:",
+             "unit_edge_max:",
+             "total_edge_min:",
+             "total_edge_max:",
+             "edge_bps_min:",
+             "edge_bps_max:",
+             "intents_with_expiry:",
+             "intents_with_idempotency_key:",
+             "duplicate_rejected:",
+             "rate_limited:",
+             "signal.scan.count:",
+             "signal.bundle.scanned:",
+             "signal.bundle.rejected:",
+             "signal.bundle.passed:",
+             "signal.reject.settled:",
+             "signal.reject.missing_snapshot:",
+             "signal.reject.stale_lob:",
+             "signal.reject.snapshot_skew:",
+             "signal.reject.insufficient_depth:",
+             "signal.reject.edge_below_threshold:",
+             "signal.reject.duplicate:",
+             "signal.reject.rate_limited:",
+             "signal.intent.published:",
+             "signal.scan.latency_ns:"
+         }) {
+        expect_true(text.find(field) != std::string::npos, field);
     }
 }
 
@@ -229,6 +294,26 @@ void VerifySignalWorkflow_PositiveFixtureEmitsPaperOpportunity() {
         "paper opportunity"
     );
     expect_true(
+        text.find("bundle_qty_min: 20") != std::string::npos,
+        "bundle qty min"
+    );
+    expect_true(
+        text.find("bundle_qty_max: 20") != std::string::npos,
+        "bundle qty max"
+    );
+    expect_true(
+        text.find("total_edge_max: 3800000") != std::string::npos,
+        "total edge max"
+    );
+    expect_true(
+        text.find("intents_with_expiry: 1") != std::string::npos,
+        "expiry count"
+    );
+    expect_true(
+        text.find("intents_with_idempotency_key: 1") != std::string::npos,
+        "idempotency count"
+    );
+    expect_true(
         text.find("rejected_insufficient_depth: 0") != std::string::npos,
         "insufficient depth"
     );
@@ -237,11 +322,54 @@ void VerifySignalWorkflow_PositiveFixtureEmitsPaperOpportunity() {
         "intents published"
     );
     expect_true(
+        text.find("signal.bundle.passed: 1") != std::string::npos,
+        "metrics bundle passed"
+    );
+    expect_true(
+        text.find("signal.intent.published: 1") != std::string::npos,
+        "metrics intent published"
+    );
+    expect_true(
         text.find("determinism_passed: true") != std::string::npos,
         "determinism"
     );
 
     const auto intent_jsonl = read_file(intents);
+    const auto actual_intent = parse_json(intent_jsonl, "positive intent jsonl");
+    const auto expected = parse_json(
+        read_file(source_path("tests/fixtures/signal/expected_intents_positive.json")),
+        "expected positive intents"
+    );
+    const auto& expected_intents =
+        expected.as_object().at("intents").as_array();
+    expect_true(expected_intents.size() == 1, "expected one intent");
+    expect_true(actual_intent == expected_intents[0], "expected intent match");
+
+    const auto& actual_object = actual_intent.as_object();
+    expect_true(
+        json_number_gt_zero(actual_object.at("snapshot_version")),
+        "snapshot version present"
+    );
+    expect_true(
+        json_number_gt_zero(actual_object.at("oracle_artifact_hash")),
+        "artifact hash present"
+    );
+    expect_true(
+        json_number_gt_zero(actual_object.at("bundle_hash")),
+        "bundle hash present"
+    );
+    expect_true(
+        json_number_gt_zero(actual_object.at("bundle_qty")),
+        "bundle qty present"
+    );
+    expect_true(
+        json_number_gt_zero(actual_object.at("expires_at_ns")),
+        "expires at present"
+    );
+    expect_true(
+        !actual_object.at("idempotency_key").as_string().empty(),
+        "idempotency key present"
+    );
     expect_true(
         intent_jsonl.find("\"status\":\"PaperOpportunity\"") !=
             std::string::npos,
@@ -252,7 +380,11 @@ void VerifySignalWorkflow_PositiveFixtureEmitsPaperOpportunity() {
         "enough depth"
     );
     expect_true(
-        intent_jsonl.find("\"estimated_edge_tick\":200000") !=
+        intent_jsonl.find("\"bundle_qty\":20") != std::string::npos,
+        "bundle qty"
+    );
+    expect_true(
+        intent_jsonl.find("\"estimated_edge_tick\":3800000") !=
             std::string::npos,
         "positive edge"
     );

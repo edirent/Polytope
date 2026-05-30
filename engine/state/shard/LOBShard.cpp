@@ -235,6 +235,7 @@ void LOBShard::publish_asset_snapshot(const std::string& asset_id) {
     snapshot.entity_id = entity->entity_id;
     snapshot.market_id = entity->market_id;
     snapshot.version = entity->last_packet_id;
+    snapshot.last_book_update_ns = entity->last_update_monotonic_ns;
     snapshot.live = entity->status == EntityStatus::Live;
     snapshot.recovering = entity->recovering ||
         entity->status == EntityStatus::Recovering;

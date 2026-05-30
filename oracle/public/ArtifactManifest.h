@@ -15,6 +15,10 @@ struct ArtifactManifest {
     std::uint32_t variable_count = 0;
     std::uint32_t rule_count = 0;
     std::uint32_t constraint_count = 0;
+    std::uint32_t component_count = 0;
+    std::uint32_t enumerable_component_count = 0;
+    std::uint32_t semantic_oracle_component_count = 0;
+    std::uint32_t fallback_oracle_component_count = 0;
     std::uint64_t feasible_state_count = 0;
     std::uint64_t bundle_count = 0;
 
@@ -27,6 +31,10 @@ struct ArtifactManifest {
     std::string input_snapshot_hash;
     std::string rulebook_hash;
     std::string constraint_hash;
+    std::string constraint_graph_hash;
+    std::string component_partition_hash;
+    std::string oracle_descriptor_hash;
+    std::string bundle_template_hash;
     std::string feasible_states_hash;
     std::string payoff_hash;
     std::string bundle_hash;

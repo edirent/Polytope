@@ -16,6 +16,7 @@ enum class IntentStatus : std::uint8_t {
     RejectedMissingSnapshot,
     RejectedInsufficientDepth,
     RejectedLowEdge,
+    DuplicateIntent,
 
     PaperOpportunity
 };

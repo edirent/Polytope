@@ -16,7 +16,8 @@ public:
 
     [[nodiscard]] SnapshotReadResult read_for_bundle(
         const CandidateBundle& bundle,
-        const SignalConfig& config
+        const SignalConfig& config,
+        std::uint64_t now_ns = 0
     ) const override;
 
 private:

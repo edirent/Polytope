@@ -13,7 +13,9 @@ namespace {
 using trading_engine::signal::IntentStatus;
 using trading_engine::signal::OpportunityIntent;
 using trading_engine::signal::SignalConfig;
+using trading_engine::signal::SignalMetrics;
 using trading_engine::signal::SignalRunResult;
+using trading_engine::signal::SnapshotConsistencyMode;
 
 [[noreturn]] void fail(const std::string& message) {
     throw std::runtime_error(message);
@@ -53,9 +55,30 @@ void SignalConfig_DefaultsAreSafe() {
         0LL,
         "default_latency_buffer_tick"
     );
+    expect_equal(config.slippage_buffer_tick, 0LL, "slippage_buffer_tick");
+    expect_equal(config.min_unit_edge_tick, 0LL, "min_unit_edge_tick");
+    expect_equal(config.min_total_edge_tick, 0LL, "min_total_edge_tick");
+    expect_equal(config.min_edge_bps, 0LL, "min_edge_bps");
+    expect_equal(config.min_bundle_qty, 1LL, "min_bundle_qty");
     expect_equal(config.max_intents_per_scan, 1024U, "max_intents_per_scan");
+    expect_equal(
+        config.max_intents_per_second,
+        100,
+        "max_intents_per_second"
+    );
     expect_equal(config.max_bundle_legs, 16U, "max_bundle_legs");
     expect_true(config.emit_rejections, "emit_rejections");
+    expect_equal(config.max_lob_age_ns, 1'000'000'000LL, "max_lob_age_ns");
+    expect_equal(
+        config.max_snapshot_version_skew,
+        10ULL,
+        "max_snapshot_version_skew"
+    );
+    expect_equal(
+        config.consistency_mode,
+        SnapshotConsistencyMode::BoundedSkew,
+        "consistency_mode"
+    );
 }
 
 void OpportunityIntent_DefaultIsCandidateOnly() {
@@ -72,6 +95,10 @@ void OpportunityIntent_DefaultIsCandidateOnly() {
     expect_false(intent.passed_quality_gate, "passed_quality_gate");
     expect_false(intent.enough_depth, "enough_depth");
     expect_equal(intent.estimated_edge_tick, 0LL, "estimated_edge_tick");
+    expect_equal(intent.bundle_qty, 0LL, "bundle_qty");
+    expect_equal(intent.unit_edge_tick, 0LL, "unit_edge_tick");
+    expect_equal(intent.total_edge_tick, 0LL, "total_edge_tick");
+    expect_equal(intent.edge_bps, 0LL, "edge_bps");
     expect_equal(intent.leg_count, 0U, "leg_count");
     expect_equal(intent.snapshot_version_hash, 0ULL, "snapshot_version_hash");
     expect_equal(intent.oracle_artifact_version, 0ULL, "oracle_artifact_version");
@@ -103,9 +130,78 @@ void SignalRunResult_DefaultCountersZero() {
         "rejected_insufficient_depth"
     );
     expect_equal(result.rejected_low_edge, 0ULL, "rejected_low_edge");
+    expect_equal(result.duplicate_intents, 0ULL, "duplicate_intents");
+    expect_equal(result.rate_limited, 0ULL, "rate_limited");
+    expect_equal(result.rejected_duplicate, 0ULL, "rejected_duplicate");
+    expect_equal(result.rejected_rate_limited, 0ULL, "rejected_rate_limited");
+    expect_equal(result.rejected_snapshot_skew, 0ULL, "rejected_snapshot_skew");
+    expect_equal(result.rejected_stale_snapshot, 0ULL, "rejected_stale_snapshot");
+    expect_equal(result.vwap_checked, 0ULL, "vwap_checked");
+    expect_equal(result.edge_computed, 0ULL, "edge_computed");
     expect_equal(result.paper_opportunities, 0ULL, "paper_opportunities");
     expect_equal(result.intents_published, 0ULL, "intents_published");
     expect_equal(result.output_hash, 0ULL, "output_hash");
+    expect_equal(result.metrics.scan_count, 0ULL, "metrics.scan_count");
+    expect_equal(
+        result.metrics.reject_insufficient_depth,
+        0ULL,
+        "metrics.reject_insufficient_depth"
+    );
+    expect_equal(
+        result.metrics.scan_latency_ns.count,
+        0ULL,
+        "metrics.scan_latency_ns.count"
+    );
+}
+
+void SignalMetrics_DefaultCountersZero() {
+    const SignalMetrics metrics;
+
+    expect_equal(metrics.scan_count, 0ULL, "scan_count");
+    expect_equal(metrics.bundle_scanned, 0ULL, "bundle_scanned");
+    expect_equal(metrics.bundle_rejected, 0ULL, "bundle_rejected");
+    expect_equal(metrics.bundle_passed, 0ULL, "bundle_passed");
+    expect_equal(metrics.reject_settled, 0ULL, "reject_settled");
+    expect_equal(
+        metrics.reject_missing_snapshot,
+        0ULL,
+        "reject_missing_snapshot"
+    );
+    expect_equal(metrics.reject_stale_lob, 0ULL, "reject_stale_lob");
+    expect_equal(
+        metrics.reject_snapshot_skew,
+        0ULL,
+        "reject_snapshot_skew"
+    );
+    expect_equal(
+        metrics.reject_insufficient_depth,
+        0ULL,
+        "reject_insufficient_depth"
+    );
+    expect_equal(
+        metrics.reject_edge_below_threshold,
+        0ULL,
+        "reject_edge_below_threshold"
+    );
+    expect_equal(metrics.reject_duplicate, 0ULL, "reject_duplicate");
+    expect_equal(metrics.reject_rate_limited, 0ULL, "reject_rate_limited");
+    expect_equal(metrics.intent_published, 0ULL, "intent_published");
+    expect_equal(metrics.scan_latency_ns.count, 0ULL, "latency count");
+    expect_equal(metrics.scan_latency_ns.last_ns, 0ULL, "latency last");
+}
+
+void SignalMetrics_ObserveScanLatency() {
+    SignalMetrics metrics;
+
+    metrics.observe_scan_latency(100);
+    metrics.observe_scan_latency(40);
+    metrics.observe_scan_latency(250);
+
+    expect_equal(metrics.scan_latency_ns.count, 3ULL, "latency count");
+    expect_equal(metrics.scan_latency_ns.last_ns, 250ULL, "latency last");
+    expect_equal(metrics.scan_latency_ns.min_ns, 40ULL, "latency min");
+    expect_equal(metrics.scan_latency_ns.max_ns, 250ULL, "latency max");
+    expect_equal(metrics.scan_latency_ns.total_ns, 390ULL, "latency total");
 }
 
 using TestFn = void (*)();
@@ -120,6 +216,14 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "SignalRunResult_DefaultCountersZero",
             &SignalRunResult_DefaultCountersZero
+        },
+        {
+            "SignalMetrics_DefaultCountersZero",
+            &SignalMetrics_DefaultCountersZero
+        },
+        {
+            "SignalMetrics_ObserveScanLatency",
+            &SignalMetrics_ObserveScanLatency
         }
     };
     return test_map;

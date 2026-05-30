@@ -6,6 +6,8 @@
 #include "engine/signal/pricing/FeeModel.h"
 #include "engine/signal/pricing/VWAPPrecheck.h"
 #include "engine/signal/publish/CapturingIntentPublisher.h"
+#include "engine/signal/publish/IntentDeduper.h"
+#include "engine/signal/publish/IntentRateLimiter.h"
 #include "engine/signal/rank/OpportunityRanker.h"
 #include "engine/signal/reader/MarketSnapshotReader.h"
 #include "engine/signal/reader/OracleArtifactReader.h"
@@ -33,6 +35,8 @@ using trading_engine::signal::CapturingIntentPublisher;
 using trading_engine::signal::FeeModel;
 using trading_engine::signal::IMarketSnapshotReader;
 using trading_engine::signal::IntentStatus;
+using trading_engine::signal::IntentDeduper;
+using trading_engine::signal::IntentRateLimiter;
 using trading_engine::signal::LatencyBufferModel;
 using trading_engine::signal::MarketStateSnapshot;
 using trading_engine::signal::OracleArtifactReader;
@@ -233,7 +237,8 @@ public:
 
     SnapshotReadResult read_for_bundle(
         const CandidateBundle& bundle,
-        const SignalConfig& config
+        const SignalConfig& config,
+        std::uint64_t now_ns = 0
     ) const override {
         std::vector<MarketStateSnapshot> selected;
         selected.reserve(bundle.leg_count);
@@ -246,7 +251,7 @@ public:
                 }
             }
         }
-        return validate_bundle_snapshots(bundle, config, selected);
+        return validate_bundle_snapshots(bundle, config, selected, now_ns);
     }
 
 private:
@@ -279,7 +284,10 @@ struct EngineHarness {
         expect_true(load.ok, "load artifact: " + load.error);
     }
 
-    SignalEngine make_engine() {
+    SignalEngine make_engine(
+        IntentDeduper* deduper = nullptr,
+        IntentRateLimiter* rate_limiter = nullptr
+    ) {
         return SignalEngine(
             config,
             &snapshot_reader,
@@ -288,7 +296,9 @@ struct EngineHarness {
             &vwap,
             &edge_calculator,
             &ranker,
-            &publisher
+            &publisher,
+            deduper,
+            rate_limiter
         );
     }
 };

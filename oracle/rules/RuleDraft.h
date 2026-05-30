@@ -18,9 +18,15 @@ enum class RuleType : std::uint8_t {
     Custom
 };
 
+enum class RuleCoverage : std::uint8_t {
+    ExclusiveOnly,
+    ExhaustiveAndExclusive
+};
+
 struct RuleDraft {
     std::string rule_id;
     RuleType type = RuleType::Custom;
+    RuleCoverage coverage = RuleCoverage::ExclusiveOnly;
 
     std::vector<std::string> variable_ids;
 
@@ -35,5 +41,14 @@ struct RuleDraft {
     const std::string& value,
     RuleType* out
 ) noexcept;
+
+[[nodiscard]] const char* rule_coverage_to_string(
+    RuleCoverage coverage
+) noexcept;
+[[nodiscard]] bool rule_coverage_from_string(
+    const std::string& value,
+    RuleCoverage* out
+) noexcept;
+[[nodiscard]] bool rule_is_exhaustive(RuleCoverage coverage) noexcept;
 
 }  // namespace trading_engine::oracle

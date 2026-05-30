@@ -24,6 +24,13 @@ json::object manifest_to_json(const ArtifactManifest& manifest) {
     object["variable_count"] = manifest.variable_count;
     object["rule_count"] = manifest.rule_count;
     object["constraint_count"] = manifest.constraint_count;
+    object["component_count"] = manifest.component_count;
+    object["enumerable_component_count"] =
+        manifest.enumerable_component_count;
+    object["semantic_oracle_component_count"] =
+        manifest.semantic_oracle_component_count;
+    object["fallback_oracle_component_count"] =
+        manifest.fallback_oracle_component_count;
     object["feasible_state_count"] = manifest.feasible_state_count;
     object["bundle_count"] = manifest.bundle_count;
     object["llm_enabled"] = manifest.llm_enabled;
@@ -34,6 +41,11 @@ json::object manifest_to_json(const ArtifactManifest& manifest) {
     object["input_snapshot_hash"] = manifest.input_snapshot_hash;
     object["rulebook_hash"] = manifest.rulebook_hash;
     object["constraint_hash"] = manifest.constraint_hash;
+    object["constraint_graph_hash"] = manifest.constraint_graph_hash;
+    object["component_partition_hash"] =
+        manifest.component_partition_hash;
+    object["oracle_descriptor_hash"] = manifest.oracle_descriptor_hash;
+    object["bundle_template_hash"] = manifest.bundle_template_hash;
     object["feasible_states_hash"] = manifest.feasible_states_hash;
     object["payoff_hash"] = manifest.payoff_hash;
     object["bundle_hash"] = manifest.bundle_hash;
@@ -80,6 +92,34 @@ bool write_payloads(
     if (!ArtifactWriter::write_bytes(
             layout.file(kConstraintsFile),
             contents.constraints_bin,
+            &result->errors
+        )) {
+        return false;
+    }
+    if (!ArtifactWriter::write_bytes(
+            layout.file(kComponentsFile),
+            contents.components_bin,
+            &result->errors
+        )) {
+        return false;
+    }
+    if (!ArtifactWriter::write_bytes(
+            layout.file(kComponentConstraintsFile),
+            contents.component_constraints_bin,
+            &result->errors
+        )) {
+        return false;
+    }
+    if (!ArtifactWriter::write_bytes(
+            layout.file(kOracleDescriptorsFile),
+            contents.oracle_descriptors_bin,
+            &result->errors
+        )) {
+        return false;
+    }
+    if (!ArtifactWriter::write_bytes(
+            layout.file(kBundleTemplatesFile),
+            contents.bundle_templates_bin,
             &result->errors
         )) {
         return false;

@@ -1,0 +1,56 @@
+{
+  "intents": [
+    {
+      "intent_id": 1316047164327889982,
+      "bundle_id": 1,
+      "status": "PaperOpportunity",
+      "valid_under_settlement": true,
+      "passed_quality_gate": true,
+      "enough_depth": true,
+      "guaranteed_payout_tick": 20000000,
+      "estimated_cost_tick": 16200000,
+      "estimated_fee_tick": 0,
+      "latency_buffer_tick": 0,
+      "estimated_edge_tick": 3800000,
+      "min_edge_tick": 0,
+      "oracle_artifact_hash": 18436729910395042621,
+      "constraint_hash": 15843817652839425882,
+      "bundle_hash": 7241865238501750092,
+      "snapshot_version": 20,
+      "bundle_qty": 20,
+      "unit_edge_tick": 190000,
+      "total_edge_tick": 3800000,
+      "edge_bps": 2345,
+      "slippage_buffer_tick": 0,
+      "created_ts_ns": 1,
+      "expires_at_ns": 1,
+      "snapshot_version_hash": 12761872077578761906,
+      "oracle_artifact_version": 1,
+      "idempotency_key": "124389ec596c8c3e",
+      "proof_ref": "oracle:ffdc6c2be8ea7b3d:constraint:dbe08c360b8ea75a:bundle:64804610bc25754c:snapshot:b11b470a0d0ef6b2",
+      "reject_reason": "",
+      "legs": [
+        {
+          "market_id": "m1",
+          "asset_id": "asset_yes",
+          "side": "Buy",
+          "quantity_lots": 1,
+          "estimated_vwap_tick": 405000,
+          "worst_price_tick": 410000,
+          "estimated_cost_tick": 8100000,
+          "enough_depth": true
+        },
+        {
+          "market_id": "m1",
+          "asset_id": "asset_no",
+          "side": "Buy",
+          "quantity_lots": 1,
+          "estimated_vwap_tick": 405000,
+          "worst_price_tick": 410000,
+          "estimated_cost_tick": 8100000,
+          "enough_depth": true
+        }
+      ]
+    }
+  ]
+}

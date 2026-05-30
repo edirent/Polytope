@@ -2,10 +2,12 @@
 
 #include "oracle/bundles/BundleHash.h"
 #include "oracle/bundles/BundleValidator.h"
+#include "oracle/payoff/PayoutRule.h"
 
 #include <boost/json.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <limits>
 #include <sstream>
@@ -154,6 +156,24 @@ json::object bundle_to_json(const CandidateBundle& bundle) {
     return object;
 }
 
+std::string lower_copy(std::string value) {
+    for (auto& ch : value) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return value;
+}
+
+bool has_ambiguous_split_resolution(const RawMarketRecord& market) {
+    const auto text = lower_copy(
+        market.title + "\n" + market.description + "\n" +
+        market.resolution_source
+    );
+    return text.find("50-50") != std::string::npos ||
+           text.find("50/50") != std::string::npos ||
+           text.find("split") != std::string::npos ||
+           text.find("proportion") != std::string::npos;
+}
+
 }  // namespace
 
 CandidateBundleLoadResult CandidateBundleGenerator::load_fixture(
@@ -201,6 +221,80 @@ CandidateBundleLoadResult CandidateBundleGenerator::load_fixture(
 
     if (!result.errors.empty()) {
         return result;
+    }
+
+    BundleValidator validator;
+    const auto validation = validator.validate(
+        result.bundles,
+        known_market_ids,
+        known_asset_ids
+    );
+    result.errors.insert(
+        result.errors.end(),
+        validation.errors.begin(),
+        validation.errors.end()
+    );
+    if (!result.errors.empty()) {
+        return result;
+    }
+
+    result.bundle_hash = hash_candidate_bundles(result.bundles);
+    return result;
+}
+
+CandidateBundleLoadResult CandidateBundleGenerator::generate_buy_all_outcomes(
+    const std::vector<RawMarketRecord>& markets,
+    const std::unordered_set<std::string>& known_market_ids,
+    const std::unordered_set<std::string>& known_asset_ids
+) const {
+    CandidateBundleLoadResult result;
+    std::uint64_t next_bundle_id = 1;
+
+    for (const auto& market : markets) {
+        if (market.market_id.empty()) {
+            result.warnings.push_back("skipping market with empty market_id");
+            continue;
+        }
+        if (market.outcomes.size() < 2 ||
+            market.outcomes.size() != market.asset_ids.size()) {
+            result.warnings.push_back(
+                "skipping market without complete outcome/token mapping: " +
+                market.market_id
+            );
+            continue;
+        }
+        if (market.asset_ids.size() > kMaxBundleLegs) {
+            result.warnings.push_back(
+                "skipping market with too many outcomes: " + market.market_id
+            );
+            continue;
+        }
+        if (has_ambiguous_split_resolution(market)) {
+            result.warnings.push_back(
+                "skipping market with split/proportional resolution text: " +
+                market.market_id
+            );
+            continue;
+        }
+
+        CandidateBundle bundle;
+        bundle.bundle_id = next_bundle_id++;
+        bundle.guaranteed_payout_tick = PAYOUT_ONE_TICK;
+        bundle.min_edge_tick = 0;
+        bundle.required_true_mask = 0;
+        bundle.required_false_mask = 0;
+        bundle.invalid_mask = 0;
+        bundle.leg_count = static_cast<std::uint16_t>(market.asset_ids.size());
+
+        for (std::uint16_t i = 0; i < bundle.leg_count; ++i) {
+            bundle.legs[i].market_id = market.market_id;
+            bundle.legs[i].asset_id = market.asset_ids[i];
+            bundle.legs[i].side = Side::Buy;
+            bundle.legs[i].quantity_lots = 1;
+            bundle.legs[i].max_price_tick = PAYOUT_ONE_TICK;
+        }
+
+        result.bundles.push_back(std::move(bundle));
     }
 
     BundleValidator validator;

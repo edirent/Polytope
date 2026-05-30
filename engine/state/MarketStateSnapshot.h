@@ -14,6 +14,7 @@ struct MarketStateSnapshot {
     std::string entity_id;
     std::string market_id;
     std::uint64_t version{0};
+    std::uint64_t last_book_update_ns{0};
 
     bool live{false};
     bool recovering{false};

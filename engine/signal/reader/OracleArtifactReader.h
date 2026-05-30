@@ -29,11 +29,15 @@ public:
     [[nodiscard]] std::span<const CandidateBundle> active_bundles() const;
 
     [[nodiscard]] std::uint64_t artifact_version() const;
+    [[nodiscard]] std::uint64_t artifact_hash() const;
+    [[nodiscard]] std::uint64_t constraint_hash() const;
     [[nodiscard]] std::uint64_t bundle_hash() const;
 
 private:
     std::vector<CandidateBundle> bundles_;
     std::uint64_t artifact_version_ = 0;
+    std::uint64_t artifact_hash_ = 0;
+    std::uint64_t constraint_hash_ = 0;
     std::uint64_t bundle_hash_ = 0;
 };
 

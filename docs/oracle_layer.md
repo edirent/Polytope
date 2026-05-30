@@ -84,12 +84,33 @@ runtime does not run solver
 
 ### Market API
 
-The long-term source for market metadata is the Polymarket market API or an
-equivalent trusted market snapshot source. API access is not required by the v0
-workflow tests.
+The live metadata source is Polymarket Gamma Markets API:
 
-The v0 API client is a boundary placeholder. Build and test must pass without
-network access.
+```text
+https://gamma-api.polymarket.com/markets
+```
+
+`MarketApiClient` maps Gamma market records into `RawMarketRecord`:
+
+- `conditionId` -> `market_id`
+- first event `id` -> `event_id`
+- `question` / `description` / event title / event description -> rule text
+- `outcomes` -> outcome names
+- `clobTokenIds` -> Polymarket CLOB asset IDs
+- `resolutionSource` / `endDate` -> resolution metadata
+
+The fetch tool can produce a real snapshot:
+
+```text
+build/fetch_market_universe \
+  --polymarket-live \
+  --limit 10 \
+  --out runs/oracle_live_polymarket/raw_markets.jsonl \
+  --candidate-bundles-out runs/oracle_live_polymarket/candidate_bundles.json
+```
+
+Live API access is not required by default tests. Tests use synthetic Gamma
+responses to keep CI deterministic and network-free.
 
 ### Fixture
 
@@ -216,6 +237,61 @@ workflow failure
 This is sufficient for the current small fixture workflow. Larger market
 universes need a later solver phase.
 
+The workflow no longer treats global enumeration as the only valid path. After
+constraint compilation, Oracle also builds a constraint graph and partitions the
+rulebook into connected components:
+
+```text
+CompiledConstraintSet
+  -> ConstraintGraphBuilder
+  -> ComponentPartitioner
+  -> CompiledComponent[]
+```
+
+Variables are graph nodes. Constraints are hyperedges. Variables joined by the
+same constraint are placed in the same component. This is deliberately based on
+the constraint graph rather than only `event_id`, because rules can connect
+markets across events and a single event can contain unrelated subgraphs.
+
+Large components are accepted only when they have an explicit oracle backend.
+Current semantic backends:
+
+```text
+ExactlyOneOracle
+AtMostOneOracle
+```
+
+Small components can still use `StateEnumerator`. If the full variable set is
+larger than 32 variables, `verify_oracle_workflow` switches to:
+
+```text
+enumeration_mode: component_oracle
+```
+
+In this mode the artifact records components and oracle descriptors, while
+`feasible_states.bin` and `payoff_matrix.bin` may be empty placeholders. This
+keeps large components from forcing a global `2^N` state explosion.
+
+Example: the 2026 FIFA World Cup winner event has 96 variables in the local
+market snapshot and one LLM-approved `AtMostOne` constraint over 39 YES
+variables. The workflow now emits:
+
+```text
+component_count: 58
+max_component_variable_count: 39
+at_most_one_components: 1
+skipped_full_enumeration_count: 1
+large_component_without_oracle_count: 0
+enumeration_mode: component_oracle
+manifest_ok: true
+checksums_ok: true
+determinism_passed: true
+```
+
+This proves the large logical component can be represented and verified without
+materializing the full payoff matrix. Runtime pricing and Top-N leg selection
+remain Signal Engine responsibilities.
+
 ## 8. Payoff Matrix
 
 The v0 payoff model is binary:
@@ -274,8 +350,59 @@ Structural validation checks:
 - required masks do not conflict
 - `bundle_id` is unique
 
-The v0 generator loads fixture bundles and validates structure. It does not
-read live prices and does not emit live opportunities.
+There are two bundle-generation paths:
+
+```text
+CandidateBundleGenerator
+  loads fixture bundles
+  validates structure
+  keeps legacy metadata-stage buy-all-outcomes support
+
+CombinatorialBundleGenerator
+  consumes approved Rulebook + market universe
+  generates cross-market bundles from compiled logic
+  skips trivial single-market ExactlyOne(Yes, No) rules
+```
+
+Rulebook-driven bundle generation is the path for combinatorial arbitrage. It
+uses only approved rules:
+
+```text
+ExactlyOne(YES_1..YES_N)
+  -> Buy YES_1..YES_N
+  -> guaranteed_payout_tick = PAYOUT_ONE_TICK
+
+ExactlyOne(YES_1..YES_N)
+  -> Buy NO_1..NO_N
+  -> guaranteed_payout_tick = (N - 1) * PAYOUT_ONE_TICK
+
+AtMostOne(YES_1..YES_N)
+  -> Buy NO_1..NO_N
+  -> guaranteed_payout_tick = (N - 1) * PAYOUT_ONE_TICK
+```
+
+The generator deliberately does not emit `AtMostOne` YES baskets. `AtMostOne`
+does not prove that one listed outcome must occur, so buying all listed YES legs
+can lose if an outside outcome wins. This is the main distinction between
+complete bracket rules and partial winner-set rules.
+
+The generator also refuses rules that exceed `kMaxBundleLegs = 16`. Wider
+winner sets need a later pruning/ranking phase before they can become hot-path
+candidate bundles.
+
+Workflow verification can generate bundles directly from the approved Rulebook:
+
+```text
+build/verify_oracle_workflow \
+  --market-snapshot runs/oracle_live_polymarket_2000_paginated/raw_markets.jsonl \
+  --rulebook runs/oracle_live_polymarket_2000_paginated/rulebook_24383_approved.json \
+  --generate-combinatorial-bundles \
+  --out runs/oracle_live_polymarket_2000_paginated/artifact_24383 \
+  --check-determinism
+```
+
+Neither generator reads live prices or emits live opportunities. Signal Engine
+is still responsible for depth, cost, and edge evaluation.
 
 ## 10. Artifact Layout
 
@@ -335,7 +462,7 @@ ORACLE_ENABLE_LLM = OFF
 Build and tests must pass when:
 
 ```text
-ANTHROPIC_API_KEY is unset
+OPENROUTER_API_KEY is unset
 ```
 
 LLM output policy:
@@ -354,11 +481,99 @@ StubRuleExtractor:
   returns Disabled
   produces no ValidatedRule
 
-ClaudeRuleExtractor:
+OpenRouterRuleExtractor:
   disabled when ORACLE_ENABLE_LLM=OFF
-  returns MissingApiKey when enabled without ANTHROPIC_API_KEY
+  targets meta-llama/llama-3.3-70b-instruct:free
+  uses https://openrouter.ai/api/v1/chat/completions
+  returns MissingApiKey when enabled without OPENROUTER_API_KEY
+  allows model override through OPENROUTER_MODEL or --model
+  allows output-token cap through OPENROUTER_MAX_TOKENS or --max-tokens
+  groups market context by event_id
+  instructs the model to emit only cross-market combinatorial constraints
+  rejects trivial single-market YES/NO constraints in the prompt
+  sends reasoning.enabled=false and response_format=json_object for compact drafts
+  reports non-2xx HTTP status, Retry-After, and response body diagnostics
   not used by default tests
 ```
+
+Manual approval flow:
+
+```text
+OpenRouterRuleExtractor
+  -> RuleDraft[]
+  -> ManualRuleEditor review / approve
+  -> approved Rulebook
+  -> RuleValidator
+  -> ConstraintCompiler
+```
+
+LLM extraction command:
+
+```text
+build/extract_oracle_rules \
+  --use-llm \
+  --market-snapshot tests/fixtures/oracle/raw_markets_small.jsonl \
+  --drafts-out runs/oracle_rule_drafts.json
+```
+
+For real Polymarket event groups, narrow extraction to one event at a time:
+
+```text
+build/extract_oracle_rules \
+  --use-llm \
+  --model nvidia/llama-3.3-nemotron-super-49b-v1.5 \
+  --max-tokens 10000 \
+  --event-id 24383 \
+  --market-snapshot runs/oracle_live_polymarket_2000_paginated/raw_markets.jsonl \
+  --drafts-out runs/oracle_live_polymarket_2000_paginated/rule_drafts_24383.json
+```
+
+This is intended for combinatorial rules such as sentencing brackets,
+tournament winners, and election nominee sets. The LLM output is still only
+`RuleDraft`; it must be manually reviewed and approved before compilation.
+
+Minimal paid OpenRouter smoke with NVIDIA Nemotron:
+
+```text
+build/extract_oracle_rules \
+  --use-llm \
+  --model nvidia/llama-3.3-nemotron-super-49b-v1.5 \
+  --max-tokens 256 \
+  --market-snapshot tests/fixtures/oracle/raw_markets_small.jsonl \
+  --drafts-out runs/oracle_rule_drafts.json
+```
+
+If the default free model returns `429`, either wait for the provider limit to
+reset or run with a different OpenRouter model:
+
+```text
+OPENROUTER_MODEL="<provider/model>" \
+build/extract_oracle_rules \
+  --use-llm \
+  --market-snapshot tests/fixtures/oracle/raw_markets_small.jsonl \
+  --drafts-out runs/oracle_rule_drafts.json
+
+build/extract_oracle_rules \
+  --use-llm \
+  --model "<provider/model>" \
+  --market-snapshot tests/fixtures/oracle/raw_markets_small.jsonl \
+  --drafts-out runs/oracle_rule_drafts.json
+```
+
+Manual approval command:
+
+```text
+build/extract_oracle_rules \
+  --drafts-in runs/oracle_rule_drafts.json \
+  --approve-drafts \
+  --approved-by manual \
+  --approved-at-ns 1 \
+  --approved-rulebook-out runs/oracle_rulebook_approved.json
+```
+
+For safety, approval is explicit. LLM drafts are never compiler-ready until a
+human or an intentionally configured manual workflow writes an approved
+rulebook.
 
 ## 12. CMake / Environment
 
@@ -385,7 +600,7 @@ oracle_tools
 
 Default build must not require:
 
-- `ANTHROPIC_API_KEY`
+- `OPENROUTER_API_KEY`
 - live network
 - Market API availability
 - LLM provider availability
@@ -520,13 +735,16 @@ Runtime can:
 
 Current v0 limitations:
 
-- Fixture ingestion is the tested metadata path.
-- Market API client is not a required live dependency.
+- Fixture ingestion is the primary deterministic metadata path.
+- Polymarket Gamma ingestion is available for cold-path snapshot generation,
+  but default CI does not depend on network access.
 - LLM integration is a disabled placeholder by default.
 - Only small brute force enumeration is supported.
 - `variable_count > 32` is rejected.
 - Payoff model is binary only.
-- Candidate bundle generation is fixture-driven.
+- Candidate bundle generation supports fixture bundles and conservative
+  buy-all-outcomes structural bundles. Markets with split / proportional /
+  50-50 resolution text are skipped.
 - No live price integration.
 - No runtime opportunity generation.
 - No production solver.
@@ -552,7 +770,7 @@ Suggested commits:
 Commit 1: Step 12.1 oracle skeleton + manifest + CMake
 Commit 2: Step 12.2 RawMarketRecord + fixture ingestion
 Commit 3: Step 12.3 Rulebook / ManualRuleEditor
-Commit 4: Step 12.4 LLM interface + stub + Claude placeholder
+Commit 4: Step 12.4 LLM interface + stub + OpenRouter placeholder
 Commit 5: Step 12.5 ConstraintCompiler
 Commit 6: Step 12.6 FeasibilityChecker + StateEnumerator
 Commit 7: Step 12.7 PayoffMatrixBuilder
@@ -567,9 +785,9 @@ Commit 11: Step 12.11 docs/oracle_layer.md
 Oracle Layer v0 is accepted when:
 
 1. `ORACLE_ENABLE_LLM=OFF` build passes.
-2. Tests pass without `ANTHROPIC_API_KEY`.
+2. Tests pass without `OPENROUTER_API_KEY`.
 3. `StubRuleExtractor` does not access the network.
-4. `ClaudeRuleExtractor` is disabled by default.
+4. `OpenRouterRuleExtractor` is disabled by default.
 5. Market fixtures load into `RawMarketRecord`.
 6. Rulebook validation allows only approved rules into the compiler.
 7. `ConstraintCompiler` outputs deterministic constraints.

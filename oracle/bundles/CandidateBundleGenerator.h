@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oracle/bundles/CandidateBundle.h"
+#include "oracle/ingestion/RawMarketRecord.h"
 
 #include <string>
 #include <unordered_set>
@@ -23,6 +24,12 @@ class CandidateBundleGenerator {
 public:
     [[nodiscard]] CandidateBundleLoadResult load_fixture(
         const std::string& path,
+        const std::unordered_set<std::string>& known_market_ids,
+        const std::unordered_set<std::string>& known_asset_ids
+    ) const;
+
+    [[nodiscard]] CandidateBundleLoadResult generate_buy_all_outcomes(
+        const std::vector<RawMarketRecord>& markets,
         const std::unordered_set<std::string>& known_market_ids,
         const std::unordered_set<std::string>& known_asset_ids
     ) const;

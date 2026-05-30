@@ -23,6 +23,8 @@ namespace {
             return "RejectedInsufficientDepth";
         case IntentStatus::RejectedLowEdge:
             return "RejectedLowEdge";
+        case IntentStatus::DuplicateIntent:
+            return "DuplicateIntent";
         case IntentStatus::PaperOpportunity:
             return "PaperOpportunity";
     }
@@ -128,6 +130,25 @@ bool JsonlIntentWriter::write(const OpportunityIntent& intent) {
     write_i64_field(output, "min_edge_tick", intent.min_edge_tick);
     write_u64_field(
         output,
+        "oracle_artifact_hash",
+        intent.oracle_artifact_hash
+    );
+    write_u64_field(output, "constraint_hash", intent.constraint_hash);
+    write_u64_field(output, "bundle_hash", intent.bundle_hash);
+    write_u64_field(output, "snapshot_version", intent.snapshot_version);
+    write_i64_field(output, "bundle_qty", intent.bundle_qty);
+    write_i64_field(output, "unit_edge_tick", intent.unit_edge_tick);
+    write_i64_field(output, "total_edge_tick", intent.total_edge_tick);
+    write_i64_field(output, "edge_bps", intent.edge_bps);
+    write_i64_field(
+        output,
+        "slippage_buffer_tick",
+        intent.slippage_buffer_tick
+    );
+    write_u64_field(output, "created_ts_ns", intent.created_ts_ns);
+    write_u64_field(output, "expires_at_ns", intent.expires_at_ns);
+    write_u64_field(
+        output,
         "snapshot_version_hash",
         intent.snapshot_version_hash
     );
@@ -136,6 +157,14 @@ bool JsonlIntentWriter::write(const OpportunityIntent& intent) {
         "oracle_artifact_version",
         intent.oracle_artifact_version
     );
+    output << ',';
+    write_json_string(output, "idempotency_key");
+    output << ':';
+    write_json_string(output, intent.idempotency_key);
+    output << ',';
+    write_json_string(output, "proof_ref");
+    output << ':';
+    write_json_string(output, intent.proof_ref);
     output << ',';
     write_json_string(output, "reject_reason");
     output << ':';

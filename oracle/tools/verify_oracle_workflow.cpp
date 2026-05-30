@@ -3,7 +3,11 @@
 #include "oracle/artifact/ArtifactLoader.h"
 #include "oracle/bundles/BundleHash.h"
 #include "oracle/bundles/CandidateBundleGenerator.h"
+#include "oracle/bundles/CombinatorialBundleGenerator.h"
+#include "oracle/compiler/ComponentPartitioner.h"
 #include "oracle/compiler/ConstraintCompiler.h"
+#include "oracle/compiler/ConstraintGraph.h"
+#include "oracle/compiler/MarketIntrinsicConstraintBuilder.h"
 #include "oracle/enumerate/StateEnumerator.h"
 #include "oracle/ingestion/MarketDescriptionLoader.h"
 #include "oracle/ingestion/MarketUniverseBuilder.h"
@@ -38,6 +42,7 @@ struct Options {
     std::string candidate_bundles_path;
     std::filesystem::path out_path;
     bool check_determinism = false;
+    bool generate_combinatorial_bundles = false;
 };
 
 struct WorkflowSummary {
@@ -52,6 +57,15 @@ struct WorkflowSummary {
     std::uint32_t variables = 0;
     std::uint32_t constraints = 0;
     std::uint32_t contradictions = 0;
+
+    std::uint32_t component_count = 0;
+    std::uint32_t max_component_variable_count = 0;
+    std::uint32_t small_enum_components = 0;
+    std::uint32_t exactly_one_components = 0;
+    std::uint32_t at_most_one_components = 0;
+    std::uint32_t generic_components = 0;
+    std::uint32_t skipped_full_enumeration_count = 0;
+    std::uint32_t large_component_without_oracle_count = 0;
 
     std::uint64_t feasible_states = 0;
     std::string enumeration_mode = "bruteforce_u32";
@@ -75,10 +89,16 @@ struct WorkflowSummary {
     std::vector<std::string> errors;
 
     [[nodiscard]] bool acceptance_ok() const noexcept {
+        const bool global_payoff_ok = feasible_states > 0 && payoff_rows > 0;
+        const bool component_oracle_ok =
+            skipped_full_enumeration_count > 0 &&
+            large_component_without_oracle_count == 0;
+
         return markets_loaded > 0 && assets_loaded > 0 && approved_rules > 0 &&
                unapproved_rules == 0 && validation_errors == 0 &&
                variables > 0 && constraints > 0 && contradictions == 0 &&
-               feasible_states > 0 && payoff_rows > 0 && manifest_ok &&
+               component_count > 0 && (global_payoff_ok || component_oracle_ok) &&
+               manifest_ok &&
                checksums_ok && determinism_passed && !llm_outputs_used &&
                errors.empty();
     }
@@ -119,6 +139,8 @@ struct WorkflowSummary {
             }
         } else if (arg == "--check-determinism") {
             options.check_determinism = true;
+        } else if (arg == "--generate-combinatorial-bundles") {
+            options.generate_combinatorial_bundles = true;
         } else {
             errors->push_back("unknown argument: " + arg);
         }
@@ -130,7 +152,8 @@ struct WorkflowSummary {
     if (options.rulebook_path.empty()) {
         errors->push_back("missing --rulebook");
     }
-    if (options.candidate_bundles_path.empty()) {
+    if (options.candidate_bundles_path.empty() &&
+        !options.generate_combinatorial_bundles) {
         errors->push_back("missing --candidate-bundles");
     }
     if (options.out_path.empty()) {
@@ -213,6 +236,54 @@ void append_string(std::vector<std::byte>* out, const std::string& value) {
             append_u32(&out, constraint.var_ids[i]);
             append_i32(&out, constraint.coeffs[i]);
         }
+    }
+    return out;
+}
+
+[[nodiscard]] std::vector<std::byte> serialize_components(
+    const std::vector<CompiledComponent>& components
+) {
+    std::vector<std::byte> out;
+    append_u32(&out, static_cast<std::uint32_t>(components.size()));
+    for (const auto& component : components) {
+        append_u32(&out, component.component_id);
+        append_u8(&out, static_cast<std::uint8_t>(component.kind));
+        append_string(&out, component.component_hash);
+        append_u32(
+            &out,
+            static_cast<std::uint32_t>(component.variable_ids.size())
+        );
+        for (const auto var_id : component.variable_ids) {
+            append_u32(&out, var_id);
+        }
+        append_u32(
+            &out,
+            static_cast<std::uint32_t>(component.constraint_ids.size())
+        );
+        for (const auto constraint_id : component.constraint_ids) {
+            append_u32(&out, constraint_id);
+        }
+    }
+    return out;
+}
+
+[[nodiscard]] std::vector<std::byte> serialize_oracle_descriptors(
+    const std::vector<CompiledComponent>& components
+) {
+    std::vector<std::byte> out;
+    append_u32(&out, static_cast<std::uint32_t>(components.size()));
+    for (const auto& component : components) {
+        append_u32(&out, component.component_id);
+        append_u8(&out, static_cast<std::uint8_t>(component.kind));
+        append_u32(
+            &out,
+            static_cast<std::uint32_t>(component.variable_ids.size())
+        );
+        append_u32(
+            &out,
+            static_cast<std::uint32_t>(component.constraint_ids.size())
+        );
+        append_string(&out, component.component_hash);
     }
     return out;
 }
@@ -403,6 +474,12 @@ void hash_string_into(std::uint64_t* hash, const std::string& value) {
     hash_u64(summary.approved_rules);
     hash_u64(summary.variables);
     hash_u64(summary.constraints);
+    hash_u64(summary.component_count);
+    hash_u64(summary.small_enum_components);
+    hash_u64(summary.exactly_one_components);
+    hash_u64(summary.at_most_one_components);
+    hash_u64(summary.generic_components);
+    hash_u64(summary.skipped_full_enumeration_count);
     hash_u64(summary.feasible_states);
     hash_u64(summary.payoff_rows);
     hash_u64(summary.payoff_columns);
@@ -419,6 +496,8 @@ void hash_string_into(std::uint64_t* hash, const std::string& value) {
     const MarketUniverse& universe,
     const Rulebook& rulebook,
     const CompiledConstraintSet& compiled,
+    const ConstraintGraph& graph,
+    const ComponentPartitionResult& partition,
     const std::vector<FeasibleState>& feasible_states,
     const PayoffMatrix& payoff_matrix,
     std::uint64_t bundle_hash,
@@ -433,6 +512,24 @@ void hash_string_into(std::uint64_t* hash, const std::string& value) {
     manifest.rule_count = static_cast<std::uint32_t>(rulebook.rules().size());
     manifest.constraint_count =
         static_cast<std::uint32_t>(compiled.constraints.size());
+    manifest.component_count =
+        static_cast<std::uint32_t>(partition.components.size());
+    for (const auto& component : partition.components) {
+        switch (component.kind) {
+            case ComponentKind::SmallEnumerable:
+                ++manifest.enumerable_component_count;
+                break;
+            case ComponentKind::ExactlyOne:
+            case ComponentKind::AtMostOne:
+            case ComponentKind::ImplicationDag:
+            case ComponentKind::WeightedThreshold:
+                ++manifest.semantic_oracle_component_count;
+                break;
+            case ComponentKind::GenericLinearBoolean:
+                ++manifest.fallback_oracle_component_count;
+                break;
+        }
+    }
     manifest.feasible_state_count =
         static_cast<std::uint64_t>(feasible_states.size());
     manifest.bundle_count = 0;
@@ -445,6 +542,13 @@ void hash_string_into(std::uint64_t* hash, const std::string& value) {
         checksum_hex(fnv1a64(contents.market_universe_json));
     manifest.rulebook_hash = checksum_hex(fnv1a64(contents.rulebook_json));
     manifest.constraint_hash = checksum_hex(compiled.constraint_hash);
+    manifest.constraint_graph_hash = checksum_hex(graph.graph_hash);
+    manifest.component_partition_hash =
+        checksum_hex(partition.partition_hash);
+    manifest.oracle_descriptor_hash =
+        checksum_hex(fnv1a64(contents.oracle_descriptors_bin));
+    manifest.bundle_template_hash =
+        checksum_hex(fnv1a64(contents.bundle_templates_bin));
     manifest.feasible_states_hash = checksum_hex(fnv1a64(contents.feasible_states_bin));
     manifest.payoff_hash = checksum_hex(payoff_matrix.payoff_hash);
     manifest.bundle_hash = checksum_hex(bundle_hash);
@@ -542,10 +646,6 @@ void hash_string_into(std::uint64_t* hash, const std::string& value) {
 
     ConstraintCompiler compiler;
     const auto compiled_result = compiler.compile(rulebook, variables);
-    summary.variables =
-        static_cast<std::uint32_t>(compiled_result.compiled.variables.size());
-    summary.constraints =
-        static_cast<std::uint32_t>(compiled_result.compiled.constraints.size());
     if (!compiled_result.ok()) {
         summary.validation_errors +=
             static_cast<std::uint32_t>(compiled_result.errors.size());
@@ -556,44 +656,130 @@ void hash_string_into(std::uint64_t* hash, const std::string& value) {
         );
         return summary;
     }
+    auto compiled = compiled_result.compiled;
 
-    StateEnumerator enumerator;
-    const auto enumeration = enumerator.enumerate(compiled_result.compiled);
-    if (!enumeration.ok()) {
-        summary.errors.insert(
-            summary.errors.end(),
-            enumeration.errors.begin(),
-            enumeration.errors.end()
+    MarketIntrinsicConstraintBuilder intrinsic_builder;
+    auto intrinsic_constraints = intrinsic_builder.build(
+        universe_result.universe,
+        compiled.variables
+    );
+    compiled.constraints.insert(
+        compiled.constraints.end(),
+        intrinsic_constraints.begin(),
+        intrinsic_constraints.end()
+    );
+    compiled.constraint_hash = hash_compiled_constraints(compiled);
+
+    summary.variables =
+        static_cast<std::uint32_t>(compiled.variables.size());
+    summary.constraints =
+        static_cast<std::uint32_t>(compiled.constraints.size());
+
+    ConstraintGraphBuilder graph_builder;
+    const auto graph = graph_builder.build(compiled);
+    ComponentPartitioner partitioner;
+    const auto partition = partitioner.partition(
+        graph,
+        compiled
+    );
+
+    summary.component_count =
+        static_cast<std::uint32_t>(partition.components.size());
+    for (const auto& component : partition.components) {
+        summary.max_component_variable_count = std::max<std::uint32_t>(
+            summary.max_component_variable_count,
+            static_cast<std::uint32_t>(component.variable_ids.size())
         );
+        switch (component.kind) {
+            case ComponentKind::SmallEnumerable:
+                ++summary.small_enum_components;
+                break;
+            case ComponentKind::ExactlyOne:
+                ++summary.exactly_one_components;
+                break;
+            case ComponentKind::AtMostOne:
+                ++summary.at_most_one_components;
+                break;
+            case ComponentKind::ImplicationDag:
+            case ComponentKind::WeightedThreshold:
+            case ComponentKind::GenericLinearBoolean:
+                ++summary.generic_components;
+                break;
+        }
+
+        if (component.variable_ids.size() >
+            StateEnumerator::kMaxBruteforceVariables) {
+            ++summary.skipped_full_enumeration_count;
+            if (component.kind != ComponentKind::ExactlyOne &&
+                component.kind != ComponentKind::AtMostOne) {
+                ++summary.large_component_without_oracle_count;
+            }
+        }
+    }
+
+    if (compiled.variables.size() >
+        StateEnumerator::kMaxBruteforceVariables) {
+        summary.enumeration_mode = "component_oracle";
+        if (summary.skipped_full_enumeration_count == 0) {
+            summary.skipped_full_enumeration_count = 1;
+        }
+    }
+
+    std::vector<FeasibleState> feasible_states;
+    PayoffMatrix payoff_matrix;
+    if (summary.enumeration_mode == "bruteforce_u32") {
+        StateEnumerator enumerator;
+        const auto enumeration = enumerator.enumerate(compiled);
+        if (!enumeration.ok()) {
+            summary.errors.insert(
+                summary.errors.end(),
+                enumeration.errors.begin(),
+                enumeration.errors.end()
+            );
+            return summary;
+        }
+        feasible_states = enumeration.feasible_states;
+        summary.feasible_states =
+            static_cast<std::uint64_t>(feasible_states.size());
+        summary.contradictions = summary.feasible_states == 0 ? 1U : 0U;
+
+        PayoffMatrixBuilder payoff_builder;
+        const auto payoff = payoff_builder.build(
+            compiled.variables,
+            feasible_states
+        );
+        if (!payoff.ok()) {
+            summary.errors.insert(
+                summary.errors.end(),
+                payoff.errors.begin(),
+                payoff.errors.end()
+            );
+            return summary;
+        }
+        payoff_matrix = payoff.matrix;
+        summary.payoff_rows = payoff_matrix.row_count;
+        summary.payoff_columns = payoff_matrix.column_count;
+        summary.invalid_entries = invalid_payoff_entries(payoff_matrix);
+    } else if (summary.large_component_without_oracle_count > 0) {
+        summary.errors.push_back("large component without oracle backend");
         return summary;
     }
-    summary.feasible_states =
-        static_cast<std::uint64_t>(enumeration.feasible_states.size());
-    summary.contradictions = summary.feasible_states == 0 ? 1U : 0U;
 
-    PayoffMatrixBuilder payoff_builder;
-    const auto payoff = payoff_builder.build(
-        compiled_result.compiled.variables,
-        enumeration.feasible_states
-    );
-    if (!payoff.ok()) {
-        summary.errors.insert(
-            summary.errors.end(),
-            payoff.errors.begin(),
-            payoff.errors.end()
+    CandidateBundleLoadResult bundles;
+    if (options.generate_combinatorial_bundles) {
+        CombinatorialBundleGenerator bundle_generator;
+        bundles = bundle_generator.generate_from_rulebook(
+            universe_result.universe.markets,
+            rulebook
         );
-        return summary;
+    } else {
+        CandidateBundleGenerator bundle_generator;
+        bundles = bundle_generator.load_fixture(
+            options.candidate_bundles_path,
+            known_market_ids(universe_result.universe),
+            known_asset_ids(universe_result.universe)
+        );
     }
-    summary.payoff_rows = payoff.matrix.row_count;
-    summary.payoff_columns = payoff.matrix.column_count;
-    summary.invalid_entries = invalid_payoff_entries(payoff.matrix);
-
-    CandidateBundleGenerator bundle_generator;
-    const auto bundles = bundle_generator.load_fixture(
-        options.candidate_bundles_path,
-        known_market_ids(universe_result.universe),
-        known_asset_ids(universe_result.universe)
-    );
     summary.candidate_bundles =
         static_cast<std::uint32_t>(bundles.bundles.size());
     summary.rejected_bundles = static_cast<std::uint32_t>(bundles.errors.size());
@@ -611,22 +797,30 @@ void hash_string_into(std::uint64_t* hash, const std::string& value) {
         universe_result.universe.markets
     );
     contents.rulebook_json = read_text_file(options.rulebook_path);
-    contents.variables_bin = serialize_variables(compiled_result.compiled.variables);
+    contents.variables_bin = serialize_variables(compiled.variables);
     contents.constraints_bin = serialize_constraints(
-        compiled_result.compiled.constraints
+        compiled.constraints
     );
+    contents.components_bin = serialize_components(partition.components);
+    contents.component_constraints_bin =
+        serialize_components(partition.components);
+    contents.oracle_descriptors_bin =
+        serialize_oracle_descriptors(partition.components);
+    contents.bundle_templates_bin = {};
     contents.feasible_states_bin =
-        serialize_feasible_states(enumeration.feasible_states);
-    contents.payoff_matrix_bin = serialize_payoff_matrix(payoff.matrix);
+        serialize_feasible_states(feasible_states);
+    contents.payoff_matrix_bin = serialize_payoff_matrix(payoff_matrix);
     contents.candidate_bundles_bin = serialize_candidate_bundles(bundles.bundles);
     contents.market_dependency_graph_bin = {};
     contents.settlement_bitmask_bin = {};
     contents.manifest = build_manifest(
         universe_result.universe,
         rulebook,
-        compiled_result.compiled,
-        enumeration.feasible_states,
-        payoff.matrix,
+        compiled,
+        graph,
+        partition,
+        feasible_states,
+        payoff_matrix,
         bundles.bundle_hash,
         contents
     );
@@ -657,6 +851,8 @@ void hash_string_into(std::uint64_t* hash, const std::string& value) {
         loaded_artifact.contents.manifest.market_count == summary.markets_loaded &&
         loaded_artifact.contents.manifest.variable_count == summary.variables &&
         loaded_artifact.contents.manifest.constraint_count == summary.constraints &&
+        loaded_artifact.contents.manifest.component_count ==
+            summary.component_count &&
         loaded_artifact.contents.manifest.feasible_state_count ==
             summary.feasible_states;
 
@@ -690,6 +886,22 @@ void print_summary(const WorkflowSummary& summary) {
     std::cout << "  variables: " << summary.variables << '\n';
     std::cout << "  constraints: " << summary.constraints << '\n';
     std::cout << "  contradictions: " << summary.contradictions << "\n\n";
+
+    std::cout << "components:\n";
+    std::cout << "  component_count: " << summary.component_count << '\n';
+    std::cout << "  max_component_variable_count: "
+              << summary.max_component_variable_count << '\n';
+    std::cout << "  small_enum_components: "
+              << summary.small_enum_components << '\n';
+    std::cout << "  exactly_one_components: "
+              << summary.exactly_one_components << '\n';
+    std::cout << "  at_most_one_components: "
+              << summary.at_most_one_components << '\n';
+    std::cout << "  generic_components: " << summary.generic_components << '\n';
+    std::cout << "  skipped_full_enumeration_count: "
+              << summary.skipped_full_enumeration_count << '\n';
+    std::cout << "  large_component_without_oracle_count: "
+              << summary.large_component_without_oracle_count << "\n\n";
 
     std::cout << "states:\n";
     std::cout << "  feasible_states: " << summary.feasible_states << '\n';
@@ -745,6 +957,17 @@ int main(int argc, char** argv) {
             second.approved_rules == summary.approved_rules &&
             second.variables == summary.variables &&
             second.constraints == summary.constraints &&
+            second.component_count == summary.component_count &&
+            second.max_component_variable_count ==
+                summary.max_component_variable_count &&
+            second.small_enum_components == summary.small_enum_components &&
+            second.exactly_one_components == summary.exactly_one_components &&
+            second.at_most_one_components == summary.at_most_one_components &&
+            second.generic_components == summary.generic_components &&
+            second.skipped_full_enumeration_count ==
+                summary.skipped_full_enumeration_count &&
+            second.large_component_without_oracle_count ==
+                summary.large_component_without_oracle_count &&
             second.feasible_states == summary.feasible_states &&
             second.payoff_rows == summary.payoff_rows &&
             second.payoff_columns == summary.payoff_columns &&

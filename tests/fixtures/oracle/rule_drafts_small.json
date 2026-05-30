@@ -1,0 +1,12 @@
+{
+  "drafts": [
+    {
+      "rule_id": "draft_exactly_one_m1",
+      "type": "ExactlyOne",
+      "variable_ids": ["m1:YES", "m1:NO"],
+      "source_text": "Fixture binary YES/NO market",
+      "rationale": "Exactly one binary outcome resolves true",
+      "requires_manual_review": true
+    }
+  ]
+}

@@ -12,6 +12,7 @@
 namespace {
 
 using trading_engine::oracle::ManualRuleEditor;
+using trading_engine::oracle::RuleDraft;
 using trading_engine::oracle::Rulebook;
 using trading_engine::oracle::RuleType;
 using trading_engine::oracle::RuleValidator;
@@ -104,6 +105,67 @@ void ManualRuleEditor_RoundTripsRulebook() {
     std::filesystem::remove(out_path);
 }
 
+void ManualRuleEditor_RoundTripsRuleDrafts() {
+    RuleDraft draft;
+    draft.rule_id = "draft_exactly_one_m1";
+    draft.type = RuleType::ExactlyOne;
+    draft.variable_ids = {"m1:YES", "m1:NO"};
+    draft.source_text = "fixture text";
+    draft.rationale = "binary market";
+    draft.requires_manual_review = true;
+
+    ManualRuleEditor editor;
+    const auto out_path =
+        std::filesystem::temp_directory_path() /
+        "oracle_rule_drafts_roundtrip.json";
+    std::vector<std::string> errors;
+    expect_true(
+        editor.write_rule_drafts({draft}, out_path.string(), &errors),
+        "write drafts"
+    );
+    expect_true(errors.empty(), "write errors");
+
+    const auto loaded = editor.load_rule_drafts(out_path.string());
+    expect_true(loaded.ok(), "load drafts");
+    expect_equal(loaded.drafts.size(), 1U, "draft count");
+    expect_equal(loaded.drafts.front().rule_id, draft.rule_id, "draft id");
+    expect_true(
+        loaded.drafts.front().requires_manual_review,
+        "manual review"
+    );
+
+    std::filesystem::remove(out_path);
+}
+
+void ManualRuleEditor_ApprovesDraftsIntoRulebook() {
+    RuleDraft draft;
+    draft.rule_id = "draft_exactly_one_m1";
+    draft.type = RuleType::ExactlyOne;
+    draft.variable_ids = {"m1:YES", "m1:NO"};
+    draft.source_text = "fixture text";
+    draft.rationale = "binary market";
+
+    ManualRuleEditor editor;
+    auto rulebook = editor.approve_drafts({draft}, "human", 123);
+    expect_equal(rulebook.rules().size(), 1U, "rule count");
+    const auto& rule = rulebook.rules().front();
+    expect_true(rule.approved, "approved");
+    expect_equal(rule.approved_by, std::string{"human"}, "approved by");
+    expect_equal(rule.approved_at_ns, 123ULL, "approved at");
+    expect_equal(
+        rule.source_rule_draft_id,
+        std::string{"draft_exactly_one_m1"},
+        "source draft"
+    );
+
+    RuleValidator validator;
+    const auto validation = validator.validate_rulebook(
+        rulebook,
+        {"m1:YES", "m1:NO"}
+    );
+    expect_true(validation.compiler_ready(), "compiler ready");
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -111,6 +173,14 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "ManualRuleEditor_RoundTripsRulebook",
             &ManualRuleEditor_RoundTripsRulebook
+        },
+        {
+            "ManualRuleEditor_RoundTripsRuleDrafts",
+            &ManualRuleEditor_RoundTripsRuleDrafts
+        },
+        {
+            "ManualRuleEditor_ApprovesDraftsIntoRulebook",
+            &ManualRuleEditor_ApprovesDraftsIntoRulebook
         }
     };
     return test_map;

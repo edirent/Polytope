@@ -69,6 +69,10 @@ void increment_counter_for_status(
         case IntentStatus::RejectedLowEdge:
             ++result->rejected_low_edge;
             break;
+        case IntentStatus::DuplicateIntent:
+            ++result->duplicate_intents;
+            ++result->rejected_duplicate;
+            break;
         case IntentStatus::PaperOpportunity:
             ++result->paper_opportunities;
             break;
@@ -98,6 +102,17 @@ std::uint64_t hash_published_intents(
         hash_i64(&hash, intent.latency_buffer_tick);
         hash_i64(&hash, intent.estimated_edge_tick);
         hash_i64(&hash, intent.min_edge_tick);
+        hash_u64(&hash, intent.oracle_artifact_hash);
+        hash_u64(&hash, intent.constraint_hash);
+        hash_u64(&hash, intent.bundle_hash);
+        hash_u64(&hash, intent.snapshot_version);
+        hash_i64(&hash, intent.bundle_qty);
+        hash_i64(&hash, intent.unit_edge_tick);
+        hash_i64(&hash, intent.total_edge_tick);
+        hash_i64(&hash, intent.edge_bps);
+        hash_i64(&hash, intent.slippage_buffer_tick);
+        hash_u64(&hash, intent.created_ts_ns);
+        hash_u64(&hash, intent.expires_at_ns);
         hash_u64(&hash, intent.leg_count);
         for (std::uint16_t i = 0; i < intent.leg_count; ++i) {
             const auto& leg = intent.legs[i];

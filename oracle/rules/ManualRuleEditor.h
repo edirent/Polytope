@@ -7,6 +7,16 @@
 
 namespace trading_engine::oracle {
 
+struct RuleDraftLoadResult {
+    std::vector<std::string> warnings;
+    std::vector<std::string> errors;
+    std::vector<RuleDraft> drafts;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return errors.empty();
+    }
+};
+
 class ManualRuleEditor {
 public:
     [[nodiscard]] RulebookLoadResult load_rulebook(
@@ -21,6 +31,28 @@ public:
 
     [[nodiscard]] std::vector<ValidatedRule> list_unapproved_rules(
         const Rulebook& rulebook
+    ) const;
+
+    [[nodiscard]] RuleDraftLoadResult load_rule_drafts(
+        const std::string& path
+    ) const;
+
+    [[nodiscard]] bool write_rule_drafts(
+        const std::vector<RuleDraft>& drafts,
+        const std::string& path,
+        std::vector<std::string>* errors = nullptr
+    ) const;
+
+    [[nodiscard]] ValidatedRule approve_draft(
+        const RuleDraft& draft,
+        const std::string& approved_by,
+        std::uint64_t approved_at_ns
+    ) const;
+
+    [[nodiscard]] Rulebook approve_drafts(
+        const std::vector<RuleDraft>& drafts,
+        const std::string& approved_by,
+        std::uint64_t approved_at_ns
     ) const;
 };
 

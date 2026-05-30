@@ -43,6 +43,12 @@ target_sources(oracle_ingestion PRIVATE
     ingestion/MarketUniverseBuilder.cpp
 )
 
+target_link_libraries(oracle_ingestion PUBLIC
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+)
+
 target_sources(oracle_rules PRIVATE
     rules/ManualRuleEditor.cpp
     rules/Rulebook.cpp
@@ -50,26 +56,36 @@ target_sources(oracle_rules PRIVATE
 )
 
 target_sources(oracle_llm PRIVATE
-    llm/ClaudeRuleExtractor.cpp
+    llm/OpenRouterRuleExtractor.cpp
     llm/StubRuleExtractor.cpp
 )
 
 target_link_libraries(oracle_llm PUBLIC
     oracle_rules
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
 target_sources(oracle_compiler PRIVATE
     compiler/BooleanConstraintBuilder.cpp
+    compiler/ComponentPartitioner.cpp
     compiler/ConstraintCompiler.cpp
+    compiler/ConstraintGraph.cpp
+    compiler/MarketIntrinsicConstraintBuilder.cpp
     compiler/MatrixBuilder.cpp
 )
 
 target_link_libraries(oracle_compiler PUBLIC
+    oracle_ingestion
     oracle_rules
 )
 
 target_sources(oracle_enumerate PRIVATE
+    enumerate/AtMostOneOracle.cpp
+    enumerate/ExactlyOneOracle.cpp
     enumerate/FeasibilityChecker.cpp
+    enumerate/SmallEnumOracle.cpp
     enumerate/StateEnumerator.cpp
 )
 
@@ -90,6 +106,7 @@ target_sources(oracle_bundles PRIVATE
     bundles/BundleValidator.cpp
     bundles/CandidateBundle.cpp
     bundles/CandidateBundleGenerator.cpp
+    bundles/CombinatorialBundleGenerator.cpp
 )
 
 target_link_libraries(oracle_bundles PUBLIC
@@ -112,6 +129,7 @@ add_executable(fetch_market_universe
 
 target_link_libraries(fetch_market_universe PRIVATE
     oracle_ingestion
+    oracle_bundles
 )
 
 set_target_properties(fetch_market_universe PROPERTIES
@@ -128,5 +146,18 @@ target_link_libraries(verify_oracle_workflow PRIVATE
 )
 
 set_target_properties(verify_oracle_workflow PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+add_executable(extract_oracle_rules
+    tools/extract_oracle_rules.cpp
+)
+
+target_link_libraries(extract_oracle_rules PRIVATE
+    oracle_llm
+    oracle_ingestion
+)
+
+set_target_properties(extract_oracle_rules PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )

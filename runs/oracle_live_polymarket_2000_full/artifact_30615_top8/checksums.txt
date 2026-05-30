@@ -1,0 +1,8 @@
+manifest.json 2cdfaad7e8d6b659
+market_universe.json 0ebe5e0c351964dd
+rulebook.json f8708d4d6a6d77ee
+variables.bin 7ed4d6d0eea5e36b
+constraints.bin 585c18fb2f08b396
+feasible_states.bin 0e7cd60c96ab8f92
+payoff_matrix.bin 6d5dcd5f7b532de7
+candidate_bundles.bin d0df9f0ff90d8323

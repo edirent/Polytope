@@ -1,0 +1,93 @@
+#include "engine/signal/publish/IntentRateLimiter.h"
+
+#include <exception>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+
+namespace {
+
+using trading_engine::signal::IntentRateLimiter;
+
+[[noreturn]] void fail(const std::string& message) {
+    throw std::runtime_error(message);
+}
+
+void expect_true(bool value, const std::string& field) {
+    if (!value) {
+        fail("expected true: " + field);
+    }
+}
+
+void expect_false(bool value, const std::string& field) {
+    if (value) {
+        fail("expected false: " + field);
+    }
+}
+
+void RateLimiter_AllowsUnderLimit() {
+    IntentRateLimiter limiter(2);
+
+    expect_true(limiter.allow(0), "first intent");
+    expect_true(limiter.allow(1), "second intent");
+}
+
+void RateLimiter_RejectsOverLimit() {
+    IntentRateLimiter limiter(2);
+
+    expect_true(limiter.allow(0), "first intent");
+    expect_true(limiter.allow(1), "second intent");
+    expect_false(limiter.allow(2), "third intent");
+}
+
+void RateLimiter_ResetsNextSecond() {
+    IntentRateLimiter limiter(1);
+
+    expect_true(limiter.allow(0), "first second");
+    expect_false(limiter.allow(1), "same second");
+    expect_true(limiter.allow(1'000'000'000ULL), "next second");
+}
+
+using TestFn = void (*)();
+
+const std::unordered_map<std::string, TestFn>& tests() {
+    static const std::unordered_map<std::string, TestFn> test_map{
+        {"RateLimiter_AllowsUnderLimit", &RateLimiter_AllowsUnderLimit},
+        {"RateLimiter_RejectsOverLimit", &RateLimiter_RejectsOverLimit},
+        {"RateLimiter_ResetsNextSecond", &RateLimiter_ResetsNextSecond}
+    };
+    return test_map;
+}
+
+int run_test(const std::string& name) {
+    const auto it = tests().find(name);
+    if (it == tests().end()) {
+        std::cerr << "unknown test: " << name << '\n';
+        return 2;
+    }
+
+    try {
+        it->second();
+    } catch (const std::exception& error) {
+        std::cerr << name << " failed: " << error.what() << '\n';
+        return 1;
+    }
+
+    std::cout << name << " passed\n";
+    return 0;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    if (argc == 2) {
+        return run_test(argv[1]);
+    }
+
+    int failures = 0;
+    for (const auto& [name, _] : tests()) {
+        failures += run_test(name) == 0 ? 0 : 1;
+    }
+    return failures == 0 ? 0 : 1;
+}

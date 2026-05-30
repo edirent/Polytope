@@ -11,6 +11,7 @@ namespace trading_engine::oracle {
 struct ValidatedRule {
     std::string rule_id;
     RuleType type = RuleType::Custom;
+    RuleCoverage coverage = RuleCoverage::ExclusiveOnly;
 
     std::vector<std::string> variable_ids;
 

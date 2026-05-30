@@ -11,6 +11,7 @@
 
 #include <boost/json.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -33,23 +34,35 @@ struct Options {
     bool emit_rejections = true;
 };
 
+struct PublishedIntentStats {
+    std::uint64_t paper_intents = 0;
+
+    std::int64_t bundle_qty_min = 0;
+    std::int64_t bundle_qty_max = 0;
+
+    std::int64_t unit_edge_min = 0;
+    std::int64_t unit_edge_max = 0;
+    std::int64_t total_edge_min = 0;
+    std::int64_t total_edge_max = 0;
+    std::int64_t edge_bps_min = 0;
+    std::int64_t edge_bps_max = 0;
+
+    std::uint64_t intents_with_expiry = 0;
+    std::uint64_t intents_with_idempotency_key = 0;
+};
+
 struct WorkflowSummary {
     std::uint64_t snapshots_loaded = 0;
     std::uint64_t candidate_bundles_loaded = 0;
     SignalRunResult result;
+    PublishedIntentStats published_stats;
     bool settlement_masks_available = false;
     bool determinism_passed = true;
     std::uint64_t second_output_hash = 0;
     std::vector<std::string> errors;
 
     [[nodiscard]] std::uint64_t vwap_checked() const noexcept {
-        const auto early_rejections =
-            result.rejected_invalid_settlement +
-            result.rejected_missing_snapshot +
-            result.rejected_bad_market_state;
-        return result.bundles_scanned > early_rejections
-            ? result.bundles_scanned - early_rejections
-            : 0;
+        return result.vwap_checked;
     }
 
     [[nodiscard]] std::uint64_t enough_depth() const noexcept {
@@ -57,7 +70,13 @@ struct WorkflowSummary {
     }
 
     [[nodiscard]] std::uint64_t edge_computed() const noexcept {
-        return result.paper_opportunities + result.rejected_low_edge;
+        return result.edge_computed;
+    }
+
+    [[nodiscard]] std::uint64_t consistency_checked() const noexcept {
+        return result.bundles_scanned > result.rejected_invalid_settlement
+            ? result.bundles_scanned - result.rejected_invalid_settlement
+            : 0;
     }
 
     [[nodiscard]] bool acceptance_ok(bool emit_rejections) const noexcept {
@@ -68,6 +87,70 @@ struct WorkflowSummary {
                (!emit_rejections || result.intents_published > 0);
     }
 };
+
+void update_minmax(
+    std::int64_t value,
+    std::int64_t* min_value,
+    std::int64_t* max_value,
+    bool first
+) noexcept {
+    if (first) {
+        *min_value = value;
+        *max_value = value;
+        return;
+    }
+    *min_value = std::min(*min_value, value);
+    *max_value = std::max(*max_value, value);
+}
+
+[[nodiscard]] PublishedIntentStats summarize_published_intents(
+    const std::vector<OpportunityIntent>& intents
+) {
+    PublishedIntentStats stats;
+    bool first_paper = true;
+
+    for (const auto& intent : intents) {
+        if (intent.expires_at_ns != 0) {
+            ++stats.intents_with_expiry;
+        }
+        if (!intent.idempotency_key.empty()) {
+            ++stats.intents_with_idempotency_key;
+        }
+
+        if (intent.status != IntentStatus::PaperOpportunity) {
+            continue;
+        }
+
+        ++stats.paper_intents;
+        update_minmax(
+            intent.bundle_qty,
+            &stats.bundle_qty_min,
+            &stats.bundle_qty_max,
+            first_paper
+        );
+        update_minmax(
+            intent.unit_edge_tick,
+            &stats.unit_edge_min,
+            &stats.unit_edge_max,
+            first_paper
+        );
+        update_minmax(
+            intent.total_edge_tick,
+            &stats.total_edge_min,
+            &stats.total_edge_max,
+            first_paper
+        );
+        update_minmax(
+            intent.edge_bps,
+            &stats.edge_bps_min,
+            &stats.edge_bps_max,
+            first_paper
+        );
+        first_paper = false;
+    }
+
+    return stats;
+}
 
 [[nodiscard]] std::optional<std::string> require_value(
     int argc,
@@ -257,6 +340,9 @@ bool write_intents_jsonl(
         &artifact_reader,
         &publisher
     );
+    summary.published_stats = summarize_published_intents(
+        publisher.intents()
+    );
 
     if (options.check_determinism) {
         FixtureMarketSnapshotReader second_snapshot_reader;
@@ -284,7 +370,9 @@ bool write_intents_jsonl(
         summary.determinism_passed =
             summary.result.output_hash == second_result.output_hash &&
             summary.result.bundles_scanned == second_result.bundles_scanned &&
-            summary.result.intents_published == second_result.intents_published;
+            summary.result.intents_published == second_result.intents_published &&
+            summary.result.rejected_rate_limited == second_result.rejected_rate_limited &&
+            summary.result.rejected_duplicate == second_result.rejected_duplicate;
     }
 
     if (!options.out_path.empty()) {
@@ -312,7 +400,17 @@ void print_summary(const WorkflowSummary& summary) {
     std::cout << "  rejected_missing_snapshot: "
               << summary.result.rejected_missing_snapshot << '\n';
     std::cout << "  rejected_bad_state: "
-              << summary.result.rejected_bad_market_state << "\n\n";
+              << summary.result.rejected_bad_market_state << '\n';
+    std::cout << "  rejected_stale_snapshot: "
+              << summary.result.rejected_stale_snapshot << "\n\n";
+
+    std::cout << "snapshot:\n";
+    std::cout << "  consistency_checked: "
+              << summary.consistency_checked() << '\n';
+    std::cout << "  rejected_snapshot_skew: "
+              << summary.result.rejected_snapshot_skew << '\n';
+    std::cout << "  rejected_stale_snapshot: "
+              << summary.result.rejected_stale_snapshot << "\n\n";
 
     std::cout << "settlement:\n";
     std::cout << "  settlement_masks_available: "
@@ -323,12 +421,28 @@ void print_summary(const WorkflowSummary& summary) {
 
     std::cout << "vwap:\n";
     std::cout << "  vwap_checked: " << summary.vwap_checked() << '\n';
+    std::cout << "  bundle_qty_min: "
+              << summary.published_stats.bundle_qty_min << '\n';
+    std::cout << "  bundle_qty_max: "
+              << summary.published_stats.bundle_qty_max << '\n';
     std::cout << "  enough_depth: " << summary.enough_depth() << '\n';
     std::cout << "  insufficient_depth: "
               << summary.result.rejected_insufficient_depth << "\n\n";
 
     std::cout << "edge:\n";
     std::cout << "  edge_computed: " << summary.edge_computed() << '\n';
+    std::cout << "  unit_edge_min: "
+              << summary.published_stats.unit_edge_min << '\n';
+    std::cout << "  unit_edge_max: "
+              << summary.published_stats.unit_edge_max << '\n';
+    std::cout << "  total_edge_min: "
+              << summary.published_stats.total_edge_min << '\n';
+    std::cout << "  total_edge_max: "
+              << summary.published_stats.total_edge_max << '\n';
+    std::cout << "  edge_bps_min: "
+              << summary.published_stats.edge_bps_min << '\n';
+    std::cout << "  edge_bps_max: "
+              << summary.published_stats.edge_bps_max << '\n';
     std::cout << "  above_threshold: "
               << summary.result.paper_opportunities << '\n';
     std::cout << "  below_threshold: "
@@ -345,8 +459,60 @@ void print_summary(const WorkflowSummary& summary) {
               << summary.result.rejected_insufficient_depth << '\n';
     std::cout << "  rejected_low_edge: "
               << summary.result.rejected_low_edge << '\n';
+    std::cout << "  duplicate_intents: "
+              << summary.result.duplicate_intents << '\n';
+    std::cout << "  rejected_duplicate: "
+              << summary.result.rejected_duplicate << '\n';
+    std::cout << "  rate_limited: "
+              << summary.result.rate_limited << '\n';
+    std::cout << "  rejected_rate_limited: "
+              << summary.result.rejected_rate_limited << '\n';
     std::cout << "  intents_published: "
               << summary.result.intents_published << "\n\n";
+
+    std::cout << "intent_lifecycle:\n";
+    std::cout << "  intents_with_expiry: "
+              << summary.published_stats.intents_with_expiry << '\n';
+    std::cout << "  intents_with_idempotency_key: "
+              << summary.published_stats.intents_with_idempotency_key << '\n';
+    std::cout << "  duplicate_rejected: "
+              << summary.result.rejected_duplicate << '\n';
+    std::cout << "  rate_limited: "
+              << summary.result.rejected_rate_limited << "\n\n";
+
+    const auto& metrics = summary.result.metrics;
+    std::cout << "metrics:\n";
+    std::cout << "  signal.scan.count: "
+              << metrics.scan_count << '\n';
+    std::cout << "  signal.bundle.scanned: "
+              << metrics.bundle_scanned << '\n';
+    std::cout << "  signal.bundle.rejected: "
+              << metrics.bundle_rejected << '\n';
+    std::cout << "  signal.bundle.passed: "
+              << metrics.bundle_passed << '\n';
+    std::cout << "  signal.reject.settled: "
+              << metrics.reject_settled << '\n';
+    std::cout << "  signal.reject.missing_snapshot: "
+              << metrics.reject_missing_snapshot << '\n';
+    std::cout << "  signal.reject.stale_lob: "
+              << metrics.reject_stale_lob << '\n';
+    std::cout << "  signal.reject.snapshot_skew: "
+              << metrics.reject_snapshot_skew << '\n';
+    std::cout << "  signal.reject.insufficient_depth: "
+              << metrics.reject_insufficient_depth << '\n';
+    std::cout << "  signal.reject.edge_below_threshold: "
+              << metrics.reject_edge_below_threshold << '\n';
+    std::cout << "  signal.reject.duplicate: "
+              << metrics.reject_duplicate << '\n';
+    std::cout << "  signal.reject.rate_limited: "
+              << metrics.reject_rate_limited << '\n';
+    std::cout << "  signal.intent.published: "
+              << metrics.intent_published << '\n';
+    std::cout << "  signal.scan.latency_ns:\n";
+    std::cout << "    count: " << metrics.scan_latency_ns.count << '\n';
+    std::cout << "    last: " << metrics.scan_latency_ns.last_ns << '\n';
+    std::cout << "    min: " << metrics.scan_latency_ns.min_ns << '\n';
+    std::cout << "    max: " << metrics.scan_latency_ns.max_ns << "\n\n";
 
     std::cout << "hashes:\n";
     std::cout << "  signal_output_hash: "

@@ -15,6 +15,7 @@ using trading_engine::oracle::BooleanVariable;
 using trading_engine::oracle::ConstraintCompiler;
 using trading_engine::oracle::ConstraintOp;
 using trading_engine::oracle::MatrixBuilder;
+using trading_engine::oracle::RuleCoverage;
 using trading_engine::oracle::RuleType;
 using trading_engine::oracle::Rulebook;
 using trading_engine::oracle::ValidatedRule;
@@ -71,11 +72,13 @@ ValidatedRule rule(
     std::string rule_id,
     RuleType type,
     std::vector<std::string> variable_ids,
-    bool approved = true
+    bool approved = true,
+    RuleCoverage coverage = RuleCoverage::ExclusiveOnly
 ) {
     ValidatedRule out;
     out.rule_id = std::move(rule_id);
     out.type = type;
+    out.coverage = coverage;
     out.variable_ids = std::move(variable_ids);
     out.approved = approved;
     out.approved_by = approved ? "fixture" : "";
@@ -123,6 +126,44 @@ void ConstraintCompiler_AtMostOne() {
     expect_true(result.ok(), "compile ok");
     const auto& constraint = result.compiled.constraints.front();
     expect_equal(constraint.op, ConstraintOp::LessEqual, "op");
+    expect_equal(constraint.rhs, 1, "rhs");
+    expect_equal(constraint.var_ids.size(), 3U, "var count");
+}
+
+void ConstraintCompiler_MutuallyExclusiveExclusiveOnlyBuildsAtMostOne() {
+    ConstraintCompiler compiler;
+    const auto result = compiler.compile(
+        rulebook_with(rule(
+            "r1",
+            RuleType::MutuallyExclusive,
+            {"m1:YES", "m1:NO", "m1:MAYBE"}
+        )),
+        variables()
+    );
+
+    expect_true(result.ok(), "compile ok");
+    const auto& constraint = result.compiled.constraints.front();
+    expect_equal(constraint.op, ConstraintOp::LessEqual, "op");
+    expect_equal(constraint.rhs, 1, "rhs");
+    expect_equal(constraint.var_ids.size(), 3U, "var count");
+}
+
+void ConstraintCompiler_MutuallyExclusiveExhaustiveBuildsExactlyOne() {
+    ConstraintCompiler compiler;
+    const auto result = compiler.compile(
+        rulebook_with(rule(
+            "r1",
+            RuleType::MutuallyExclusive,
+            {"m1:YES", "m1:NO", "m1:MAYBE"},
+            true,
+            RuleCoverage::ExhaustiveAndExclusive
+        )),
+        variables()
+    );
+
+    expect_true(result.ok(), "compile ok");
+    const auto& constraint = result.compiled.constraints.front();
+    expect_equal(constraint.op, ConstraintOp::Equal, "op");
     expect_equal(constraint.rhs, 1, "rhs");
     expect_equal(constraint.var_ids.size(), 3U, "var count");
 }
@@ -312,6 +353,14 @@ const std::unordered_map<std::string, TestFn>& tests() {
     static const std::unordered_map<std::string, TestFn> test_map{
         {"ConstraintCompiler_ExactlyOne", &ConstraintCompiler_ExactlyOne},
         {"ConstraintCompiler_AtMostOne", &ConstraintCompiler_AtMostOne},
+        {
+            "ConstraintCompiler_MutuallyExclusiveExclusiveOnlyBuildsAtMostOne",
+            &ConstraintCompiler_MutuallyExclusiveExclusiveOnlyBuildsAtMostOne
+        },
+        {
+            "ConstraintCompiler_MutuallyExclusiveExhaustiveBuildsExactlyOne",
+            &ConstraintCompiler_MutuallyExclusiveExhaustiveBuildsExactlyOne
+        },
         {"ConstraintCompiler_AtLeastOne", &ConstraintCompiler_AtLeastOne},
         {"ConstraintCompiler_Implies", &ConstraintCompiler_Implies},
         {

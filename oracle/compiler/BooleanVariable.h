@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace trading_engine::oracle {
 
@@ -13,5 +14,7 @@ struct BooleanVariable {
     std::string outcome_id;
     std::string asset_id;
 };
+
+using BooleanVariableRegistry = std::vector<BooleanVariable>;
 
 }  // namespace trading_engine::oracle

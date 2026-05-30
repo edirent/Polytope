@@ -30,6 +30,14 @@ std::string read_file(const std::filesystem::path& path) {
     };
 }
 
+void write_file(const std::filesystem::path& path, const std::string& text) {
+    std::ofstream output(path, std::ios::binary);
+    if (!output) {
+        fail("failed to write file: " + path.string());
+    }
+    output << text;
+}
+
 std::filesystem::path source_path(const std::string& relative) {
     return std::filesystem::path{POLYTOPE_SOURCE_DIR} / relative;
 }
@@ -65,7 +73,7 @@ void OracleWorkflow_SmallFixtureCompiles() {
     expect_true(text.find("assets_loaded: 2") != std::string::npos, "assets");
     expect_true(text.find("approved_rules: 1") != std::string::npos, "rules");
     expect_true(text.find("variables: 2") != std::string::npos, "variables");
-    expect_true(text.find("constraints: 1") != std::string::npos, "constraints");
+    expect_true(text.find("constraints: 2") != std::string::npos, "constraints");
     expect_true(text.find("feasible_states: 2") != std::string::npos, "states");
     expect_true(text.find("manifest_ok: true") != std::string::npos, "manifest");
     expect_true(text.find("checksums_ok: true") != std::string::npos, "checksums");
@@ -91,6 +99,132 @@ void OracleWorkflow_LlmDisabledStillPasses() {
     );
 }
 
+void OracleWorkflow_GeneratesCombinatorialBundlesFromRulebook() {
+    const auto root =
+        std::filesystem::temp_directory_path() /
+        "oracle_workflow_combinatorial_bundles";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    const auto markets = root / "markets.jsonl";
+    const auto rulebook = root / "rulebook.json";
+    const auto output = root / "workflow.out";
+
+    write_file(
+        markets,
+        R"({"market_id":"m1","event_id":"harvey","title":"Bracket 1","description":"Sentence bracket 1","outcomes":["Yes","No"],"asset_ids":["m1_yes","m1_no"],"resolution_source":"fixture","end_time":"2030-01-01T00:00:00Z","tags":["test"],"fetched_at_ns":1,"source":"fixture"}
+{"market_id":"m2","event_id":"harvey","title":"Bracket 2","description":"Sentence bracket 2","outcomes":["Yes","No"],"asset_ids":["m2_yes","m2_no"],"resolution_source":"fixture","end_time":"2030-01-01T00:00:00Z","tags":["test"],"fetched_at_ns":1,"source":"fixture"}
+{"market_id":"m3","event_id":"harvey","title":"Bracket 3","description":"Sentence bracket 3","outcomes":["Yes","No"],"asset_ids":["m3_yes","m3_no"],"resolution_source":"fixture","end_time":"2030-01-01T00:00:00Z","tags":["test"],"fetched_at_ns":1,"source":"fixture"}
+)"
+    );
+
+    write_file(
+        rulebook,
+        R"({"rules":[{"rule_id":"r_harvey_exactly_one","type":"ExactlyOne","variable_ids":["m1:Yes","m2:Yes","m3:Yes"],"approved":true,"approved_by":"fixture","approved_at_ns":1,"source_rule_draft_id":"draft_harvey"}]})"
+    );
+
+    const std::string command =
+        std::string{VERIFY_ORACLE_WORKFLOW_BIN} +
+        " --market-snapshot " + markets.string() +
+        " --rulebook " + rulebook.string() +
+        " --generate-combinatorial-bundles" +
+        " --out " + (root / "artifact").string() +
+        " --check-determinism > " + output.string() + " 2>&1";
+
+    const int rc = std::system(command.c_str());
+    expect_true(rc == 0, "workflow exit");
+
+    const auto text = read_file(output);
+    expect_true(text.find("markets_loaded: 3") != std::string::npos, "markets");
+    expect_true(text.find("assets_loaded: 6") != std::string::npos, "assets");
+    expect_true(text.find("approved_rules: 1") != std::string::npos, "rules");
+    expect_true(
+        text.find("candidate_bundles: 2") != std::string::npos,
+        "candidate bundles"
+    );
+    expect_true(
+        text.find("rejected_bundles: 0") != std::string::npos,
+        "rejected bundles"
+    );
+    expect_true(
+        text.find("determinism_passed: true") != std::string::npos,
+        "determinism"
+    );
+}
+
+void OracleWorkflow_LargeAtMostOneUsesComponentOracle() {
+    const auto root =
+        std::filesystem::temp_directory_path() /
+        "oracle_workflow_large_at_most_one";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    const auto markets = root / "markets.jsonl";
+    const auto rulebook = root / "rulebook.json";
+    const auto output = root / "workflow.out";
+
+    std::string market_text;
+    std::string rule_text = R"({"rules":[{"rule_id":"r_large_at_most_one","type":"AtMostOne","variable_ids":[)";
+    for (int i = 0; i < 40; ++i) {
+        if (i != 0) {
+            rule_text += ',';
+        }
+        rule_text += "\"m" + std::to_string(i) + ":Yes\"";
+
+        market_text +=
+            "{\"market_id\":\"m" + std::to_string(i) +
+            "\",\"event_id\":\"world_cup\",\"title\":\"Team " +
+            std::to_string(i) +
+            "\",\"description\":\"At most one team wins.\",\"outcomes\":[\"Yes\",\"No\"],\"asset_ids\":[\"m" +
+            std::to_string(i) + "_yes\",\"m" + std::to_string(i) +
+            "_no\"],\"resolution_source\":\"fixture\",\"end_time\":\"2030-01-01T00:00:00Z\",\"tags\":[\"test\"],\"fetched_at_ns\":1,\"source\":\"fixture\"}\n";
+    }
+    rule_text += R"(],"approved":true,"approved_by":"fixture","approved_at_ns":1,"source_rule_draft_id":"draft_large"}]})";
+
+    write_file(markets, market_text);
+    write_file(rulebook, rule_text);
+
+    const std::string command =
+        std::string{VERIFY_ORACLE_WORKFLOW_BIN} +
+        " --market-snapshot " + markets.string() +
+        " --rulebook " + rulebook.string() +
+        " --generate-combinatorial-bundles" +
+        " --out " + (root / "artifact").string() +
+        " --check-determinism > " + output.string() + " 2>&1";
+
+    const int rc = std::system(command.c_str());
+    expect_true(rc == 0, "workflow exit");
+
+    const auto text = read_file(output);
+    expect_true(text.find("markets_loaded: 40") != std::string::npos, "markets");
+    expect_true(text.find("assets_loaded: 80") != std::string::npos, "assets");
+    expect_true(text.find("variables: 80") != std::string::npos, "variables");
+    expect_true(
+        text.find("max_component_variable_count: 80") != std::string::npos,
+        "max component"
+    );
+    expect_true(
+        text.find("at_most_one_components: 1") != std::string::npos,
+        "at most one"
+    );
+    expect_true(
+        text.find("skipped_full_enumeration_count: 1") != std::string::npos,
+        "skipped enumeration"
+    );
+    expect_true(
+        text.find("large_component_without_oracle_count: 0") != std::string::npos,
+        "oracle backend"
+    );
+    expect_true(
+        text.find("enumeration_mode: component_oracle") != std::string::npos,
+        "component oracle mode"
+    );
+    expect_true(
+        text.find("determinism_passed: true") != std::string::npos,
+        "determinism"
+    );
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -102,6 +236,14 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "OracleWorkflow_LlmDisabledStillPasses",
             &OracleWorkflow_LlmDisabledStillPasses
+        },
+        {
+            "OracleWorkflow_GeneratesCombinatorialBundlesFromRulebook",
+            &OracleWorkflow_GeneratesCombinatorialBundlesFromRulebook
+        },
+        {
+            "OracleWorkflow_LargeAtMostOneUsesComponentOracle",
+            &OracleWorkflow_LargeAtMostOneUsesComponentOracle
         }
     };
     return test_map;

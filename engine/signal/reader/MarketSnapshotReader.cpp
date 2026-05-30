@@ -1,8 +1,11 @@
 #include "engine/signal/reader/MarketSnapshotReader.h"
 
-#include "state/quality/BookQualityState.h"
+#include "engine/signal/reader/SnapshotConsistencyGuard.h"
 
+#include <algorithm>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 namespace trading_engine::signal {
 
@@ -10,24 +13,48 @@ namespace {
 
 [[nodiscard]] SnapshotReadResult reject(
     IntentStatus status,
-    std::string error
+    std::string error,
+    SnapshotVersion version = {}
 ) {
     SnapshotReadResult result;
     result.ok = false;
     result.rejection_status = status;
     result.error = std::move(error);
+    result.snapshot_version = version;
     return result;
 }
 
-[[nodiscard]] bool bad_quality(
-    const MarketStateSnapshot& snapshot
+std::vector<std::string> unique_bundle_assets(const CandidateBundle& bundle) {
+    std::vector<std::string> assets;
+    std::unordered_set<std::string> seen;
+    assets.reserve(bundle.leg_count);
+
+    for (std::uint16_t i = 0; i < bundle.leg_count; ++i) {
+        const auto& asset_id = bundle.legs[i].asset_id;
+        if (asset_id.empty()) {
+            continue;
+        }
+        if (seen.insert(asset_id).second) {
+            assets.push_back(asset_id);
+        }
+    }
+
+    return assets;
+}
+
+[[nodiscard]] std::uint64_t guard_now_ns(
+    const std::vector<MarketStateSnapshot>& snapshots,
+    std::uint64_t requested_now_ns
 ) noexcept {
-    using trading_engine::state::BookQuality;
-    return snapshot.quality == BookQuality::Recovering ||
-           snapshot.quality == BookQuality::Crossed ||
-           snapshot.quality == BookQuality::Stale ||
-           snapshot.quality == BookQuality::Closed ||
-           snapshot.quality == BookQuality::Resolved;
+    if (requested_now_ns != 0) {
+        return requested_now_ns;
+    }
+
+    std::uint64_t now_ns = 0;
+    for (const auto& snapshot : snapshots) {
+        now_ns = std::max(now_ns, snapshot.last_book_update_ns);
+    }
+    return now_ns;
 }
 
 }  // namespace
@@ -35,78 +62,49 @@ namespace {
 SnapshotReadResult validate_bundle_snapshots(
     const CandidateBundle& bundle,
     const SignalConfig& config,
-    const std::vector<MarketStateSnapshot>& snapshots
+    const std::vector<MarketStateSnapshot>& snapshots,
+    std::uint64_t now_ns
 ) {
+    const auto required_assets = unique_bundle_assets(bundle);
     std::unordered_set<std::string> seen_assets;
     for (const auto& snapshot : snapshots) {
         seen_assets.insert(snapshot.entity_id);
     }
 
-    if (snapshots.size() < bundle.leg_count) {
+    if (snapshots.size() < required_assets.size()) {
         return reject(
             IntentStatus::RejectedMissingSnapshot,
             "missing bundle snapshot"
         );
     }
 
-    for (std::uint16_t i = 0; i < bundle.leg_count; ++i) {
-        const auto& leg = bundle.legs[i];
-        if (!seen_assets.contains(leg.asset_id)) {
+    for (const auto& asset_id : required_assets) {
+        if (!seen_assets.contains(asset_id)) {
             return reject(
                 IntentStatus::RejectedMissingSnapshot,
-                "missing snapshot for asset: " + leg.asset_id
+                "missing snapshot for asset: " + asset_id
             );
         }
     }
 
-    for (const auto& snapshot : snapshots) {
-        if (snapshot.recovering) {
-            return reject(
-                IntentStatus::RejectedBadMarketState,
-                "snapshot recovering: " + snapshot.entity_id
-            );
-        }
-        if (snapshot.crossed) {
-            return reject(
-                IntentStatus::RejectedBadMarketState,
-                "snapshot crossed: " + snapshot.entity_id
-            );
-        }
-        if (snapshot.closed) {
-            return reject(
-                IntentStatus::RejectedBadMarketState,
-                "snapshot closed: " + snapshot.entity_id
-            );
-        }
-        if (snapshot.resolved) {
-            return reject(
-                IntentStatus::RejectedBadMarketState,
-                "snapshot resolved: " + snapshot.entity_id
-            );
-        }
-        if (bad_quality(snapshot)) {
-            return reject(
-                IntentStatus::RejectedBadMarketState,
-                "bad snapshot quality: " + snapshot.entity_id
-            );
-        }
-        if (config.require_usable_for_depth && !snapshot.usable_for_depth) {
-            return reject(
-                IntentStatus::RejectedBadMarketState,
-                "snapshot not usable for depth: " + snapshot.entity_id
-            );
-        }
-        if (config.require_usable_for_signal && !snapshot.usable_for_signal) {
-            return reject(
-                IntentStatus::RejectedBadMarketState,
-                "snapshot not usable for signal: " + snapshot.entity_id
-            );
-        }
+    SnapshotConsistencyGuard guard;
+    const auto guard_result = guard.check(
+        snapshots,
+        guard_now_ns(snapshots, now_ns),
+        config
+    );
+    if (!guard_result.ok) {
+        return reject(
+            guard_result.rejection_status,
+            guard_result.error,
+            guard_result.version
+        );
     }
 
     SnapshotReadResult result;
     result.ok = true;
     result.snapshots = snapshots;
+    result.snapshot_version = guard_result.version;
     return result;
 }
 

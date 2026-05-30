@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 namespace trading_engine::signal {
 
@@ -144,6 +145,10 @@ MarketStateSnapshot parse_snapshot(const json::object& object) {
     snapshot.entity_id = string_field(object, "entity_id");
     snapshot.market_id = string_field(object, "market_id");
     snapshot.version = u64_field(object, "version");
+    snapshot.last_book_update_ns = u64_field(object, "last_book_update_ns");
+    if (snapshot.last_book_update_ns == 0) {
+        snapshot.last_book_update_ns = u64_field(object, "last_ws_recv_ns");
+    }
     snapshot.live = bool_field(object, "live");
     snapshot.recovering = bool_field(object, "recovering");
     snapshot.closed = bool_field(object, "closed");
@@ -223,19 +228,24 @@ bool FixtureMarketSnapshotReader::load(
 
 SnapshotReadResult FixtureMarketSnapshotReader::read_for_bundle(
     const CandidateBundle& bundle,
-    const SignalConfig& config
+    const SignalConfig& config,
+    std::uint64_t now_ns
 ) const {
     std::vector<MarketStateSnapshot> snapshots;
     snapshots.reserve(bundle.leg_count);
+    std::unordered_set<std::string> seen_assets;
     for (std::uint16_t i = 0; i < bundle.leg_count; ++i) {
         const auto& leg = bundle.legs[i];
+        if (!seen_assets.insert(leg.asset_id).second) {
+            continue;
+        }
         const auto it = snapshots_.find(leg.asset_id);
         if (it != snapshots_.end()) {
             snapshots.push_back(it->second);
         }
     }
 
-    return validate_bundle_snapshots(bundle, config, snapshots);
+    return validate_bundle_snapshots(bundle, config, snapshots, now_ns);
 }
 
 }  // namespace trading_engine::signal

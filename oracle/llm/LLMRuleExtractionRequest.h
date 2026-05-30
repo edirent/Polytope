@@ -12,6 +12,7 @@ struct LLMMarketContext {
     std::string title;
     std::string description;
     std::vector<std::string> outcomes;
+    std::vector<std::string> asset_ids;
     std::string resolution_source;
 };
 

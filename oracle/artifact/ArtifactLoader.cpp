@@ -5,6 +5,7 @@
 
 #include <boost/json.hpp>
 
+#include <array>
 #include <fstream>
 #include <sstream>
 
@@ -13,6 +14,17 @@ namespace trading_engine::oracle {
 namespace {
 
 namespace json = boost::json;
+
+inline constexpr std::array<std::string_view, 8> kLegacyRequiredChecksumFiles{
+    kManifestFile,
+    kMarketUniverseFile,
+    kRulebookFile,
+    kVariablesFile,
+    kConstraintsFile,
+    kFeasibleStatesFile,
+    kPayoffMatrixFile,
+    kCandidateBundlesFile
+};
 
 std::string read_text(
     const std::filesystem::path& path,
@@ -52,6 +64,17 @@ std::vector<std::byte> read_bytes(
         errors->push_back("failed to read artifact file: " + path.string());
     }
     return bytes;
+}
+
+std::vector<std::byte> read_optional_bytes(
+    const std::filesystem::path& path,
+    std::vector<std::string>* errors
+) {
+    std::error_code error;
+    if (!std::filesystem::exists(path, error)) {
+        return {};
+    }
+    return read_bytes(path, errors);
 }
 
 std::uint32_t u32_field(const json::object& object, const char* name) {
@@ -117,6 +140,13 @@ ArtifactManifest parse_manifest(
     manifest.variable_count = u32_field(object, "variable_count");
     manifest.rule_count = u32_field(object, "rule_count");
     manifest.constraint_count = u32_field(object, "constraint_count");
+    manifest.component_count = u32_field(object, "component_count");
+    manifest.enumerable_component_count =
+        u32_field(object, "enumerable_component_count");
+    manifest.semantic_oracle_component_count =
+        u32_field(object, "semantic_oracle_component_count");
+    manifest.fallback_oracle_component_count =
+        u32_field(object, "fallback_oracle_component_count");
     manifest.feasible_state_count = u64_field(object, "feasible_state_count");
     manifest.bundle_count = u64_field(object, "bundle_count");
     manifest.llm_enabled = bool_field(object, "llm_enabled");
@@ -127,6 +157,14 @@ ArtifactManifest parse_manifest(
     manifest.input_snapshot_hash = string_field(object, "input_snapshot_hash");
     manifest.rulebook_hash = string_field(object, "rulebook_hash");
     manifest.constraint_hash = string_field(object, "constraint_hash");
+    manifest.constraint_graph_hash =
+        string_field(object, "constraint_graph_hash");
+    manifest.component_partition_hash =
+        string_field(object, "component_partition_hash");
+    manifest.oracle_descriptor_hash =
+        string_field(object, "oracle_descriptor_hash");
+    manifest.bundle_template_hash =
+        string_field(object, "bundle_template_hash");
     manifest.feasible_states_hash = string_field(object, "feasible_states_hash");
     manifest.payoff_hash = string_field(object, "payoff_hash");
     manifest.bundle_hash = string_field(object, "bundle_hash");
@@ -145,7 +183,7 @@ std::map<std::string, std::string> parse_checksums(
         checksums[filename] = hash;
     }
 
-    for (const auto expected : kChecksumFiles) {
+    for (const auto expected : kLegacyRequiredChecksumFiles) {
         if (!checksums.contains(std::string{expected})) {
             errors->push_back(
                 "missing checksum entry: " + std::string{expected}
@@ -161,21 +199,14 @@ bool verify_checksums(
     std::vector<std::string>* errors
 ) {
     bool ok = true;
-    for (const auto filename : kChecksumFiles) {
-        const std::string name{filename};
-        const auto it = checksums.find(name);
-        if (it == checksums.end()) {
-            ok = false;
-            continue;
-        }
-
+    for (const auto& [name, expected_hash] : checksums) {
         const auto checksum = checksum_file(artifact_dir / name);
         if (!checksum.ok()) {
             errors->push_back(checksum.error);
             ok = false;
             continue;
         }
-        if (checksum.hex != it->second) {
+        if (checksum.hex != expected_hash) {
             errors->push_back("checksum mismatch: " + name);
             ok = false;
         }
@@ -211,6 +242,26 @@ ArtifactLoadResult ArtifactLoader::load(
         read_bytes(artifact_dir / std::string{kVariablesFile}, &result.errors);
     result.contents.constraints_bin =
         read_bytes(artifact_dir / std::string{kConstraintsFile}, &result.errors);
+    result.contents.components_bin =
+        read_optional_bytes(
+            artifact_dir / std::string{kComponentsFile},
+            &result.errors
+        );
+    result.contents.component_constraints_bin =
+        read_optional_bytes(
+            artifact_dir / std::string{kComponentConstraintsFile},
+            &result.errors
+        );
+    result.contents.oracle_descriptors_bin =
+        read_optional_bytes(
+            artifact_dir / std::string{kOracleDescriptorsFile},
+            &result.errors
+        );
+    result.contents.bundle_templates_bin =
+        read_optional_bytes(
+            artifact_dir / std::string{kBundleTemplatesFile},
+            &result.errors
+        );
     result.contents.feasible_states_bin =
         read_bytes(artifact_dir / std::string{kFeasibleStatesFile}, &result.errors);
     result.contents.payoff_matrix_bin =

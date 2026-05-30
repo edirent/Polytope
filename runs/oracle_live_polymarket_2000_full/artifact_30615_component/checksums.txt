@@ -1,0 +1,12 @@
+manifest.json df3f0f61039b3ea2
+market_universe.json 83969e900ea9cb2c
+rulebook.json 66410878e4c7fd25
+variables.bin f0faed94d8d1bb45
+constraints.bin a86079ee13ee8ab9
+components.bin cde920cd04672673
+component_constraints.bin cde920cd04672673
+oracle_descriptors.bin ab4834bb8e000837
+bundle_templates.bin cbf29ce484222325
+feasible_states.bin a8c7f832281a39c5
+payoff_matrix.bin 0c8210784d8af5a5
+candidate_bundles.bin 4d25767f9dce13f5

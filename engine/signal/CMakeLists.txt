@@ -7,17 +7,27 @@ add_library(engine_signal STATIC
     core/SignalWorkflow.cpp
     edge/LatencyBufferModel.cpp
     edge/TheoreticalEdgeCalculator.cpp
+    metrics/SignalMetrics.cpp
     pricing/FeeModel.cpp
     pricing/PriceVectorBuilder.cpp
+    pricing/SideResolver.cpp
+    pricing/SlippageBufferModel.cpp
     pricing/VWAPPrecheck.cpp
     publish/CapturingIntentPublisher.cpp
+    publish/IntentBuilder.cpp
+    publish/IntentDeduper.cpp
+    publish/IntentRateLimiter.cpp
     publish/JsonlIntentWriter.cpp
     publish/PaperIntentPublisher.cpp
     rank/OpportunityRanker.cpp
     reader/FixtureMarketSnapshotReader.cpp
+    reader/LOBStalenessChecker.cpp
     reader/MarketSnapshotReader.cpp
     reader/MarketStateViewSnapshotReader.cpp
     reader/OracleArtifactReader.cpp
+    reader/SnapshotConsistencyGuard.cpp
+    scan/BundleRegistry.cpp
+    scan/CandidateBundleScanner.cpp
 )
 
 target_compile_features(engine_signal PUBLIC cxx_std_20)

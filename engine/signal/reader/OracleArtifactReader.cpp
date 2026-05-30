@@ -1,6 +1,7 @@
 #include "engine/signal/reader/OracleArtifactReader.h"
 
 #include "oracle/artifact/ArtifactLoader.h"
+#include "oracle/artifact/ArtifactLayout.h"
 #include "oracle/bundles/BundleHash.h"
 
 #include <boost/json.hpp>
@@ -16,6 +17,23 @@ namespace {
 namespace json = boost::json;
 
 constexpr std::uint32_t kSupportedArtifactVersion = 1;
+
+[[nodiscard]] std::uint64_t parse_hex_u64(std::string_view text) noexcept {
+    std::uint64_t value = 0;
+    for (const char ch : text) {
+        value <<= 4U;
+        if (ch >= '0' && ch <= '9') {
+            value |= static_cast<std::uint64_t>(ch - '0');
+        } else if (ch >= 'a' && ch <= 'f') {
+            value |= static_cast<std::uint64_t>(ch - 'a' + 10);
+        } else if (ch >= 'A' && ch <= 'F') {
+            value |= static_cast<std::uint64_t>(ch - 'A' + 10);
+        } else {
+            return 0;
+        }
+    }
+    return value;
+}
 
 class ByteReader {
 public:
@@ -332,6 +350,8 @@ OracleLoadResult OracleArtifactReader::load(
 ) {
     bundles_.clear();
     artifact_version_ = 0;
+    artifact_hash_ = 0;
+    constraint_hash_ = 0;
     bundle_hash_ = 0;
 
     OracleLoadResult result;
@@ -371,6 +391,13 @@ OracleLoadResult OracleArtifactReader::load(
 
     bundles_ = std::move(parsed_bundles);
     artifact_version_ = artifact.contents.manifest.artifact_version;
+    const auto manifest_checksum =
+        artifact.checksums.find(std::string{trading_engine::oracle::kManifestFile});
+    if (manifest_checksum != artifact.checksums.end()) {
+        artifact_hash_ = parse_hex_u64(manifest_checksum->second);
+    }
+    constraint_hash_ =
+        parse_hex_u64(artifact.contents.manifest.constraint_hash);
     bundle_hash_ = trading_engine::oracle::hash_candidate_bundles(bundles_);
 
     result.ok = true;
@@ -384,6 +411,14 @@ std::span<const CandidateBundle> OracleArtifactReader::active_bundles() const {
 
 std::uint64_t OracleArtifactReader::artifact_version() const {
     return artifact_version_;
+}
+
+std::uint64_t OracleArtifactReader::artifact_hash() const {
+    return artifact_hash_;
+}
+
+std::uint64_t OracleArtifactReader::constraint_hash() const {
+    return constraint_hash_;
 }
 
 std::uint64_t OracleArtifactReader::bundle_hash() const {

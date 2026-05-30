@@ -42,12 +42,31 @@ struct OpportunityIntent {
     std::int64_t estimated_edge_tick = 0;
     std::int64_t min_edge_tick = 0;
 
+    std::uint64_t oracle_artifact_hash = 0;
+    std::uint64_t constraint_hash = 0;
+    std::uint64_t bundle_hash = 0;
+
+    std::uint64_t snapshot_version = 0;
+    std::uint64_t snapshot_version_hash = 0;
+
+    std::int64_t bundle_qty = 0;
+
+    std::int64_t unit_edge_tick = 0;
+    std::int64_t total_edge_tick = 0;
+    std::int64_t edge_bps = 0;
+
+    std::int64_t slippage_buffer_tick = 0;
+
+    std::uint64_t created_ts_ns = 0;
+    std::uint64_t expires_at_ns = 0;
+
     std::uint16_t leg_count = 0;
     std::array<IntentLeg, kMaxIntentLegs> legs{};
 
-    std::uint64_t snapshot_version_hash = 0;
     std::uint64_t oracle_artifact_version = 0;
 
+    std::string idempotency_key;
+    std::string proof_ref;
     std::string reject_reason;
 };
 

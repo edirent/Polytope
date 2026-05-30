@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace {
 
@@ -27,6 +28,9 @@ using trading_engine::signal::FixtureMarketSnapshotReader;
 using trading_engine::signal::IntentStatus;
 using trading_engine::signal::MarketStateViewSnapshotReader;
 using trading_engine::signal::SignalConfig;
+using trading_engine::signal::validate_bundle_snapshots;
+using trading_engine::state::BookQuality;
+using trading_engine::state::MarketStateSnapshot;
 using trading_engine::state::MarketStateStore;
 using trading_engine::state::MarketStateView;
 using trading_engine::state::from_normalized_batch;
@@ -145,6 +149,41 @@ void MarketSnapshotReader_ReadsRequiredSnapshots() {
     );
 }
 
+void MarketSnapshotReader_ReadsUniqueAssetSnapshots() {
+    const auto reader = good_reader();
+    const auto result = reader.read_for_bundle(
+        bundle_for({"asset_yes", "asset_yes", "asset_no"}),
+        SignalConfig{}
+    );
+
+    expect_true(result.ok, "read ok: " + result.error);
+    expect_equal(result.snapshots.size(), 2U, "unique snapshot count");
+}
+
+void MarketSnapshotReader_ReturnsSnapshotVersion() {
+    const auto reader = good_reader();
+    const auto result = reader.read_for_bundle(
+        bundle_for({"asset_yes", "asset_no"}),
+        SignalConfig{}
+    );
+
+    expect_true(result.ok, "read ok: " + result.error);
+    expect_equal(
+        result.snapshot_version.min_book_version,
+        10ULL,
+        "min book version"
+    );
+    expect_equal(
+        result.snapshot_version.max_book_version,
+        10ULL,
+        "max book version"
+    );
+    expect_true(
+        result.snapshot_version.combined_hash != 0,
+        "combined hash"
+    );
+}
+
 void MarketSnapshotReader_RejectsMissingSnapshot() {
     const auto reader = good_reader();
     const auto result = reader.read_for_bundle(
@@ -222,6 +261,53 @@ void MarketSnapshotReader_RequiresUsableForSignalWhenConfigured() {
     );
 }
 
+MarketStateSnapshot direct_snapshot(
+    const std::string& asset_id,
+    std::uint64_t version
+) {
+    MarketStateSnapshot snapshot;
+    snapshot.entity_id = asset_id;
+    snapshot.market_id = "m1";
+    snapshot.version = version;
+    snapshot.last_book_update_ns = 1'000;
+    snapshot.live = true;
+    snapshot.has_bid = true;
+    snapshot.has_ask = true;
+    snapshot.best_bid_tick = 490'000;
+    snapshot.best_ask_tick = 500'000;
+    snapshot.bid_count = 1;
+    snapshot.ask_count = 1;
+    snapshot.state_hash = version * 100;
+    snapshot.quality = BookQuality::Good;
+    snapshot.usable_for_depth = true;
+    snapshot.usable_for_signal = true;
+    return snapshot;
+}
+
+void MarketSnapshotReader_UsesConsistencyGuard() {
+    SignalConfig config;
+    config.max_snapshot_version_skew = 0;
+
+    const std::vector<MarketStateSnapshot> snapshots{
+        direct_snapshot("asset_a", 100),
+        direct_snapshot("asset_b", 101)
+    };
+
+    const auto result = validate_bundle_snapshots(
+        bundle_for({"asset_a", "asset_b"}),
+        config,
+        snapshots,
+        1'000
+    );
+
+    expect_false(result.ok, "read ok");
+    expect_equal(
+        result.rejection_status,
+        IntentStatus::RejectedBadMarketState,
+        "status"
+    );
+}
+
 void MarketSnapshotReader_MarketStateViewAdapterReadsSnapshot() {
     MarketStateStore store;
     apply_snapshot(store, "asset_yes");
@@ -238,6 +324,28 @@ void MarketSnapshotReader_MarketStateViewAdapterReadsSnapshot() {
     expect_equal(result.snapshots.size(), 2U, "snapshot count");
 }
 
+void MarketSnapshotReader_RejectsStaleWhenScanNowExceedsMaxAge() {
+    MarketStateStore store;
+    apply_snapshot(store, "asset_yes");
+    MarketStateView view(store);
+    MarketStateViewSnapshotReader reader(view);
+
+    SignalConfig config;
+    config.max_lob_age_ns = 500;
+    const auto result = reader.read_for_bundle(
+        bundle_for({"asset_yes"}),
+        config,
+        2'000
+    );
+
+    expect_false(result.ok, "read ok");
+    expect_equal(
+        result.rejection_status,
+        IntentStatus::RejectedBadMarketState,
+        "status"
+    );
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -245,6 +353,14 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "MarketSnapshotReader_ReadsRequiredSnapshots",
             &MarketSnapshotReader_ReadsRequiredSnapshots
+        },
+        {
+            "MarketSnapshotReader_ReadsUniqueAssetSnapshots",
+            &MarketSnapshotReader_ReadsUniqueAssetSnapshots
+        },
+        {
+            "MarketSnapshotReader_ReturnsSnapshotVersion",
+            &MarketSnapshotReader_ReturnsSnapshotVersion
         },
         {
             "MarketSnapshotReader_RejectsMissingSnapshot",
@@ -267,8 +383,16 @@ const std::unordered_map<std::string, TestFn>& tests() {
             &MarketSnapshotReader_RequiresUsableForSignalWhenConfigured
         },
         {
+            "MarketSnapshotReader_UsesConsistencyGuard",
+            &MarketSnapshotReader_UsesConsistencyGuard
+        },
+        {
             "MarketSnapshotReader_MarketStateViewAdapterReadsSnapshot",
             &MarketSnapshotReader_MarketStateViewAdapterReadsSnapshot
+        },
+        {
+            "MarketSnapshotReader_RejectsStaleWhenScanNowExceedsMaxAge",
+            &MarketSnapshotReader_RejectsStaleWhenScanNowExceedsMaxAge
         }
     };
     return test_map;

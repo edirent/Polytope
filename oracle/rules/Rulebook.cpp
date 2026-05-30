@@ -27,6 +27,14 @@ const std::unordered_map<std::string, RuleType>& rule_type_map() {
     return values;
 }
 
+const std::unordered_map<std::string, RuleCoverage>& rule_coverage_map() {
+    static const std::unordered_map<std::string, RuleCoverage> values{
+        {"ExclusiveOnly", RuleCoverage::ExclusiveOnly},
+        {"ExhaustiveAndExclusive", RuleCoverage::ExhaustiveAndExclusive}
+    };
+    return values;
+}
+
 std::string string_field(
     const json::object& object,
     const char* name
@@ -116,6 +124,17 @@ ValidatedRule parse_rule(
         );
     }
 
+    const std::string coverage_name = string_field(object, "coverage");
+    if (!coverage_name.empty() &&
+        !rule_coverage_from_string(coverage_name, &rule.coverage)) {
+        result->errors.push_back(
+            "rules[" + std::to_string(index) + "]: unknown rule coverage"
+        );
+    }
+    if (bool_field(object, "exhaustive")) {
+        rule.coverage = RuleCoverage::ExhaustiveAndExclusive;
+    }
+
     if (rule.rule_id.empty()) {
         result->errors.push_back(
             "rules[" + std::to_string(index) + "]: missing rule_id"
@@ -129,6 +148,8 @@ json::object to_json_object(const ValidatedRule& rule) {
     json::object object;
     object["rule_id"] = rule.rule_id;
     object["type"] = rule_type_to_string(rule.type);
+    object["coverage"] = rule_coverage_to_string(rule.coverage);
+    object["exhaustive"] = rule_is_exhaustive(rule.coverage);
     object["variable_ids"] = to_json_array(rule.variable_ids);
     object["approved"] = rule.approved;
     object["approved_by"] = rule.approved_by;
@@ -176,6 +197,35 @@ bool rule_type_from_string(
         *out = it->second;
     }
     return true;
+}
+
+const char* rule_coverage_to_string(RuleCoverage coverage) noexcept {
+    switch (coverage) {
+        case RuleCoverage::ExclusiveOnly:
+            return "ExclusiveOnly";
+        case RuleCoverage::ExhaustiveAndExclusive:
+            return "ExhaustiveAndExclusive";
+    }
+
+    return "ExclusiveOnly";
+}
+
+bool rule_coverage_from_string(
+    const std::string& value,
+    RuleCoverage* out
+) noexcept {
+    const auto it = rule_coverage_map().find(value);
+    if (it == rule_coverage_map().end()) {
+        return false;
+    }
+    if (out) {
+        *out = it->second;
+    }
+    return true;
+}
+
+bool rule_is_exhaustive(RuleCoverage coverage) noexcept {
+    return coverage == RuleCoverage::ExhaustiveAndExclusive;
 }
 
 void Rulebook::add_rule(const ValidatedRule& rule) {

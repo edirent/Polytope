@@ -19,8 +19,14 @@ namespace {
     if (left_status != right_status) {
         return left_status < right_status;
     }
-    if (left.estimated_edge_tick != right.estimated_edge_tick) {
-        return left.estimated_edge_tick > right.estimated_edge_tick;
+    if (left.total_edge_tick != right.total_edge_tick) {
+        return left.total_edge_tick > right.total_edge_tick;
+    }
+    if (left.edge_bps != right.edge_bps) {
+        return left.edge_bps > right.edge_bps;
+    }
+    if (left.bundle_qty != right.bundle_qty) {
+        return left.bundle_qty > right.bundle_qty;
     }
     if (left.bundle_id != right.bundle_id) {
         return left.bundle_id < right.bundle_id;
