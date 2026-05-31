@@ -44,8 +44,8 @@ IntentValidationResult IntentEvidenceVerifier::verify(
     if (intent.expires_at_ns <= intent.created_ts_ns) {
         return reject("expires_at_ns must be greater than created_ts_ns");
     }
-    if (intent.idempotency_key.empty()) {
-        return reject("missing idempotency_key");
+    if (intent.idempotency_hash == 0 && intent.idempotency_key.empty()) {
+        return reject("missing idempotency evidence");
     }
 
     return accept();

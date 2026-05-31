@@ -13,6 +13,7 @@ inline constexpr std::uint16_t kMaxIntentLegs = 16;
 struct IntentLeg {
     std::string market_id;
     std::string asset_id;
+    std::uint32_t asset_index = 0;
 
     Side side = Side::Buy;
 

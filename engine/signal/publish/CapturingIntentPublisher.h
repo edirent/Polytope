@@ -18,6 +18,12 @@ struct CapturedSignalEvidence {
         kMaxSignalEvidenceSnapshots
     > snapshots{};
 
+    std::uint16_t depth_view_count = 0;
+    std::array<
+        trading_engine::state::MarketDepthView,
+        kMaxSignalEvidenceSnapshots
+    > depth_views{};
+
     std::uint64_t snapshot_version_hash = 0;
     std::uint64_t read_ts_ns = 0;
 

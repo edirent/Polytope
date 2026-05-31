@@ -87,6 +87,34 @@ SnapshotVersion make_version(
     return version;
 }
 
+SnapshotVersion make_version(
+    std::span<const trading_engine::state::MarketDepthView> depth_views,
+    std::uint64_t now_ns
+) noexcept {
+    SnapshotVersion version;
+    version.read_ts_ns = now_ns;
+    version.min_book_version = std::numeric_limits<std::uint64_t>::max();
+    version.max_book_version = 0;
+
+    std::uint64_t hash = kFnvOffset;
+    for (const auto& view : depth_views) {
+        version.min_book_version =
+            std::min(version.min_book_version, view.book_version);
+        version.max_book_version =
+            std::max(version.max_book_version, view.book_version);
+        mix_u64(view.asset_index, &hash);
+        mix_u64(view.book_version, &hash);
+        mix_u64(view.snapshot_version_hash, &hash);
+        mix_u64(view.last_ws_recv_ns, &hash);
+    }
+
+    if (depth_views.empty()) {
+        version.min_book_version = 0;
+    }
+    version.combined_hash = hash;
+    return version;
+}
+
 }  // namespace
 
 SnapshotConsistencyResult SnapshotConsistencyGuard::check(
@@ -185,6 +213,102 @@ SnapshotConsistencyResult SnapshotConsistencyGuard::check(
         return reject(
             IntentStatus::RejectedBadMarketState,
             "snapshot version skew too large",
+            version
+        );
+    }
+
+    SnapshotConsistencyResult result;
+    result.ok = true;
+    result.version = version;
+    return result;
+}
+
+SnapshotConsistencyResult SnapshotConsistencyGuard::check(
+    std::span<const trading_engine::state::MarketDepthView> depth_views,
+    std::uint64_t now_ns,
+    const SignalConfig& config
+) const {
+    const auto version = make_version(depth_views, now_ns);
+
+    if (depth_views.empty()) {
+        return reject(
+            IntentStatus::RejectedMissingSnapshot,
+            "missing depth view",
+            version
+        );
+    }
+
+    for (const auto& view : depth_views) {
+        if (view.recovering) {
+            return reject(
+                IntentStatus::RejectedBadMarketState,
+                "depth view recovering",
+                version
+            );
+        }
+        if (view.crossed) {
+            return reject(
+                IntentStatus::RejectedBadMarketState,
+                "depth view crossed",
+                version
+            );
+        }
+        if (view.closed) {
+            return reject(
+                IntentStatus::RejectedBadMarketState,
+                "depth view closed",
+                version
+            );
+        }
+        if (view.resolved) {
+            return reject(
+                IntentStatus::RejectedBadMarketState,
+                "depth view resolved",
+                version
+            );
+        }
+        if (config.require_usable_for_depth && !view.usable_for_depth) {
+            return reject(
+                IntentStatus::RejectedBadMarketState,
+                "depth view not usable for depth",
+                version
+            );
+        }
+        if (view.last_ws_recv_ns != 0 && now_ns != 0 &&
+            now_ns < view.last_ws_recv_ns) {
+            return reject(
+                IntentStatus::RejectedBadMarketState,
+                "depth view invalid timestamp",
+                version
+            );
+        }
+        const auto age_ns = view.last_ws_recv_ns == 0 || now_ns == 0
+            ? 0
+            : static_cast<std::int64_t>(now_ns - view.last_ws_recv_ns);
+        if (view.last_ws_recv_ns != 0 && now_ns != 0 &&
+            config.max_lob_age_ns >= 0 && age_ns > config.max_lob_age_ns) {
+            return reject(
+                IntentStatus::RejectedBadMarketState,
+                "depth view stale",
+                version
+            );
+        }
+    }
+
+    const auto skew = version.max_book_version - version.min_book_version;
+    if (config.consistency_mode == SnapshotConsistencyMode::StrictSameVersion &&
+        skew != 0) {
+        return reject(
+            IntentStatus::RejectedBadMarketState,
+            "depth view versions differ",
+            version
+        );
+    }
+    if (config.consistency_mode == SnapshotConsistencyMode::BoundedSkew &&
+        skew > config.max_snapshot_version_skew) {
+        return reject(
+            IntentStatus::RejectedBadMarketState,
+            "depth view version skew too large",
             version
         );
     }

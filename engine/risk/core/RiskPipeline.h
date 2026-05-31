@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/risk/core/RiskContext.h"
+#include "engine/risk/core/RiskScratch.h"
 #include "engine/risk/guards/DuplicateIntentGuard.h"
 #include "engine/risk/guards/EdgeGuard.h"
 #include "engine/risk/guards/ExposureGuard.h"
@@ -53,6 +54,7 @@ private:
     ExposureGuard exposure_guard_;
     InventoryGuard inventory_guard_;
     PartialFillGuard partial_fill_guard_;
+    RiskScratch scratch_;
 };
 
 }  // namespace trading_engine::risk

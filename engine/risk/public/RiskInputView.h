@@ -10,6 +10,7 @@ struct OpportunityIntent;
 
 namespace trading_engine::state {
 struct MarketStateSnapshot;
+struct MarketDepthView;
 }  // namespace trading_engine::state
 
 namespace trading_engine::risk {
@@ -22,6 +23,9 @@ struct RiskInputView {
 
     const state::MarketStateSnapshot* snapshots = nullptr;
     std::uint16_t snapshot_count = 0;
+
+    const state::MarketDepthView* depth_views = nullptr;
+    std::uint16_t depth_view_count = 0;
 
     std::uint64_t snapshot_version_hash = 0;
     // Legacy compatibility only. Hot-path risk evaluation ignores this field.
@@ -40,6 +44,8 @@ struct RiskInputView {
     out.intent = handoff.intent;
     out.snapshots = handoff.snapshots;
     out.snapshot_count = handoff.snapshot_count;
+    out.depth_views = handoff.depth_views;
+    out.depth_view_count = handoff.depth_view_count;
     out.snapshot_version_hash = handoff.snapshot_version_hash;
     out.now_ns = handoff.now_ns;
     return out;

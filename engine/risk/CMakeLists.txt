@@ -26,7 +26,9 @@ add_library(engine_risk STATIC
     metrics/RiskMetrics.cpp
     publish/ApprovedIntentPublisher.cpp
     publish/CapturingRiskPublisher.cpp
+    publish/HashOnlyRiskPublisher.cpp
     publish/JsonlRiskDecisionWriter.cpp
+    publish/RiskDecisionPublisher.cpp
     reprice/CostRevalidator.cpp
     reprice/FeeRevalidator.cpp
     reprice/LatencyRevalidator.cpp

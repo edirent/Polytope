@@ -13,6 +13,9 @@ struct SignalRiskHandoff {
     const trading_engine::state::MarketStateSnapshot* snapshots = nullptr;
     std::uint16_t snapshot_count = 0;
 
+    const trading_engine::state::MarketDepthView* depth_views = nullptr;
+    std::uint16_t depth_view_count = 0;
+
     std::uint64_t snapshot_version_hash = 0;
     std::uint64_t now_ns = 0;
 };
@@ -26,6 +29,8 @@ struct SignalRiskHandoff {
     out.intent = &intent;
     out.snapshots = evidence.snapshots;
     out.snapshot_count = evidence.snapshot_count;
+    out.depth_views = evidence.depth_views;
+    out.depth_view_count = evidence.depth_view_count;
     out.snapshot_version_hash = evidence.snapshot_version_hash;
     out.now_ns = now_ns;
     return out;

@@ -8,6 +8,8 @@ SignalEvidenceView CapturedSignalEvidence::view() const noexcept {
     SignalEvidenceView out;
     out.snapshots = snapshot_count == 0 ? nullptr : snapshots.data();
     out.snapshot_count = snapshot_count;
+    out.depth_views = depth_view_count == 0 ? nullptr : depth_views.data();
+    out.depth_view_count = depth_view_count;
     out.snapshot_version_hash = snapshot_version_hash;
     out.read_ts_ns = read_ts_ns;
     return out;
@@ -33,6 +35,15 @@ void CapturingIntentPublisher::publish(
          i < captured.snapshot_count && evidence.snapshots != nullptr;
          ++i) {
         captured.snapshots[i] = evidence.snapshots[i];
+    }
+    captured.depth_view_count = std::min<std::uint16_t>(
+        evidence.depth_view_count,
+        kMaxSignalEvidenceSnapshots
+    );
+    for (std::uint16_t i = 0;
+         i < captured.depth_view_count && evidence.depth_views != nullptr;
+         ++i) {
+        captured.depth_views[i] = evidence.depth_views[i];
     }
     captured.snapshot_version_hash = evidence.snapshot_version_hash;
     captured.read_ts_ns = evidence.read_ts_ns;

@@ -1,6 +1,7 @@
 #include "state/MarketStateView.h"
 
 #include <algorithm>
+#include <array>
 #include <utility>
 
 namespace trading_engine::state {
@@ -299,6 +300,56 @@ std::uint16_t MarketStateView::get_snapshots(
     std::uint16_t max_out
 ) const {
     return store_.get_snapshots(entity_ids, out, max_out);
+}
+
+std::uint16_t MarketStateView::get_depth_views(
+    std::span<const std::string* const> entity_ids,
+    std::span<const std::uint32_t> asset_indices,
+    MarketDepthView* out,
+    std::uint16_t max_out
+) const {
+    return store_.get_depth_views(entity_ids, asset_indices, out, max_out);
+}
+
+DepthBatchReadResult MarketStateView::read_depth_batch(
+    std::span<const std::uint32_t> asset_indices
+) const {
+    (void)asset_indices;
+    return {};
+}
+
+DepthBatchReadResult MarketStateView::read_depth_batch_by_asset_id(
+    std::span<const std::string_view> asset_ids
+) const {
+    DepthBatchReadResult result;
+    if (asset_ids.empty()) {
+        return result;
+    }
+
+    std::array<std::string, kMaxDepthBatchViews> owned_ids{};
+    std::array<const std::string*, kMaxDepthBatchViews> id_ptrs{};
+    std::array<std::uint32_t, kMaxDepthBatchViews> indices{};
+    const auto count = std::min<std::size_t>(
+        asset_ids.size(),
+        kMaxDepthBatchViews
+    );
+    for (std::size_t i = 0; i < count; ++i) {
+        owned_ids[i] = std::string{asset_ids[i]};
+        id_ptrs[i] = &owned_ids[i];
+        indices[i] = static_cast<std::uint32_t>(i);
+    }
+
+    result.count = get_depth_views(
+        std::span<const std::string* const>{id_ptrs.data(), count},
+        std::span<const std::uint32_t>{indices.data(), count},
+        result.views.data(),
+        kMaxDepthBatchViews
+    );
+    result.ok = result.count == count;
+    result.combined_snapshot_hash = hash_depth_views(
+        std::span<const MarketDepthView>{result.views.data(), result.count}
+    );
+    return result;
 }
 
 std::uint64_t MarketStateView::state_hash(

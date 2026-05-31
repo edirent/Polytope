@@ -4,6 +4,7 @@
 #include "engine/signal/public/SignalTypes.h"
 #include "engine/signal/reader/SnapshotVersion.h"
 #include "state/MarketStateSnapshot.h"
+#include "state/view/MarketDepthView.h"
 
 #include <span>
 #include <string>
@@ -21,6 +22,12 @@ class SnapshotConsistencyGuard {
 public:
     [[nodiscard]] SnapshotConsistencyResult check(
         std::span<const trading_engine::state::MarketStateSnapshot> snapshots,
+        std::uint64_t now_ns,
+        const SignalConfig& config
+    ) const;
+
+    [[nodiscard]] SnapshotConsistencyResult check(
+        std::span<const trading_engine::state::MarketDepthView> depth_views,
         std::uint64_t now_ns,
         const SignalConfig& config
     ) const;

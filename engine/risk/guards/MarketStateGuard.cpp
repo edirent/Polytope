@@ -45,4 +45,33 @@ GuardResult MarketStateGuard::check(
     return pass_guard();
 }
 
+GuardResult MarketStateGuard::check(
+    const state::MarketDepthView* depth_view
+) const {
+    if (depth_view == nullptr) {
+        return reject("depth view missing");
+    }
+    if (!depth_view->usable_for_depth) {
+        return reject("depth view not usable for depth");
+    }
+    if (depth_view->recovering) {
+        return reject("depth view recovering");
+    }
+    if (depth_view->crossed) {
+        return reject("depth view crossed");
+    }
+    if (depth_view->closed) {
+        return reject("depth view closed");
+    }
+    if (depth_view->resolved) {
+        return reject("depth view resolved");
+    }
+
+    return pass_guard();
+}
+
+GuardResult MarketStateGuard::check(std::nullptr_t) const {
+    return reject("snapshot missing");
+}
+
 }  // namespace trading_engine::risk

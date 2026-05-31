@@ -317,6 +317,20 @@ std::uint16_t LOBShard::snapshots(
     return snapshot_publisher_.read_many(asset_ids, out, max_out);
 }
 
+std::uint16_t LOBShard::depth_views(
+    std::span<const std::string* const> asset_ids,
+    std::span<const std::uint32_t> asset_indices,
+    MarketDepthView* out,
+    std::uint16_t max_out
+) const {
+    return snapshot_publisher_.read_depth_many(
+        asset_ids,
+        asset_indices,
+        out,
+        max_out
+    );
+}
+
 const ConfirmedTradeState* LOBShard::confirmed_trade_state(
     const std::string& asset_id
 ) const noexcept {

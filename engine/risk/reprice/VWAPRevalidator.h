@@ -3,6 +3,7 @@
 #include "engine/risk/reprice/CostRevalidationResult.h"
 #include "engine/signal/public/OpportunityIntent.h"
 #include "engine/state/MarketStateSnapshot.h"
+#include "engine/state/view/MarketDepthView.h"
 
 #include <cstddef>
 #include <vector>
@@ -20,6 +21,12 @@ public:
         const signal::OpportunityIntent& intent,
         const state::MarketStateSnapshot* snapshots,
         std::size_t snapshot_count
+    ) const;
+
+    [[nodiscard]] CostRevalidationResult reprice(
+        const signal::OpportunityIntent& intent,
+        const state::MarketDepthView* depth_views,
+        std::size_t depth_view_count
     ) const;
 };
 

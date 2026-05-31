@@ -4,10 +4,12 @@
 #include "state/MarketStateSnapshot.h"
 #include "state/StateTypes.h"
 #include "state/core/MarketStateStore.h"
+#include "state/view/MarketDepthView.h"
 
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 
 namespace trading_engine::state {
 
@@ -66,6 +68,21 @@ public:
         std::span<const std::string* const> entity_ids,
         MarketStateSnapshot* out,
         std::uint16_t max_out
+    ) const;
+
+    [[nodiscard]] std::uint16_t get_depth_views(
+        std::span<const std::string* const> entity_ids,
+        std::span<const std::uint32_t> asset_indices,
+        MarketDepthView* out,
+        std::uint16_t max_out
+    ) const;
+
+    [[nodiscard]] DepthBatchReadResult read_depth_batch(
+        std::span<const std::uint32_t> asset_indices
+    ) const;
+
+    [[nodiscard]] DepthBatchReadResult read_depth_batch_by_asset_id(
+        std::span<const std::string_view> asset_ids
     ) const;
 
     [[nodiscard]] std::uint64_t state_hash(

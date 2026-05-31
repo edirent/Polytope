@@ -157,10 +157,10 @@ ReservationResult ReservationBook::try_reserve(
             "reservation requires approved risk decision"
         );
     }
-    if (intent.idempotency_key.empty()) {
+    if (intent.idempotency_hash == 0 && intent.idempotency_key.empty()) {
         return reject(
             RiskRejectReason::MissingEvidence,
-            "reservation requires idempotency_key"
+            "reservation requires idempotency evidence"
         );
     }
     const auto key = reservation_key_for(intent);

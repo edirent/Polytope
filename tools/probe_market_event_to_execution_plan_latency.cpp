@@ -4,6 +4,7 @@
 #include "engine/execution/plan/ExecutionPlanner.h"
 #include "engine/risk/core/RiskEngine.h"
 #include "engine/risk/publish/CapturingRiskPublisher.h"
+#include "engine/risk/publish/HashOnlyRiskPublisher.h"
 #include "engine/risk/public/RiskPolicySnapshot.h"
 #include "engine/signal/core/SignalEngine.h"
 #include "engine/signal/edge/LatencyBufferModel.h"
@@ -11,6 +12,8 @@
 #include "engine/signal/pricing/FeeModel.h"
 #include "engine/signal/pricing/VWAPPrecheck.h"
 #include "engine/signal/publish/CapturingIntentPublisher.h"
+#include "engine/signal/publish/HashOnlySignalPublisher.h"
+#include "engine/signal/publish/IIntentPublisher.h"
 #include "engine/signal/public/SignalRiskHandoff.h"
 #include "engine/signal/rank/OpportunityRanker.h"
 #include "engine/signal/reader/MarketStateViewSnapshotReader.h"
@@ -56,6 +59,12 @@ constexpr std::uint64_t kNsPerSecond = 1'000'000'000ULL;
 constexpr std::uint64_t kFnvOffset = 14695981039346656037ULL;
 constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 
+enum class PublisherMode {
+    Hash,
+    Jsonl,
+    Null
+};
+
 struct Config {
     std::filesystem::path raw_path{
         "runs/worldcup_feed_to_execute_30m_20260530_170629/feed.raw"
@@ -68,8 +77,21 @@ struct Config {
     std::uint64_t warmup_pass_events = 0;
     std::uint64_t max_plan_samples = 0;
     std::uint64_t intent_ttl_ms = 5'000;
+    PublisherMode publisher_mode = PublisherMode::Hash;
     bool check_determinism = false;
 };
+
+[[nodiscard]] const char* to_string(PublisherMode mode) noexcept {
+    switch (mode) {
+        case PublisherMode::Hash:
+            return "hash";
+        case PublisherMode::Jsonl:
+            return "jsonl";
+        case PublisherMode::Null:
+            return "null";
+    }
+    return "hash";
+}
 
 struct LatencyStats {
     std::uint64_t count = 0;
@@ -302,6 +324,23 @@ void mix_string(std::uint64_t* hash, const std::string& value) noexcept {
     throw std::runtime_error(message);
 }
 
+class NullSignalPublisher final : public signal::IIntentPublisher {
+public:
+    void publish(const signal::OpportunityIntent&) override {}
+
+    [[nodiscard]] bool requires_materialized_strings() const noexcept override {
+        return false;
+    }
+};
+
+class NullRiskPublisher final : public risk::IRiskDecisionPublisher {
+public:
+    void publish_decision(
+        const risk::RiskDecision&,
+        const risk::RiskAuditTrace&
+    ) override {}
+};
+
 [[nodiscard]] Config parse_args(int argc, char** argv) {
     Config config;
     for (int i = 1; i < argc; ++i) {
@@ -328,6 +367,19 @@ void mix_string(std::uint64_t* hash, const std::string& value) noexcept {
         } else if (arg == "--intent-ttl-ms") {
             config.intent_ttl_ms =
                 std::stoull(require_value("--intent-ttl-ms"));
+        } else if (arg == "--publisher-mode") {
+            const auto value = require_value("--publisher-mode");
+            if (value == "hash") {
+                config.publisher_mode = PublisherMode::Hash;
+            } else if (value == "jsonl") {
+                config.publisher_mode = PublisherMode::Jsonl;
+            } else if (value == "null") {
+                config.publisher_mode = PublisherMode::Null;
+            } else {
+                throw std::runtime_error(
+                    "--publisher-mode must be hash, jsonl, or null"
+                );
+            }
         } else if (arg == "--check-determinism") {
             config.check_determinism = true;
         } else if (arg == "--help" || arg == "-h") {
@@ -335,7 +387,7 @@ void mix_string(std::uint64_t* hash, const std::string& value) noexcept {
                 "usage: probe_market_event_to_execution_plan_latency "
                 "--raw PATH --artifact PATH [--repeat N] "
                 "[--warmup-pass-events N] [--max-plan-samples N] "
-                "[--check-determinism]"
+                "[--publisher-mode hash|jsonl|null] [--check-determinism]"
             );
         } else {
             throw std::runtime_error("unknown argument: " + arg);
@@ -444,6 +496,19 @@ void print_stats_with_indent(
 
 void print_stats(const char* name, const std::vector<std::uint64_t>& values) {
     print_stats_with_indent("  ", name, values);
+}
+
+void print_acceptance_latency(
+    const char* name,
+    const std::vector<std::uint64_t>& values
+) {
+    const auto stats = summarize(values);
+    std::cout << "  " << name << ":\n";
+    std::cout << std::fixed << std::setprecision(3);
+    std::cout << "    p50_us: " << stats.p50_us << '\n';
+    std::cout << "    p95_us: " << stats.p95_us << '\n';
+    std::cout << "    p99_us: " << stats.p99_us << '\n';
+    std::cout.unsetf(std::ios::floatfield);
 }
 
 [[nodiscard]] std::uint64_t sum_values(
@@ -684,7 +749,17 @@ void run_probe(const Config& config, ProbeState* probe) {
         latency_model
     );
     signal::OpportunityRanker ranker;
-    signal::CapturingIntentPublisher signal_publisher;
+    signal::HashOnlySignalPublisher hash_signal_publisher(
+        artifact_reader.active_bundles().size()
+    );
+    signal::CapturingIntentPublisher json_signal_publisher;
+    NullSignalPublisher null_signal_publisher;
+    signal::IIntentPublisher* signal_publisher = &hash_signal_publisher;
+    if (config.publisher_mode == PublisherMode::Jsonl) {
+        signal_publisher = &json_signal_publisher;
+    } else if (config.publisher_mode == PublisherMode::Null) {
+        signal_publisher = &null_signal_publisher;
+    }
 
     signal::SignalConfig signal_config;
     signal_config.emit_rejections = true;
@@ -702,11 +777,19 @@ void run_probe(const Config& config, ProbeState* probe) {
         &vwap,
         &edge_calculator,
         &ranker,
-        &signal_publisher
+        signal_publisher
     );
 
-    risk::CapturingRiskPublisherFast risk_publisher;
-    risk_publisher.reserve(packets.size());
+    risk::HashOnlyRiskPublisher hash_risk_publisher(packets.size());
+    risk::CapturingRiskPublisherFast json_risk_publisher;
+    json_risk_publisher.reserve(packets.size());
+    NullRiskPublisher null_risk_publisher;
+    risk::IRiskDecisionPublisher* risk_publisher = &hash_risk_publisher;
+    if (config.publisher_mode == PublisherMode::Jsonl) {
+        risk_publisher = &json_risk_publisher;
+    } else if (config.publisher_mode == PublisherMode::Null) {
+        risk_publisher = &null_risk_publisher;
+    }
     auto risk_policy = risk::with_computed_policy_hash(
         risk::RiskPolicySnapshot{}
     );
@@ -719,7 +802,7 @@ void run_probe(const Config& config, ProbeState* probe) {
     risk_policy.max_approvals_per_second = 1'000'000;
     risk::RiskRuntimeContext risk_runtime;
     risk_runtime.policy = &risk_policy;
-    risk_runtime.publisher = &risk_publisher;
+    risk_runtime.publisher = risk_publisher;
     risk::RiskEngine risk_engine(risk_runtime);
 
     execution::ExecutionPlanner planner;
@@ -731,7 +814,6 @@ void run_probe(const Config& config, ProbeState* probe) {
     execution_config.max_order_age_ns =
         static_cast<std::int64_t>(config.intent_ttl_ms * kNsPerMs);
 
-    std::uint64_t processed_intents = 0;
     std::uint64_t scan_id = 1;
     std::uint64_t pass_events_seen = 0;
 
@@ -829,12 +911,12 @@ void run_probe(const Config& config, ProbeState* probe) {
                     );
                 }
 
-                const auto& intents = signal_publisher.intents();
-                while (processed_intents < intents.size()) {
+                const auto intents = signal_engine.last_published_intents();
+                for (std::size_t intent_index = 0; intent_index < intents.size();
+                     ++intent_index) {
                     const auto signal_to_risk_handoff_start_ns = now_ns();
-                    const auto intent_index = processed_intents++;
                     const auto& intent = intents[intent_index];
-                    const auto evidence = signal_publisher.evidence_at(
+                    const auto evidence = signal_engine.last_published_evidence_at(
                         intent_index
                     );
                     if (intent.status != signal::IntentStatus::PaperOpportunity) {
@@ -883,8 +965,15 @@ void run_probe(const Config& config, ProbeState* probe) {
                     }
                     ++probe->counters.risk_approved;
 
+                    auto execution_intent = intent;
+                    if (execution_intent.idempotency_key.empty() &&
+                        execution_intent.idempotency_hash != 0) {
+                        execution_intent.idempotency_key =
+                            std::to_string(execution_intent.idempotency_hash);
+                    }
+
                     execution::ApprovedIntentEnvelope envelope;
-                    envelope.source_intent = intent;
+                    envelope.source_intent = execution_intent;
                     envelope.approval.decision_id =
                         risk_result.output_hash != 0
                             ? risk_result.output_hash
@@ -897,7 +986,7 @@ void run_probe(const Config& config, ProbeState* probe) {
                             ? risk_result.cost.risk_bundle_qty
                             : intent.bundle_qty;
                     envelope.approval.idempotency_key =
-                        intent.idempotency_key;
+                        execution_intent.idempotency_key;
 
                     const auto plan_start_ns = now_ns();
                     const auto risk_to_execution_envelope_build_ns =
@@ -1212,6 +1301,8 @@ void print_report(const Config& config, const ProbeState& probe) {
     std::cout << "  repeat: " << config.repeat << '\n';
     std::cout << "  warmup_pass_events: "
               << config.warmup_pass_events << '\n';
+    std::cout << "  publisher_mode: "
+              << to_string(config.publisher_mode) << '\n';
     std::cout << "  check_determinism: "
               << (probe.determinism_checked ? "true" : "false") << '\n';
     std::cout << "  tsc_available: "
@@ -1265,6 +1356,39 @@ void print_report(const Config& config, const ProbeState& probe) {
                   << (probe.determinism_passed ? "true" : "false")
                   << "\n\n";
     }
+
+    std::cout << "acceptance_matrix:\n";
+    std::cout << "  fixture: worldcup_feed_to_execute_30m_20260530_170629\n";
+    std::cout << "  raw: " << config.raw_path.string() << '\n';
+    std::cout << "  oracle_artifact: "
+              << config.oracle_artifact.string() << '\n';
+    std::cout << "  latency:\n";
+    print_acceptance_latency(
+        "filter_pass_to_plan_total",
+        probe.samples.filter_to_plan_ns
+    );
+    print_acceptance_latency("state_apply", probe.samples.state_apply_ns);
+    print_acceptance_latency("signal_scan", probe.samples.signal_scan_ns);
+    print_acceptance_latency("risk_eval", probe.samples.risk_eval_ns);
+    print_acceptance_latency(
+        "execution_plan_build",
+        probe.samples.plan_build_ns
+    );
+    print_acceptance_latency(
+        "overall_unattributed",
+        probe.samples.overall_unattributed_ns
+    );
+    std::cout << "  correctness:\n";
+    std::cout << "    decode_errors: "
+              << probe.counters.decode_errors << '\n';
+    std::cout << "    state_errors: "
+              << probe.counters.state_errors << '\n';
+    std::cout << "    paper_opportunities: "
+              << probe.counters.paper_opportunities << '\n';
+    std::cout << "    risk_approved: "
+              << probe.counters.risk_approved << '\n';
+    std::cout << "    plans_built: "
+              << probe.counters.plans_built << "\n\n";
 
     std::cout << "passed_event_types:\n";
     std::cout << "  snapshot: " << probe.counters.snapshot_pass_events << '\n';

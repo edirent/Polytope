@@ -2,6 +2,7 @@
 
 #include "state/MarketStateQueryResult.h"
 #include "state/snapshot/SnapshotBuffer.h"
+#include "state/view/MarketDepthView.h"
 
 #include <cstdint>
 #include <memory>
@@ -23,6 +24,13 @@ public:
     [[nodiscard]] std::uint16_t read_many(
         std::span<const std::string* const> asset_ids,
         MarketStateSnapshot* out,
+        std::uint16_t max_out
+    ) const;
+
+    [[nodiscard]] std::uint16_t read_depth_many(
+        std::span<const std::string* const> asset_ids,
+        std::span<const std::uint32_t> asset_indices,
+        MarketDepthView* out,
         std::uint16_t max_out
     ) const;
 

@@ -14,6 +14,7 @@ add_library(engine_signal STATIC
     pricing/SlippageBufferModel.cpp
     pricing/VWAPPrecheck.cpp
     publish/CapturingIntentPublisher.cpp
+    publish/HashOnlySignalPublisher.cpp
     publish/IntentBuilder.cpp
     publish/IntentDeduper.cpp
     publish/IntentRateLimiter.cpp

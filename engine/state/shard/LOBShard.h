@@ -52,6 +52,13 @@ public:
         std::uint16_t max_out
     ) const;
 
+    [[nodiscard]] std::uint16_t depth_views(
+        std::span<const std::string* const> asset_ids,
+        std::span<const std::uint32_t> asset_indices,
+        MarketDepthView* out,
+        std::uint16_t max_out
+    ) const;
+
     [[nodiscard]] const ConfirmedTradeState* confirmed_trade_state(
         const std::string& asset_id
     ) const noexcept;

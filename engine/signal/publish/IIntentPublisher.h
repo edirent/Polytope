@@ -17,6 +17,10 @@ public:
         publish(intent);
     }
 
+    [[nodiscard]] virtual bool requires_materialized_strings() const noexcept {
+        return true;
+    }
+
     virtual ~IIntentPublisher() = default;
 };
 

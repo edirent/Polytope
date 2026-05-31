@@ -34,6 +34,22 @@ namespace {
     return nullptr;
 }
 
+[[nodiscard]] const state::MarketDepthView* find_depth_view(
+    const state::MarketDepthView* depth_views,
+    std::size_t depth_view_count,
+    std::uint32_t asset_index
+) noexcept {
+    if (depth_views == nullptr) {
+        return nullptr;
+    }
+    for (std::size_t i = 0; i < depth_view_count; ++i) {
+        if (depth_views[i].asset_index == asset_index) {
+            return &depth_views[i];
+        }
+    }
+    return nullptr;
+}
+
 [[nodiscard]] std::int64_t saturating_mul_i64(
     std::int64_t lhs,
     std::int64_t rhs
@@ -125,6 +141,41 @@ namespace {
     return true;
 }
 
+[[nodiscard]] bool depth_views_are_fresh(
+    const signal::OpportunityIntent& intent,
+    const state::MarketDepthView* depth_views,
+    std::size_t depth_view_count,
+    const RiskPolicySnapshot& policy,
+    std::uint64_t now_ns
+) noexcept {
+    if (now_ns == 0) {
+        return false;
+    }
+
+    for (std::uint16_t i = 0; i < intent.leg_count; ++i) {
+        const auto& leg = intent.legs[i];
+        if (leg.asset_id.empty() || already_seen_asset(intent, i)) {
+            continue;
+        }
+
+        const auto* depth_view =
+            find_depth_view(depth_views, depth_view_count, leg.asset_index);
+        if (depth_view == nullptr || depth_view->last_ws_recv_ns == 0 ||
+            now_ns < depth_view->last_ws_recv_ns) {
+            return false;
+        }
+
+        const auto age_ns = static_cast<std::int64_t>(
+            now_ns - depth_view->last_ws_recv_ns
+        );
+        if (policy.max_book_age_ns >= 0 && age_ns > policy.max_book_age_ns) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 [[nodiscard]] bool can_reuse_signal_snapshot(
     const signal::OpportunityIntent& intent,
     const state::MarketStateSnapshot* snapshots,
@@ -159,6 +210,46 @@ namespace {
            snapshots_are_fresh(intent, snapshots, snapshot_count, policy, now_ns);
 }
 
+[[nodiscard]] bool can_reuse_signal_depth_view(
+    const signal::OpportunityIntent& intent,
+    const state::MarketDepthView* depth_views,
+    std::size_t depth_view_count,
+    const RiskPolicySnapshot& policy,
+    std::uint64_t now_ns,
+    std::uint64_t snapshot_version_hash
+) noexcept {
+    if (intent.expires_at_ns <= now_ns || intent.bundle_qty <= 0 ||
+        intent.estimated_cost_tick < 0 || intent.leg_count == 0 ||
+        intent.leg_count > signal::kMaxIntentLegs) {
+        return false;
+    }
+
+    const auto original_bundle_qty = intent.original_bundle_qty > 0
+        ? intent.original_bundle_qty
+        : intent.bundle_qty;
+    if (intent.bundle_qty > original_bundle_qty) {
+        return false;
+    }
+
+    for (std::uint16_t i = 0; i < intent.leg_count; ++i) {
+        const auto& leg = intent.legs[i];
+        if (leg.side != signal::Side::Buy ||
+            leg.asset_id.empty() || leg.quantity_lots <= 0 ||
+            !leg.enough_depth) {
+            return false;
+        }
+    }
+
+    return combined_snapshot_hash_matches(intent, snapshot_version_hash) &&
+           depth_views_are_fresh(
+               intent,
+               depth_views,
+               depth_view_count,
+               policy,
+               now_ns
+           );
+}
+
 [[nodiscard]] CostRevalidationResult reuse_signal_snapshot(
     const signal::OpportunityIntent& intent
 ) noexcept {
@@ -178,6 +269,7 @@ namespace {
         const auto& source = intent.legs[i];
         auto& target = result.legs[i];
         target.asset_id = source.asset_id;
+        target.asset_index = source.asset_index;
         target.requested_qty_lots =
             source.requested_qty_lots > 0
                 ? source.requested_qty_lots
@@ -279,6 +371,57 @@ CostRevalidationResult CostRevalidator::revalidate(
                   )
         ? reuse_signal_snapshot(intent)
         : vwap_.reprice(intent, snapshots, snapshot_count);
+    if (timings != nullptr) {
+        timings->vwap_revalidator_ns += elapsed_ns(vwap_start);
+    }
+    if (!result.ok) {
+        accumulate_cost_timing(timings, total_start);
+        return result;
+    }
+
+    result.fee_tick = fee_.estimate_fee_tick(intent);
+    result.slippage_buffer_tick =
+        slippage_.estimate_slippage_buffer_tick(intent);
+    result.latency_buffer_tick = latency_.estimate_latency_buffer_tick(intent);
+    result.cost_drift_tick =
+        result.risk_total_cost_tick - intent.estimated_cost_tick;
+
+    if (result.cost_drift_tick > policy.max_allowed_cost_drift_tick) {
+        result.ok = false;
+        result.rejection = RiskDecisionType::RejectCostDrift;
+        result.reason = "cost drift exceeds policy";
+        accumulate_cost_timing(timings, total_start);
+        return result;
+    }
+
+    result.ok = true;
+    result.rejection = RiskDecisionType::Approve;
+    accumulate_cost_timing(timings, total_start);
+    return result;
+}
+
+CostRevalidationResult CostRevalidator::revalidate(
+    const signal::OpportunityIntent& intent,
+    const state::MarketDepthView* depth_views,
+    std::size_t depth_view_count,
+    const RiskPolicySnapshot& policy,
+    std::uint64_t now_ns,
+    std::uint64_t snapshot_version_hash,
+    RiskStageTimings* timings
+) const {
+    using Clock = std::chrono::steady_clock;
+    const auto total_start = Clock::now();
+    const auto vwap_start = Clock::now();
+    auto result = can_reuse_signal_depth_view(
+                      intent,
+                      depth_views,
+                      depth_view_count,
+                      policy,
+                      now_ns,
+                      snapshot_version_hash
+                  )
+        ? reuse_signal_snapshot(intent)
+        : vwap_.reprice(intent, depth_views, depth_view_count);
     if (timings != nullptr) {
         timings->vwap_revalidator_ns += elapsed_ns(vwap_start);
     }

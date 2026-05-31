@@ -5,6 +5,8 @@
 
 namespace trading_engine::risk {
 
+struct RiskPipelineResult;
+
 class IRiskDecisionPublisher {
 public:
     virtual ~IRiskDecisionPublisher() = default;
@@ -13,6 +15,8 @@ public:
         const RiskDecision& decision,
         const RiskAuditTrace& trace
     ) = 0;
+
+    virtual void publish_result(const RiskPipelineResult& result);
 };
 
 }  // namespace trading_engine::risk

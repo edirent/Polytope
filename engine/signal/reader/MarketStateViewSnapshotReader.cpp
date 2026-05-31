@@ -56,4 +56,33 @@ SnapshotBatchReadResult MarketStateViewSnapshotReader::read_for_plan(
     );
 }
 
+DepthReadResult MarketStateViewSnapshotReader::read_depth_for_plan(
+    const BundleRuntimePlan& plan,
+    const SignalConfig& config,
+    std::uint64_t now_ns
+) const {
+    std::array<trading_engine::state::MarketDepthView, kMaxIntentLegs>
+        depth_views{};
+    const auto depth_count = view_.get_depth_views(
+        std::span<const std::string* const>{
+            plan.unique_asset_ids.data(),
+            plan.unique_asset_count
+        },
+        std::span<const std::uint32_t>{
+            plan.unique_asset_indices.data(),
+            plan.unique_asset_count
+        },
+        depth_views.data(),
+        kMaxIntentLegs
+    );
+
+    return validate_plan_depth_views(
+        plan,
+        config,
+        depth_views,
+        depth_count,
+        now_ns
+    );
+}
+
 }  // namespace trading_engine::signal

@@ -54,10 +54,10 @@ IntentValidationResult IntentValidator::validate(
     if (intent.expires_at_ns <= now_ns) {
         return reject(RiskRejectReason::ExpiredIntent, "intent expired");
     }
-    if (intent.idempotency_key.empty()) {
+    if (intent.idempotency_hash == 0 && intent.idempotency_key.empty()) {
         return reject(
             RiskRejectReason::MissingEvidence,
-            "missing idempotency_key"
+            "missing idempotency evidence"
         );
     }
     if (intent.leg_count == 0 || intent.leg_count > signal::kMaxIntentLegs) {

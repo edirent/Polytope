@@ -6,6 +6,35 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(ENABLE_LTO "Enable link-time optimization" OFF)
+option(ENABLE_NATIVE_ARCH "Enable -march=native" OFF)
+
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
+
+if (ENABLE_LTO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+
+    if (ipo_supported)
+        message(STATUS "IPO/LTO enabled")
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    else()
+        message(WARNING "IPO/LTO not supported: ${ipo_error}")
+    endif()
+
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options("-flto=thin")
+        add_link_options("-flto=thin")
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_compile_options("-flto")
+        add_link_options("-flto")
+    endif()
+endif()
+
+if (ENABLE_NATIVE_ARCH)
+    add_compile_options("-march=native")
+endif()
+
 find_package(Boost REQUIRED COMPONENTS system)
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
@@ -277,6 +306,68 @@ foreach(test_case
     add_test(NAME ${test_case} COMMAND market_state_view_tests ${test_case})
 endforeach()
 
+add_executable(market_depth_view_tests
+    tests/unit/state/market_depth_view_test.cpp
+)
+
+target_include_directories(market_depth_view_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(market_depth_view_tests PRIVATE
+    engine_state
+)
+
+foreach(test_case
+    StateMarketDepthView_DefaultsAreSafe
+    DepthViewContainsBidsAsks
+    DepthViewPreservesSnapshotHash
+)
+    add_test(NAME ${test_case} COMMAND market_depth_view_tests ${test_case})
+endforeach()
+
+add_executable(depth_prefix_tests
+    tests/unit/state/depth_prefix_test.cpp
+)
+
+target_include_directories(depth_prefix_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(depth_prefix_tests PRIVATE
+    engine_state
+)
+
+foreach(test_case
+    DepthPrefix_BuildsAskCumulativeQty
+    DepthPrefix_BuildsAskCumulativeCost
+    DepthPrefix_BuyVwapExactFirstLevel
+)
+    add_test(NAME ${test_case} COMMAND depth_prefix_tests ${test_case})
+endforeach()
+
+add_executable(market_state_view_depth_batch_tests
+    tests/unit/state/market_state_view_depth_batch_test.cpp
+)
+
+target_include_directories(market_state_view_depth_batch_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(market_state_view_depth_batch_tests PRIVATE
+    engine_state
+)
+
+foreach(test_case
+    DepthBatchReadReadsAllAssets
+    DepthBatchReadRejectsMissingAsset
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND market_state_view_depth_batch_tests ${test_case}
+    )
+endforeach()
+
 add_executable(signal_types_tests
     tests/unit/signal/signal_types_test.cpp
 )
@@ -331,6 +422,7 @@ foreach(test_case
     RiskInputView_DoesNotOwnIntent
     RiskInputView_DoesNotCopySnapshots
     RiskInputView_ReferencesSignalSnapshotEvidence
+    RiskInputView_ReferencesDepthEvidence
 )
     add_test(NAME ${test_case} COMMAND risk_input_view_tests ${test_case})
 endforeach()
@@ -453,6 +545,36 @@ foreach(test_case
     add_test(NAME ${test_case} COMMAND risk_cost_revalidator_tests ${test_case})
 endforeach()
 
+add_executable(risk_depth_view_fast_path_tests
+    tests/unit/risk/risk_depth_view_fast_path_test.cpp
+)
+
+target_link_libraries(risk_depth_view_fast_path_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    RiskUsesDepthViewForFastRevalidation
+    RiskDepthViewFallbackRepricesOnHashMismatch
+)
+    add_test(NAME ${test_case} COMMAND risk_depth_view_fast_path_tests ${test_case})
+endforeach()
+
+add_executable(risk_vwap_revalidator_prefix_tests
+    tests/unit/risk/vwap_revalidator_prefix_test.cpp
+)
+
+target_link_libraries(risk_vwap_revalidator_prefix_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    RiskVWAPRevalidator_PrefixMultiLevel
+    RiskVWAPRevalidator_PrefixEqualsLinearDepth
+)
+    add_test(NAME ${test_case} COMMAND risk_vwap_revalidator_prefix_tests ${test_case})
+endforeach()
+
 add_executable(risk_edge_guard_tests
     tests/unit/risk/edge_guard_test.cpp
 )
@@ -566,6 +688,39 @@ foreach(test_case
     JsonlRiskDecisionWriter_DoesNotContainOrderFields
 )
     add_test(NAME ${test_case} COMMAND risk_publisher_tests ${test_case})
+endforeach()
+
+add_executable(risk_hash_only_publisher_tests
+    tests/unit/risk/hash_only_risk_publisher_test.cpp
+)
+
+target_link_libraries(risk_hash_only_publisher_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    HashOnlyRiskPublisher_PublishesNumericRecord
+    HashOnlyRiskPublisher_DoesNotMaterializeStrings
+    HashOnlyRiskPublisher_PreservesIntentIdBundleId
+    HashOnlyRiskPublisher_DeterministicOutputHash
+)
+    add_test(NAME ${test_case} COMMAND risk_hash_only_publisher_tests ${test_case})
+endforeach()
+
+add_executable(risk_scratch_tests
+    tests/unit/risk/risk_scratch_test.cpp
+)
+
+target_link_libraries(risk_scratch_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    Scratch_ResetClearsCounts
+    Scratch_DoesNotAllocate
+    Scratch_MaxLegCountEnforced
+)
+    add_test(NAME Risk${test_case} COMMAND risk_scratch_tests ${test_case})
 endforeach()
 
 add_executable(signal_opportunity_intent_tests
@@ -745,11 +900,37 @@ foreach(test_case
     )
 endforeach()
 
+add_executable(signal_snapshot_batch_reader_depth_view_tests
+    tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp
+)
+
+target_link_libraries(signal_snapshot_batch_reader_depth_view_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    DepthBatchReadValidatesRequiredAssets
+    SignalUsesDepthViewForVWAP
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND signal_snapshot_batch_reader_depth_view_tests ${test_case}
+    )
+endforeach()
+
 add_executable(signal_vwap_precheck_tests
     tests/unit/signal/vwap_precheck_test.cpp
 )
 
 target_link_libraries(signal_vwap_precheck_tests PRIVATE
+    engine_signal
+)
+
+add_executable(signal_vwap_prefix_tests
+    tests/unit/signal/vwap_prefix_test.cpp
+)
+
+target_link_libraries(signal_vwap_prefix_tests PRIVATE
     engine_signal
 )
 
@@ -788,6 +969,15 @@ foreach(test_case
     VWAPPrecheck_ComputesAvgCost
 )
     add_test(NAME ${test_case} COMMAND signal_vwap_precheck_tests ${test_case})
+endforeach()
+
+foreach(test_case
+    VWAPPrefix_ExactFirstLevel
+    VWAPPrefix_MultiLevel
+    VWAPPrefix_InsufficientDepth
+    VWAPPrefix_EqualsOldLinearVWAP
+)
+    add_test(NAME ${test_case} COMMAND signal_vwap_prefix_tests ${test_case})
 endforeach()
 
 add_executable(signal_fee_model_tests
@@ -874,6 +1064,39 @@ foreach(test_case
     JsonlIntentWriter_DoesNotRequireExecution
 )
     add_test(NAME ${test_case} COMMAND signal_paper_intent_publisher_tests ${test_case})
+endforeach()
+
+add_executable(signal_hash_only_publisher_tests
+    tests/unit/signal/hash_only_signal_publisher_test.cpp
+)
+
+target_link_libraries(signal_hash_only_publisher_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    HashOnlySignalPublisher_PublishesNumericRecord
+    HashOnlySignalPublisher_DoesNotMaterializeStrings
+    HashOnlySignalPublisher_PreservesIntentIdBundleId
+    HashOnlySignalPublisher_DeterministicOutputHash
+)
+    add_test(NAME ${test_case} COMMAND signal_hash_only_publisher_tests ${test_case})
+endforeach()
+
+add_executable(signal_scratch_tests
+    tests/unit/signal/signal_scratch_test.cpp
+)
+
+target_link_libraries(signal_scratch_tests PRIVATE
+    engine_signal
+)
+
+foreach(test_case
+    Scratch_ResetClearsCounts
+    Scratch_DoesNotAllocate
+    Scratch_MaxLegCountEnforced
+)
+    add_test(NAME Signal${test_case} COMMAND signal_scratch_tests ${test_case})
 endforeach()
 
 add_executable(signal_workflow_small_fixture_tests

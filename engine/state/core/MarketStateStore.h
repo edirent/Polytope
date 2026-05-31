@@ -6,6 +6,7 @@
 #include "state/core/StateHashPolicy.h"
 #include "state/shard/LOBShard.h"
 #include "state/shard/ShardRouter.h"
+#include "state/view/MarketDepthView.h"
 
 #include <array>
 #include <cstdint>
@@ -29,6 +30,13 @@ public:
     [[nodiscard]] std::uint16_t get_snapshots(
         std::span<const std::string* const> asset_ids,
         MarketStateSnapshot* out,
+        std::uint16_t max_out
+    ) const;
+
+    [[nodiscard]] std::uint16_t get_depth_views(
+        std::span<const std::string* const> asset_ids,
+        std::span<const std::uint32_t> asset_indices,
+        MarketDepthView* out,
         std::uint16_t max_out
     ) const;
 

@@ -12,6 +12,7 @@ inline constexpr std::uint16_t kMaxRevalidatedLegCosts = 16;
 
 struct RevalidatedLegCost {
     std::string asset_id;
+    std::uint32_t asset_index = 0;
     std::int64_t requested_qty_lots = 0;
     std::int64_t executable_qty_lots = 0;
     std::int64_t depth_margin_bps = 0;

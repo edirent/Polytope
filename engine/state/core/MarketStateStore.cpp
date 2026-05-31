@@ -50,6 +50,34 @@ std::uint16_t MarketStateStore::get_snapshots(
     return count;
 }
 
+std::uint16_t MarketStateStore::get_depth_views(
+    std::span<const std::string* const> asset_ids,
+    std::span<const std::uint32_t> asset_indices,
+    MarketDepthView* out,
+    std::uint16_t max_out
+) const {
+    if (ShardRouter::kNumShards == 1) {
+        return shards_[0].depth_views(asset_ids, asset_indices, out, max_out);
+    }
+
+    std::uint16_t count = 0;
+    for (std::uint16_t i = 0; i < asset_ids.size(); ++i) {
+        if (!asset_ids[i] || count >= max_out) {
+            continue;
+        }
+        auto snapshot = get_snapshot(*asset_ids[i]);
+        if (snapshot.ok) {
+            const auto asset_index =
+                i < asset_indices.size() ? asset_indices[i] : 0U;
+            out[count++] = market_depth_view_from_snapshot(
+                snapshot.value,
+                asset_index
+            );
+        }
+    }
+    return count;
+}
+
 bool MarketStateStore::exists(const std::string& asset_id) const {
     return get_snapshot(asset_id).ok;
 }

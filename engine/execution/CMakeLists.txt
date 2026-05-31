@@ -14,6 +14,7 @@ add_library(engine_execution STATIC
     state/PartialFillPolicy.cpp
     cancel/CancelManager.cpp
     metrics/ExecutionMetrics.cpp
+    publish/HashOnlyExecutionPublisher.cpp
 )
 
 target_compile_features(engine_execution PUBLIC cxx_std_20)
@@ -294,6 +295,43 @@ foreach(test_case
     ReservationDispositionPublisher_CapturesDisposition
 )
     add_test(NAME ${test_case} COMMAND execution_report_publisher_tests ${test_case})
+endforeach()
+
+add_executable(execution_hash_only_publisher_tests
+    ${CMAKE_SOURCE_DIR}/tests/unit/execution/hash_only_execution_publisher_test.cpp
+)
+
+target_compile_features(execution_hash_only_publisher_tests PRIVATE cxx_std_20)
+
+target_link_libraries(execution_hash_only_publisher_tests PRIVATE
+    engine_execution
+)
+
+foreach(test_case
+    HashOnlyExecutionPublisher_PublishesNumericRecord
+    HashOnlyExecutionPublisher_DoesNotMaterializeStrings
+    HashOnlyExecutionPublisher_PreservesIntentIdBundleId
+    HashOnlyExecutionPublisher_DeterministicOutputHash
+)
+    add_test(NAME ${test_case} COMMAND execution_hash_only_publisher_tests ${test_case})
+endforeach()
+
+add_executable(execution_scratch_tests
+    ${CMAKE_SOURCE_DIR}/tests/unit/execution/execution_scratch_test.cpp
+)
+
+target_compile_features(execution_scratch_tests PRIVATE cxx_std_20)
+
+target_link_libraries(execution_scratch_tests PRIVATE
+    engine_execution
+)
+
+foreach(test_case
+    Scratch_ResetClearsCounts
+    Scratch_DoesNotAllocate
+    Scratch_MaxLegCountEnforced
+)
+    add_test(NAME Execution${test_case} COMMAND execution_scratch_tests ${test_case})
 endforeach()
 
 add_executable(execution_metrics_tests

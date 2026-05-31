@@ -3,6 +3,7 @@
 #include "engine/signal/public/OpportunityIntent.h"
 #include "engine/signal/public/SignalRiskHandoff.h"
 #include "engine/state/MarketStateSnapshot.h"
+#include "engine/state/view/MarketDepthView.h"
 
 #include <exception>
 #include <iostream>
@@ -18,6 +19,7 @@ using trading_engine::signal::OpportunityIntent;
 using trading_engine::signal::SignalEvidenceView;
 using trading_engine::signal::make_signal_risk_handoff;
 using trading_engine::state::MarketStateSnapshot;
+using trading_engine::state::MarketDepthView;
 
 [[noreturn]] void fail(const std::string& message) {
     throw std::runtime_error(message);
@@ -86,6 +88,26 @@ void RiskInputView_ReferencesSignalSnapshotEvidence() {
     expect_equal(view.now_ns, 3'000ULL, "now");
 }
 
+void RiskInputView_ReferencesDepthEvidence() {
+    OpportunityIntent intent;
+    MarketDepthView depth;
+    SignalEvidenceView evidence;
+    evidence.depth_views = &depth;
+    evidence.depth_view_count = 1;
+    evidence.snapshot_version_hash = 111;
+
+    const auto handoff = make_signal_risk_handoff(intent, evidence, 4'000);
+    const RiskInputView view = make_risk_input_view(handoff);
+
+    expect_true(view.depth_views == &depth, "depth pointer");
+    expect_equal(
+        view.depth_view_count,
+        static_cast<std::uint16_t>(1),
+        "depth count"
+    );
+    expect_equal(view.snapshot_version_hash, 111ULL, "snapshot hash");
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -95,6 +117,10 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "RiskInputView_ReferencesSignalSnapshotEvidence",
             &RiskInputView_ReferencesSignalSnapshotEvidence
+        },
+        {
+            "RiskInputView_ReferencesDepthEvidence",
+            &RiskInputView_ReferencesDepthEvidence
         },
     };
     return test_map;

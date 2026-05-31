@@ -1,7 +1,7 @@
 {
   "intents": [
     {
-      "intent_id": 1316047164327889982,
+      "intent_id": 13625944349587682819,
       "bundle_id": 1,
       "status": "PaperOpportunity",
       "valid_under_settlement": true,
@@ -26,10 +26,10 @@
       "max_leg_slippage_tick": 10000,
       "created_ts_ns": 1,
       "expires_at_ns": 5000000001,
-      "snapshot_version_hash": 12761872077578761906,
+      "snapshot_version_hash": 9729175985894826855,
       "oracle_artifact_version": 1,
-      "idempotency_key": "124389ec596c8c3e",
-      "proof_ref": "oracle:ffdc6c2be8ea7b3d:constraint:dbe08c360b8ea75a:bundle:64804610bc25754c:snapshot:b11b470a0d0ef6b2",
+      "idempotency_key": "bd1914314e6a3603",
+      "proof_ref": "oracle:ffdc6c2be8ea7b3d:constraint:dbe08c360b8ea75a:bundle:64804610bc25754c:snapshot:8704fa030485a367",
       "reject_reason": "",
       "legs": [
         {

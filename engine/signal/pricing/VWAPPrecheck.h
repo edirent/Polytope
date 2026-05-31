@@ -20,6 +20,11 @@ public:
         const BundleRuntimePlan& plan,
         const SnapshotBatchReadResult& snapshots
     ) const;
+
+    [[nodiscard]] CostResult price_runtime_plan(
+        const BundleRuntimePlan& plan,
+        const DepthReadResult& depth
+    ) const;
 };
 
 }  // namespace trading_engine::signal

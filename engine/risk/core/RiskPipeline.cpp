@@ -1,6 +1,7 @@
 #include "engine/risk/core/RiskPipeline.h"
 
 #include "engine/risk/public/RiskDecision.h"
+#include "engine/state/view/MarketDepthView.h"
 
 #include <algorithm>
 #include <chrono>
@@ -245,7 +246,7 @@ void publish_decision_if_needed(
     }
 
     const auto start = Clock::now();
-    publisher->publish_decision(result->decision, result->audit_trace);
+    publisher->publish_result(*result);
     result->result.stage_timings.publisher_ns += elapsed_ns(start);
 }
 
@@ -371,6 +372,21 @@ void timed_add_step(
     return nullptr;
 }
 
+[[nodiscard]] const state::MarketDepthView* find_depth_view(
+    const RiskInputView& input,
+    std::uint32_t asset_index
+) {
+    if (input.depth_views == nullptr) {
+        return nullptr;
+    }
+    for (std::uint16_t i = 0; i < input.depth_view_count; ++i) {
+        if (input.depth_views[i].asset_index == asset_index) {
+            return &input.depth_views[i];
+        }
+    }
+    return nullptr;
+}
+
 }  // namespace
 
 RiskPipeline::RiskPipeline() : rate_limit_guard_(100) {}
@@ -410,6 +426,7 @@ RiskPipelineResult RiskPipeline::evaluate_view(
     bool enable_full_audit_trace
 ) {
     const auto total_start = Clock::now();
+    scratch_.reset();
     RiskPipelineResult result;
     const bool full_audit_trace = enable_full_audit_trace;
     if (input.intent == nullptr) {
@@ -440,7 +457,8 @@ RiskPipelineResult RiskPipeline::evaluate_view(
     result.result.stage_timings.audit_trace_ns += elapsed_ns(stage_start);
 
     if (input.policy == nullptr || input.ledger == nullptr ||
-        (input.snapshots == nullptr && input.snapshot_count > 0)) {
+        (input.snapshots == nullptr && input.snapshot_count > 0) ||
+        (input.depth_views == nullptr && input.depth_view_count > 0)) {
         timed_add_step(
             &result,
             RiskAuditStepCode::IntentValidator,
@@ -654,9 +672,17 @@ RiskPipelineResult RiskPipeline::evaluate_view(
     );
 
     for (std::uint16_t i = 0; i < intent.leg_count; ++i) {
-        const auto* snapshot = find_snapshot(input, intent.legs[i].asset_id);
+        const auto* depth_view = find_depth_view(
+            input,
+            intent.legs[i].asset_index
+        );
+        const auto* snapshot = depth_view == nullptr
+            ? find_snapshot(input, intent.legs[i].asset_id)
+            : nullptr;
         stage_start = Clock::now();
-        auto market_state_result = market_state_guard_.check(snapshot);
+        auto market_state_result = depth_view != nullptr
+            ? market_state_guard_.check(depth_view)
+            : market_state_guard_.check(snapshot);
         result.result.stage_timings.market_state_guard_ns +=
             elapsed_ns(stage_start);
         if (!market_state_result.pass) {
@@ -687,12 +713,19 @@ RiskPipelineResult RiskPipeline::evaluate_view(
             full_audit_trace
         );
         stage_start = Clock::now();
-        auto freshness_result = snapshot_freshness_guard_.check(
-            *snapshot,
-            intent,
-            policy,
-            input.now_ns
-        );
+        auto freshness_result = depth_view != nullptr
+            ? snapshot_freshness_guard_.check(
+                  *depth_view,
+                  intent,
+                  policy,
+                  input.now_ns
+              )
+            : snapshot_freshness_guard_.check(
+                  *snapshot,
+                  intent,
+                  policy,
+                  input.now_ns
+              );
         result.result.stage_timings.snapshot_freshness_guard_ns +=
             elapsed_ns(stage_start);
         if (!freshness_result.pass) {
@@ -731,15 +764,25 @@ RiskPipelineResult RiskPipeline::evaluate_view(
     }
 
     stage_start = Clock::now();
-    auto cost = cost_revalidator_.revalidate(
-        intent,
-        input.snapshots,
-        input.snapshot_count,
-        policy,
-        input.now_ns,
-        input.snapshot_version_hash,
-        &result.result.stage_timings
-    );
+    auto cost = input.depth_views != nullptr && input.depth_view_count > 0
+        ? cost_revalidator_.revalidate(
+              intent,
+              input.depth_views,
+              input.depth_view_count,
+              policy,
+              input.now_ns,
+              input.snapshot_version_hash,
+              &result.result.stage_timings
+          )
+        : cost_revalidator_.revalidate(
+              intent,
+              input.snapshots,
+              input.snapshot_count,
+              policy,
+              input.now_ns,
+              input.snapshot_version_hash,
+              &result.result.stage_timings
+          );
     const auto measured_cost_revalidator_ns = elapsed_ns(stage_start);
     if (result.result.stage_timings.cost_revalidator_ns == 0) {
         result.result.stage_timings.cost_revalidator_ns +=

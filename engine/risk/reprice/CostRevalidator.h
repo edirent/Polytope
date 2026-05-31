@@ -7,6 +7,7 @@
 #include "engine/risk/reprice/LatencyRevalidator.h"
 #include "engine/risk/reprice/SlippageRevalidator.h"
 #include "engine/risk/reprice/VWAPRevalidator.h"
+#include "engine/state/view/MarketDepthView.h"
 
 #include <cstddef>
 #include <vector>
@@ -32,6 +33,16 @@ public:
         const signal::OpportunityIntent& intent,
         const state::MarketStateSnapshot* snapshots,
         std::size_t snapshot_count,
+        const RiskPolicySnapshot& policy,
+        std::uint64_t now_ns,
+        std::uint64_t snapshot_version_hash,
+        RiskStageTimings* timings
+    ) const;
+
+    [[nodiscard]] CostRevalidationResult revalidate(
+        const signal::OpportunityIntent& intent,
+        const state::MarketDepthView* depth_views,
+        std::size_t depth_view_count,
         const RiskPolicySnapshot& policy,
         std::uint64_t now_ns,
         std::uint64_t snapshot_version_hash,

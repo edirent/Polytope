@@ -10,7 +10,8 @@ namespace trading_engine::signal {
 
 class FixtureMarketSnapshotReader final
     : public IMarketSnapshotReader,
-      public ISnapshotBatchReader {
+      public ISnapshotBatchReader,
+      public IDepthBatchReader {
 public:
     [[nodiscard]] bool load(
         const std::filesystem::path& path,
@@ -24,6 +25,12 @@ public:
     ) const override;
 
     [[nodiscard]] SnapshotBatchReadResult read_for_plan(
+        const BundleRuntimePlan& plan,
+        const SignalConfig& config,
+        std::uint64_t now_ns = 0
+    ) const override;
+
+    [[nodiscard]] DepthReadResult read_depth_for_plan(
         const BundleRuntimePlan& plan,
         const SignalConfig& config,
         std::uint64_t now_ns = 0

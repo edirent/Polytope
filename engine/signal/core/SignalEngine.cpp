@@ -7,41 +7,20 @@
 #include <array>
 #include <chrono>
 #include <limits>
+#include <memory>
 #include <string>
 #include <span>
-#include <vector>
+#include <utility>
 
 namespace trading_engine::signal {
 
 namespace {
 
-struct BufferedSignalEvidence {
-    std::uint16_t snapshot_count = 0;
-    std::array<MarketStateSnapshot, kMaxIntentLegs> snapshots{};
-
-    std::uint64_t snapshot_version_hash = 0;
-    std::uint64_t read_ts_ns = 0;
-
-    [[nodiscard]] SignalEvidenceView view() const noexcept {
-        SignalEvidenceView out;
-        out.snapshots = snapshot_count == 0 ? nullptr : snapshots.data();
-        out.snapshot_count = snapshot_count;
-        out.snapshot_version_hash = snapshot_version_hash;
-        out.read_ts_ns = read_ts_ns;
-        return out;
-    }
-};
-
-struct PublishCandidate {
-    OpportunityIntent intent;
-    BufferedSignalEvidence evidence;
-};
-
-[[nodiscard]] BufferedSignalEvidence evidence_from_batch(
+[[nodiscard]] SignalPublishedEvidence evidence_from_batch(
     const SnapshotBatchReadResult& snapshots,
     std::uint64_t read_ts_ns
 ) {
-    BufferedSignalEvidence evidence;
+    SignalPublishedEvidence evidence;
     evidence.snapshot_count = std::min<std::uint16_t>(
         snapshots.snapshot_count,
         kMaxIntentLegs
@@ -54,11 +33,28 @@ struct PublishCandidate {
     return evidence;
 }
 
-[[nodiscard]] BufferedSignalEvidence evidence_from_snapshots(
+[[nodiscard]] SignalPublishedEvidence evidence_from_depth(
+    const DepthReadResult& depth,
+    std::uint64_t read_ts_ns
+) {
+    SignalPublishedEvidence evidence;
+    evidence.depth_view_count = std::min<std::uint16_t>(
+        depth.count,
+        kMaxIntentLegs
+    );
+    for (std::uint16_t i = 0; i < evidence.depth_view_count; ++i) {
+        evidence.depth_views[i] = depth.depth_views[i];
+    }
+    evidence.snapshot_version_hash = depth.snapshot_version.combined_hash;
+    evidence.read_ts_ns = read_ts_ns;
+    return evidence;
+}
+
+[[nodiscard]] SignalPublishedEvidence evidence_from_snapshots(
     const SnapshotReadResult& snapshots,
     std::uint64_t read_ts_ns
 ) {
-    BufferedSignalEvidence evidence;
+    SignalPublishedEvidence evidence;
     evidence.snapshot_count = std::min<std::uint16_t>(
         static_cast<std::uint16_t>(snapshots.snapshots.size()),
         kMaxIntentLegs
@@ -76,8 +72,8 @@ struct PublishCandidate {
 }
 
 [[nodiscard]] bool candidate_less(
-    const PublishCandidate& left,
-    const PublishCandidate& right
+    const SignalPublishCandidate& left,
+    const SignalPublishCandidate& right
 ) noexcept {
     const auto left_status = status_priority(left.intent.status);
     const auto right_status = status_priority(right.intent.status);
@@ -121,6 +117,20 @@ void copy_bundle_legs(
         target.asset_id = source.asset_id;
         target.side = source.side;
         target.quantity_lots = source.quantity_lots;
+    }
+}
+
+void copy_plan_asset_indices(
+    const BundleRuntimePlan& plan,
+    OpportunityIntent* intent
+) {
+    if (!intent) {
+        return;
+    }
+    for (std::uint16_t i = 0;
+         i < intent->leg_count && i < plan.leg_count && i < kMaxIntentLegs;
+         ++i) {
+        intent->legs[i].asset_index = plan.asset_indices[i];
     }
 }
 
@@ -324,6 +334,20 @@ void copy_cost_fields(
            snapshots.error.find("version") != std::string::npos;
 }
 
+[[nodiscard]] bool is_stale_snapshot_rejection(
+    const DepthReadResult& depth
+) noexcept {
+    return depth.rejection_status == IntentStatus::RejectedBadMarketState &&
+           depth.error.find("stale") != std::string::npos;
+}
+
+[[nodiscard]] bool is_snapshot_skew_rejection(
+    const DepthReadResult& depth
+) noexcept {
+    return depth.rejection_status == IntentStatus::RejectedBadMarketState &&
+           depth.error.find("version") != std::string::npos;
+}
+
 [[nodiscard]] std::uint64_t elapsed_ns(
     std::chrono::steady_clock::time_point start
 ) noexcept {
@@ -389,9 +413,37 @@ SignalEngine::SignalEngine(
     publisher_(publisher),
     deduper_(deduper),
     default_rate_limiter_(config.max_intents_per_second),
-    external_rate_limiter_(rate_limiter) {
+    external_rate_limiter_(rate_limiter),
+    scratch_(std::make_unique<SignalScratch>()) {
     snapshot_batch_reader_ =
         dynamic_cast<const ISnapshotBatchReader*>(snapshot_reader_);
+    depth_batch_reader_ =
+        dynamic_cast<const IDepthBatchReader*>(snapshot_reader_);
+    const auto reserve_count = std::min<std::size_t>(
+        config_.max_intents_per_scan,
+        kSignalScratchMaxIntents
+    );
+    last_published_intents_.reserve(reserve_count);
+    last_published_evidence_.reserve(reserve_count);
+    last_published_evidence_indices_.reserve(reserve_count);
+}
+
+std::span<const OpportunityIntent> SignalEngine::last_published_intents()
+    const noexcept {
+    return last_published_intents_;
+}
+
+SignalEvidenceView SignalEngine::last_published_evidence_at(
+    std::size_t index
+) const noexcept {
+    if (index >= last_published_evidence_indices_.size()) {
+        return {};
+    }
+    const auto evidence_index = last_published_evidence_indices_[index];
+    if (evidence_index >= last_published_evidence_.size()) {
+        return {};
+    }
+    return last_published_evidence_[evidence_index].view();
 }
 
 SignalRunResult SignalEngine::scan_once(
@@ -400,6 +452,14 @@ SignalRunResult SignalEngine::scan_once(
     using Clock = std::chrono::steady_clock;
     const auto scan_started = Clock::now();
     SignalRunResult result;
+    scratch_->reset();
+    last_published_intents_.clear();
+    last_published_evidence_.clear();
+    last_published_evidence_indices_.clear();
+    auto store_evidence = [&](SignalPublishedEvidence evidence) {
+        last_published_evidence_.push_back(std::move(evidence));
+        return last_published_evidence_.size() - 1U;
+    };
     auto finalize = [&]() {
         const auto elapsed = Clock::now() - scan_started;
         populate_metrics(
@@ -421,14 +481,27 @@ SignalRunResult SignalEngine::scan_once(
         return finalize();
     }
 
-    std::vector<PublishCandidate> publishable;
+    const auto publish_limit = std::min<std::uint32_t>(
+        config_.max_intents_per_scan,
+        kSignalScratchMaxIntents
+    );
+    auto try_publish = [&](OpportunityIntent intent, std::size_t evidence_index) {
+        if (scratch_->publish_candidate_count >= publish_limit) {
+            return;
+        }
+        (void)scratch_->push_publish_candidate(
+            std::move(intent),
+            evidence_index
+        );
+    };
     const auto bundle_fetch_start = Clock::now();
     const auto bundles = artifact_reader_->active_bundles();
     const auto runtime_plans = artifact_reader_->active_runtime_plans();
     result.stage_timings.bundle_scan_ns += elapsed_ns(bundle_fetch_start);
     std::uint64_t ordinal = 0;
 
-    if (snapshot_batch_reader_ && !runtime_plans.empty()) {
+    if ((depth_batch_reader_ || snapshot_batch_reader_) &&
+        !runtime_plans.empty()) {
         for (const auto& plan : runtime_plans) {
             if (!plan.bundle) {
                 continue;
@@ -448,6 +521,7 @@ SignalRunResult SignalEngine::scan_once(
             intent.oracle_artifact_hash = plan.oracle_artifact_hash;
             intent.constraint_hash = plan.constraint_hash;
             copy_bundle_legs(bundle, &intent);
+            copy_plan_asset_indices(plan, &intent);
             result.stage_timings.bundle_scan_ns += elapsed_ns(bundle_scan_start);
 
             const auto settlement_start = Clock::now();
@@ -457,9 +531,11 @@ SignalRunResult SignalEngine::scan_once(
                 intent.status = IntentStatus::RejectedInvalidSettlement;
                 intent.reject_code = IntentRejectCode::InvalidSettlement;
                 increment_counter_for_status(intent.status, &result);
-                if (should_publish(config_, intent.status) &&
-                    publishable.size() < config_.max_intents_per_scan) {
-                    publishable.push_back({std::move(intent), {}});
+                if (should_publish(config_, intent.status)) {
+                    try_publish(
+                        std::move(intent),
+                        kSignalScratchNoEvidenceIndex
+                    );
                 }
                 continue;
             }
@@ -467,65 +543,116 @@ SignalRunResult SignalEngine::scan_once(
                 elapsed_ns(settlement_start);
             intent.valid_under_settlement = true;
 
-            const auto snapshot_start = Clock::now();
-            const auto snapshots = snapshot_batch_reader_->read_for_plan(
-                plan,
-                config_,
-                context.now_monotonic_ns
-            );
-            const auto snapshot_total_ns = elapsed_ns(snapshot_start);
-            result.stage_timings.snapshot_consistency_guard_ns +=
-                snapshots.snapshot_consistency_guard_ns;
-            result.stage_timings.snapshot_reader_ns +=
-                snapshot_total_ns >= snapshots.snapshot_consistency_guard_ns
-                    ? snapshot_total_ns -
-                          snapshots.snapshot_consistency_guard_ns
-                    : snapshot_total_ns;
-            if (!snapshots.ok) {
-                intent.status = snapshots.rejection_status;
-                intent.reject_reason = snapshots.error;
-                intent.reject_code =
-                    intent.status == IntentStatus::RejectedMissingSnapshot
-                        ? IntentRejectCode::MissingSnapshot
-                        : IntentRejectCode::BadMarketState;
-                increment_counter_for_status(intent.status, &result);
-                if (is_stale_snapshot_rejection(snapshots)) {
-                    ++result.rejected_stale_snapshot;
+            SignalPublishedEvidence evidence;
+            SnapshotVersion snapshot_version;
+            CostResult cost;
+            if (depth_batch_reader_) {
+                const auto snapshot_start = Clock::now();
+                const auto depth = depth_batch_reader_->read_depth_for_plan(
+                    plan,
+                    config_,
+                    context.now_monotonic_ns
+                );
+                const auto snapshot_total_ns = elapsed_ns(snapshot_start);
+                result.stage_timings.snapshot_consistency_guard_ns +=
+                    depth.snapshot_consistency_guard_ns;
+                result.stage_timings.snapshot_reader_ns +=
+                    snapshot_total_ns >= depth.snapshot_consistency_guard_ns
+                        ? snapshot_total_ns -
+                              depth.snapshot_consistency_guard_ns
+                        : snapshot_total_ns;
+                if (!depth.ok) {
+                    intent.status = depth.rejection_status;
+                    intent.reject_reason = depth.error;
+                    intent.reject_code =
+                        intent.status == IntentStatus::RejectedMissingSnapshot
+                            ? IntentRejectCode::MissingSnapshot
+                            : IntentRejectCode::BadMarketState;
+                    increment_counter_for_status(intent.status, &result);
+                    if (is_stale_snapshot_rejection(depth)) {
+                        ++result.rejected_stale_snapshot;
+                    }
+                    if (is_snapshot_skew_rejection(depth)) {
+                        ++result.rejected_snapshot_skew;
+                    }
+                    if (should_publish(config_, intent.status)) {
+                        try_publish(
+                            std::move(intent),
+                            kSignalScratchNoEvidenceIndex
+                        );
+                    }
+                    continue;
                 }
-                if (is_snapshot_skew_rejection(snapshots)) {
-                    ++result.rejected_snapshot_skew;
+                evidence = evidence_from_depth(
+                    depth,
+                    context.now_monotonic_ns
+                );
+                snapshot_version = depth.snapshot_version;
+                ++result.vwap_checked;
+                const auto vwap_start = Clock::now();
+                cost = vwap_->price_runtime_plan(plan, depth);
+                const auto vwap_total_ns = elapsed_ns(vwap_start);
+                result.stage_timings.price_vector_builder_ns +=
+                    cost.price_vector_builder_ns;
+                result.stage_timings.vwap_precheck_ns +=
+                    cost.vwap_precheck_ns != 0 ? cost.vwap_precheck_ns :
+                                                 vwap_total_ns;
+            } else {
+                const auto snapshot_start = Clock::now();
+                const auto snapshots = snapshot_batch_reader_->read_for_plan(
+                    plan,
+                    config_,
+                    context.now_monotonic_ns
+                );
+                const auto snapshot_total_ns = elapsed_ns(snapshot_start);
+                result.stage_timings.snapshot_consistency_guard_ns +=
+                    snapshots.snapshot_consistency_guard_ns;
+                result.stage_timings.snapshot_reader_ns +=
+                    snapshot_total_ns >= snapshots.snapshot_consistency_guard_ns
+                        ? snapshot_total_ns -
+                              snapshots.snapshot_consistency_guard_ns
+                        : snapshot_total_ns;
+                if (!snapshots.ok) {
+                    intent.status = snapshots.rejection_status;
+                    intent.reject_reason = snapshots.error;
+                    intent.reject_code =
+                        intent.status == IntentStatus::RejectedMissingSnapshot
+                            ? IntentRejectCode::MissingSnapshot
+                            : IntentRejectCode::BadMarketState;
+                    increment_counter_for_status(intent.status, &result);
+                    if (is_stale_snapshot_rejection(snapshots)) {
+                        ++result.rejected_stale_snapshot;
+                    }
+                    if (is_snapshot_skew_rejection(snapshots)) {
+                        ++result.rejected_snapshot_skew;
+                    }
+                    if (should_publish(config_, intent.status)) {
+                        try_publish(
+                            std::move(intent),
+                            kSignalScratchNoEvidenceIndex
+                        );
+                    }
+                    continue;
                 }
-                if (should_publish(config_, intent.status) &&
-                    publishable.size() < config_.max_intents_per_scan) {
-                    publishable.push_back({
-                        std::move(intent),
-                        evidence_from_batch(
-                            snapshots,
-                            context.now_monotonic_ns
-                        )
-                    });
-                }
-                continue;
+                evidence = evidence_from_batch(
+                    snapshots,
+                    context.now_monotonic_ns
+                );
+                snapshot_version = snapshots.snapshot_version;
+                ++result.vwap_checked;
+                const auto vwap_start = Clock::now();
+                cost = vwap_->price_runtime_plan(plan, snapshots);
+                const auto vwap_total_ns = elapsed_ns(vwap_start);
+                result.stage_timings.price_vector_builder_ns +=
+                    cost.price_vector_builder_ns;
+                result.stage_timings.vwap_precheck_ns +=
+                    cost.vwap_precheck_ns != 0 ? cost.vwap_precheck_ns :
+                                                 vwap_total_ns;
             }
-            const auto evidence = evidence_from_batch(
-                snapshots,
-                context.now_monotonic_ns
-            );
             intent.passed_quality_gate = true;
-            intent.snapshot_version =
-                snapshots.snapshot_version.max_book_version;
-            intent.snapshot_version_hash =
-                snapshots.snapshot_version.combined_hash;
+            intent.snapshot_version = snapshot_version.max_book_version;
+            intent.snapshot_version_hash = snapshot_version.combined_hash;
 
-            ++result.vwap_checked;
-            const auto vwap_start = Clock::now();
-            const auto cost = vwap_->price_runtime_plan(plan, snapshots);
-            const auto vwap_total_ns = elapsed_ns(vwap_start);
-            result.stage_timings.price_vector_builder_ns +=
-                cost.price_vector_builder_ns;
-            result.stage_timings.vwap_precheck_ns +=
-                cost.vwap_precheck_ns != 0 ? cost.vwap_precheck_ns :
-                                             vwap_total_ns;
             copy_cost_fields(cost, &intent);
             if (!cost.executable) {
                 intent.status = status_from_cost_failure(cost.failure_reason);
@@ -534,9 +661,11 @@ SignalRunResult SignalEngine::scan_once(
                         ? IntentRejectCode::MissingSnapshot
                         : IntentRejectCode::InsufficientDepth;
                 increment_counter_for_status(intent.status, &result);
-                if (should_publish(config_, intent.status) &&
-                    publishable.size() < config_.max_intents_per_scan) {
-                    publishable.push_back({std::move(intent), evidence});
+                if (should_publish(config_, intent.status)) {
+                    try_publish(
+                        std::move(intent),
+                        kSignalScratchNoEvidenceIndex
+                    );
                 }
                 continue;
             }
@@ -553,7 +682,7 @@ SignalRunResult SignalEngine::scan_once(
             IntentBuilder intent_builder;
             intent = intent_builder.build(IntentBuildInput{
                 .bundle = &bundle,
-                .snapshot_version = snapshots.snapshot_version,
+                .snapshot_version = snapshot_version,
                 .cost = &cost,
                 .edge = &edge,
                 .now_ns = context.now_monotonic_ns,
@@ -565,11 +694,14 @@ SignalRunResult SignalEngine::scan_once(
                 .valid_under_settlement = true,
                 .passed_quality_gate = true
             });
+            copy_plan_asset_indices(plan, &intent);
             result.stage_timings.intent_builder_ns += elapsed_ns(intent_start);
             increment_counter_for_status(intent.status, &result);
-            if (should_publish(config_, intent.status) &&
-                publishable.size() < config_.max_intents_per_scan) {
-                publishable.push_back({std::move(intent), evidence});
+            if (should_publish(config_, intent.status)) {
+                try_publish(
+                    std::move(intent),
+                    store_evidence(std::move(evidence))
+                );
             }
         }
     } else {
@@ -593,9 +725,11 @@ SignalRunResult SignalEngine::scan_once(
                 elapsed_ns(settlement_start);
             intent.status = IntentStatus::RejectedInvalidSettlement;
             increment_counter_for_status(intent.status, &result);
-            if (should_publish(config_, intent.status) &&
-                publishable.size() < config_.max_intents_per_scan) {
-                publishable.push_back({std::move(intent), {}});
+            if (should_publish(config_, intent.status)) {
+                try_publish(
+                    std::move(intent),
+                    kSignalScratchNoEvidenceIndex
+                );
             }
             continue;
         }
@@ -626,15 +760,11 @@ SignalRunResult SignalEngine::scan_once(
             if (is_snapshot_skew_rejection(snapshots)) {
                 ++result.rejected_snapshot_skew;
             }
-            if (should_publish(config_, intent.status) &&
-                publishable.size() < config_.max_intents_per_scan) {
-                publishable.push_back({
+            if (should_publish(config_, intent.status)) {
+                try_publish(
                     std::move(intent),
-                    evidence_from_snapshots(
-                        snapshots,
-                        context.now_monotonic_ns
-                    )
-                });
+                    kSignalScratchNoEvidenceIndex
+                );
             }
             continue;
         }
@@ -660,9 +790,11 @@ SignalRunResult SignalEngine::scan_once(
         if (!cost.executable) {
             intent.status = status_from_cost_failure(cost.failure_reason);
             increment_counter_for_status(intent.status, &result);
-            if (should_publish(config_, intent.status) &&
-                publishable.size() < config_.max_intents_per_scan) {
-                publishable.push_back({std::move(intent), evidence});
+            if (should_publish(config_, intent.status)) {
+                try_publish(
+                    std::move(intent),
+                    kSignalScratchNoEvidenceIndex
+                );
             }
             continue;
         }
@@ -689,14 +821,17 @@ SignalRunResult SignalEngine::scan_once(
         });
         result.stage_timings.intent_builder_ns += elapsed_ns(intent_start);
         increment_counter_for_status(intent.status, &result);
-        if (should_publish(config_, intent.status) &&
-            publishable.size() < config_.max_intents_per_scan) {
-            publishable.push_back({std::move(intent), evidence});
+        if (should_publish(config_, intent.status)) {
+            try_publish(
+                std::move(intent),
+                store_evidence(std::move(evidence))
+            );
         }
     }
     }
 
-    for (auto& candidate : publishable) {
+    for (std::uint16_t i = 0; i < scratch_->publish_candidate_count; ++i) {
+        auto& candidate = scratch_->publish_candidates[i];
         complete_intent_lifecycle(
             &candidate.intent,
             config_,
@@ -707,14 +842,19 @@ SignalRunResult SignalEngine::scan_once(
 
     const auto rank_start = Clock::now();
     if (ranker_) {
-        std::sort(publishable.begin(), publishable.end(), candidate_less);
+        std::sort(
+            scratch_->publish_candidates.begin(),
+            scratch_->publish_candidates.begin() +
+                scratch_->publish_candidate_count,
+            candidate_less
+        );
     }
     result.stage_timings.bundle_scan_ns += elapsed_ns(rank_start);
 
     const auto dedupe_start = Clock::now();
-    std::vector<PublishCandidate> deduped;
-    deduped.reserve(publishable.size());
-    for (const auto& candidate : publishable) {
+    std::uint16_t deduped_count = 0;
+    for (std::uint16_t i = 0; i < scratch_->publish_candidate_count; ++i) {
+        auto& candidate = scratch_->publish_candidates[i];
         const auto& intent = candidate.intent;
         if (intent.status == IntentStatus::PaperOpportunity &&
             deduper_ &&
@@ -744,17 +884,22 @@ SignalRunResult SignalEngine::scan_once(
                 );
             }
         }
-        deduped.push_back(candidate);
+        if (deduped_count != i) {
+            scratch_->publish_candidates[deduped_count] =
+                std::move(candidate);
+        }
+        ++deduped_count;
     }
+    scratch_->publish_candidate_count = deduped_count;
     result.stage_timings.dedupe_ns += elapsed_ns(dedupe_start);
 
     const auto rate_start = Clock::now();
-    std::vector<PublishCandidate> allowed;
-    allowed.reserve(deduped.size());
+    std::uint16_t allowed_count = 0;
     auto* rate_limiter = external_rate_limiter_ == nullptr
         ? &default_rate_limiter_
         : external_rate_limiter_;
-    for (const auto& candidate : deduped) {
+    for (std::uint16_t i = 0; i < scratch_->publish_candidate_count; ++i) {
+        auto& candidate = scratch_->publish_candidates[i];
         const auto& intent = candidate.intent;
         if (rate_limiter &&
             !rate_limiter->allow(context.now_monotonic_ns)) {
@@ -762,23 +907,38 @@ SignalRunResult SignalEngine::scan_once(
             ++result.rejected_rate_limited;
             continue;
         }
-        allowed.push_back(candidate);
+        if (allowed_count != i) {
+            scratch_->publish_candidates[allowed_count] =
+                std::move(candidate);
+        }
+        ++allowed_count;
     }
+    scratch_->publish_candidate_count = allowed_count;
     result.stage_timings.rate_limiter_ns += elapsed_ns(rate_start);
 
-    std::vector<OpportunityIntent> allowed_intents;
-    allowed_intents.reserve(allowed.size());
-    for (const auto& candidate : allowed) {
-        allowed_intents.push_back(candidate.intent);
+    for (std::uint16_t i = 0; i < scratch_->publish_candidate_count; ++i) {
+        const auto& candidate = scratch_->publish_candidates[i];
+        last_published_intents_.push_back(candidate.intent);
+        last_published_evidence_indices_.push_back(candidate.evidence_index);
     }
-    result.output_hash = hash_published_intents(allowed_intents);
+    result.output_hash = hash_published_intents(last_published_intents_);
 
     const auto publish_start = Clock::now();
     if (publisher_) {
-        for (const auto& candidate : allowed) {
-            auto intent = candidate.intent;
-            materialize_intent_strings(&intent);
-            publisher_->publish(intent, candidate.evidence.view());
+        const bool materialize_strings =
+            publisher_->requires_materialized_strings();
+        for (std::size_t i = 0; i < last_published_intents_.size(); ++i) {
+            const auto evidence_view = last_published_evidence_at(i);
+            if (materialize_strings) {
+                auto intent = last_published_intents_[i];
+                materialize_intent_strings(&intent);
+                publisher_->publish(intent, evidence_view);
+            } else {
+                publisher_->publish(
+                    last_published_intents_[i],
+                    evidence_view
+                );
+            }
             ++result.intents_published;
         }
     }

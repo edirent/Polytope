@@ -3,6 +3,7 @@
 #include "engine/execution/adapter/IExecutionAdapter.h"
 #include "engine/execution/cancel/CancelManager.h"
 #include "engine/execution/core/ExecutionContext.h"
+#include "engine/execution/core/ExecutionScratch.h"
 #include "engine/execution/core/ExecutionPlanStore.h"
 #include "engine/execution/plan/ExecutionPlanner.h"
 #include "engine/execution/plan/PlanValidator.h"
@@ -74,6 +75,7 @@ private:
     PlanStateMachine plan_state_machine_;
     PartialFillPolicy partial_fill_policy_;
     CancelManager cancel_manager_;
+    ExecutionScratch scratch_;
 
     std::unordered_map<PlanId, PlanRuntimeState> runtime_;
     std::vector<ExecutionReport> pending_reports_;

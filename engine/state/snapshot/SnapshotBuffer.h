@@ -1,6 +1,7 @@
 #pragma once
 
 #include "state/snapshot/PublishedMarketSnapshot.h"
+#include "state/view/MarketDepthView.h"
 
 #include <array>
 #include <atomic>
@@ -10,6 +11,7 @@ namespace trading_engine::state {
 
 struct SnapshotSlot {
     PublishedMarketSnapshot snapshot;
+    MarketDepthView depth_view;
 };
 
 struct SnapshotBuffer {

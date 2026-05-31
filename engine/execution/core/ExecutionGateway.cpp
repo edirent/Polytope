@@ -13,7 +13,9 @@ ExecutionGateway::ExecutionGateway(
     : adapter_(adapter),
       report_publisher_(report_publisher),
       reservation_publisher_(reservation_publisher),
-      cancel_manager_(adapter) {}
+      cancel_manager_(adapter) {
+    pending_reports_.reserve(kMaxChildOrdersPerPlan);
+}
 
 namespace {
 
@@ -53,6 +55,7 @@ ExecutionResult ExecutionGateway::submit_approved_intent(
     const ApprovedIntentEnvelope& envelope,
     const ExecutionContext& context
 ) {
+    scratch_.reset();
     if (adapter_ == nullptr) {
         return {
             .ok = false,
@@ -97,6 +100,7 @@ ExecutionResult ExecutionGateway::submit_approved_intent(
             order_state_machine_,
             plan.orders[i].status
         );
+        (void)scratch_.push_child_order(plan.orders[i]);
     }
     plan_store_.put(plan);
 
@@ -119,6 +123,7 @@ ExecutionResult ExecutionGateway::submit_approved_intent(
         }
 
         fill_tracker.apply(report);
+        (void)scratch_.push_child_report(report);
         publish_report(report);
         pending_reports_.push_back(report);
     }

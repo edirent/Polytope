@@ -282,4 +282,38 @@ SnapshotBatchReadResult FixtureMarketSnapshotReader::read_for_plan(
     );
 }
 
+DepthReadResult FixtureMarketSnapshotReader::read_depth_for_plan(
+    const BundleRuntimePlan& plan,
+    const SignalConfig& config,
+    std::uint64_t now_ns
+) const {
+    std::array<trading_engine::state::MarketDepthView, kMaxIntentLegs>
+        depth_views{};
+    std::uint16_t depth_count = 0;
+    for (std::uint16_t i = 0;
+         i < plan.unique_asset_count && depth_count < kMaxIntentLegs;
+         ++i) {
+        const auto* asset_id = plan.unique_asset_ids[i];
+        if (!asset_id) {
+            continue;
+        }
+        const auto it = snapshots_.find(*asset_id);
+        if (it != snapshots_.end()) {
+            depth_views[depth_count++] =
+                trading_engine::state::market_depth_view_from_snapshot(
+                    it->second,
+                    plan.unique_asset_indices[i]
+                );
+        }
+    }
+
+    return validate_plan_depth_views(
+        plan,
+        config,
+        depth_views,
+        depth_count,
+        now_ns
+    );
+}
+
 }  // namespace trading_engine::signal

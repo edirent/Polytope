@@ -21,6 +21,8 @@ void SnapshotPublisher::publish(const MarketStateSnapshot& snapshot) {
     }
 
     buffer->slots[inactive].snapshot = published;
+    buffer->slots[inactive].depth_view =
+        market_depth_view_from_snapshot(published, 0);
     buffer->published.store(true, std::memory_order_release);
     buffer->active_index.store(inactive, std::memory_order_release);
 }
@@ -73,6 +75,40 @@ std::uint16_t SnapshotPublisher::read_many(
         const std::uint8_t active =
             it->second->active_index.load(std::memory_order_acquire);
         out[count++] = it->second->slots[active].snapshot;
+    }
+    return count;
+}
+
+std::uint16_t SnapshotPublisher::read_depth_many(
+    std::span<const std::string* const> asset_ids,
+    std::span<const std::uint32_t> asset_indices,
+    MarketDepthView* out,
+    std::uint16_t max_out
+) const {
+    if (!out || max_out == 0) {
+        return 0;
+    }
+
+    std::uint16_t count = 0;
+    std::lock_guard<std::mutex> lock(buffers_mutex_);
+    for (std::uint16_t i = 0; i < asset_ids.size(); ++i) {
+        const auto* asset_id = asset_ids[i];
+        if (!asset_id || count >= max_out) {
+            continue;
+        }
+        const auto it = buffers_.find(*asset_id);
+        if (it == buffers_.end() || !it->second ||
+            !it->second->published.load(std::memory_order_acquire)) {
+            continue;
+        }
+
+        const std::uint8_t active =
+            it->second->active_index.load(std::memory_order_acquire);
+        const auto asset_index =
+            i < asset_indices.size() ? asset_indices[i] : 0U;
+        out[count] = it->second->slots[active].depth_view;
+        out[count].asset_index = asset_index;
+        ++count;
     }
     return count;
 }
