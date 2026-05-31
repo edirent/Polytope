@@ -61,4 +61,10 @@ enum class RiskRejectReason : std::uint8_t {
     InternalError
 };
 
+enum class RiskVWAPMode : std::uint8_t {
+    ReusedSignalCost,
+    ReuseSignalSnapshot,
+    RecomputedFromSnapshot
+};
+
 }  // namespace trading_engine::risk

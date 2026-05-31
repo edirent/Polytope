@@ -514,6 +514,31 @@ void print_summary(const WorkflowSummary& summary) {
     std::cout << "    min: " << metrics.scan_latency_ns.min_ns << '\n';
     std::cout << "    max: " << metrics.scan_latency_ns.max_ns << "\n\n";
 
+    const auto& timings = summary.result.stage_timings;
+    std::cout << "signal_stage_timings_ns:\n";
+    std::cout << "  bundle_scan_ns: "
+              << timings.bundle_scan_ns << '\n';
+    std::cout << "  settlement_check_ns: "
+              << timings.settlement_check_ns << '\n';
+    std::cout << "  snapshot_reader_ns: "
+              << timings.snapshot_reader_ns << '\n';
+    std::cout << "  snapshot_consistency_guard_ns: "
+              << timings.snapshot_consistency_guard_ns << '\n';
+    std::cout << "  price_vector_builder_ns: "
+              << timings.price_vector_builder_ns << '\n';
+    std::cout << "  vwap_precheck_ns: "
+              << timings.vwap_precheck_ns << '\n';
+    std::cout << "  edge_calculator_ns: "
+              << timings.edge_calculator_ns << '\n';
+    std::cout << "  intent_builder_ns: "
+              << timings.intent_builder_ns << '\n';
+    std::cout << "  dedupe_ns: "
+              << timings.dedupe_ns << '\n';
+    std::cout << "  rate_limiter_ns: "
+              << timings.rate_limiter_ns << '\n';
+    std::cout << "  publisher_ns: "
+              << timings.publisher_ns << "\n\n";
+
     std::cout << "hashes:\n";
     std::cout << "  signal_output_hash: "
               << summary.result.output_hash << '\n';

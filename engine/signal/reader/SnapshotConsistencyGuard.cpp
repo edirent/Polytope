@@ -51,6 +51,14 @@ bool quality_rejects(
            snapshot.quality == BookQuality::Resolved;
 }
 
+std::uint64_t evidence_hash(
+    const trading_engine::state::MarketStateSnapshot& snapshot
+) noexcept {
+    return snapshot.snapshot_version_hash != 0
+        ? snapshot.snapshot_version_hash
+        : snapshot.state_hash;
+}
+
 SnapshotVersion make_version(
     std::span<const trading_engine::state::MarketStateSnapshot> snapshots,
     std::uint64_t now_ns
@@ -68,7 +76,7 @@ SnapshotVersion make_version(
             std::max(version.max_book_version, snapshot.version);
         mix_string(snapshot.entity_id, &hash);
         mix_u64(snapshot.version, &hash);
-        mix_u64(snapshot.state_hash, &hash);
+        mix_u64(evidence_hash(snapshot), &hash);
         mix_u64(snapshot.last_book_update_ns, &hash);
     }
 

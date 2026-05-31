@@ -6,6 +6,21 @@ GuardResult DuplicateIntentGuard::check(
     const signal::OpportunityIntent& intent,
     std::uint64_t
 ) {
+    if (intent.idempotency_hash != 0) {
+        const auto [_, inserted] =
+            seen_idempotency_hashes_.insert(intent.idempotency_hash);
+        if (inserted) {
+            return pass_guard();
+        }
+
+        GuardResult result;
+        result.pass = false;
+        result.rejection = RiskDecisionType::RejectDuplicateIntent;
+        result.reject_flag = kRiskRejectFlagDuplicateIntent;
+        result.reason = "duplicate idempotency_hash";
+        return result;
+    }
+
     if (intent.idempotency_key.empty()) {
         GuardResult result;
         result.pass = false;
@@ -30,6 +45,7 @@ GuardResult DuplicateIntentGuard::check(
 }
 
 void DuplicateIntentGuard::clear() {
+    seen_idempotency_hashes_.clear();
     seen_idempotency_keys_.clear();
 }
 

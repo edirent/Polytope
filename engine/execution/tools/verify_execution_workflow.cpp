@@ -353,6 +353,11 @@ std::vector<state::MarketStateSnapshot> load_snapshots(
         snapshot.bid_count = get_u32(object, "bid_count");
         snapshot.ask_count = get_u32(object, "ask_count");
         snapshot.state_hash = get_u64(object, "state_hash");
+        snapshot.snapshot_version_hash = get_u64(
+            object,
+            "snapshot_version_hash",
+            snapshot.state_hash
+        );
         snapshot.usable_for_depth = get_bool(object, "usable_for_depth");
         snapshot.usable_for_signal = get_bool(object, "usable_for_signal");
 
@@ -381,6 +386,9 @@ signal::IntentLeg parse_intent_leg(const json::object& object) {
     leg.estimated_vwap_tick = get_i64(object, "estimated_vwap_tick");
     leg.worst_price_tick = get_i64(object, "worst_price_tick");
     leg.estimated_cost_tick = get_i64(object, "estimated_cost_tick");
+    leg.requested_qty_lots = get_i64(object, "requested_qty_lots");
+    leg.executable_qty_lots = get_i64(object, "executable_qty_lots");
+    leg.depth_margin_bps = get_i64(object, "depth_margin_bps");
     leg.enough_depth = get_bool(object, "enough_depth");
     return leg;
 }
@@ -407,10 +415,20 @@ signal::OpportunityIntent parse_intent(const json::object& object) {
     intent.snapshot_version = get_u64(object, "snapshot_version");
     intent.snapshot_version_hash = get_u64(object, "snapshot_version_hash");
     intent.bundle_qty = get_i64(object, "bundle_qty");
+    intent.original_bundle_qty = get_i64(
+        object,
+        "original_bundle_qty",
+        intent.bundle_qty
+    );
     intent.unit_edge_tick = get_i64(object, "unit_edge_tick");
     intent.total_edge_tick = get_i64(object, "total_edge_tick");
     intent.edge_bps = get_i64(object, "edge_bps");
     intent.slippage_buffer_tick = get_i64(object, "slippage_buffer_tick");
+    intent.max_leg_slippage_tick = get_i64(
+        object,
+        "max_leg_slippage_tick",
+        intent.slippage_buffer_tick
+    );
     intent.created_ts_ns = get_u64(object, "created_ts_ns");
     intent.expires_at_ns = get_u64(object, "expires_at_ns");
     intent.oracle_artifact_version =

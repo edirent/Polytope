@@ -4,6 +4,7 @@
 #include "engine/signal/public/OpportunityIntent.h"
 #include "engine/state/MarketStateSnapshot.h"
 
+#include <cstddef>
 #include <vector>
 
 namespace trading_engine::risk {
@@ -13,6 +14,12 @@ public:
     [[nodiscard]] CostRevalidationResult reprice(
         const signal::OpportunityIntent& intent,
         const std::vector<state::MarketStateSnapshot>& snapshots
+    ) const;
+
+    [[nodiscard]] CostRevalidationResult reprice(
+        const signal::OpportunityIntent& intent,
+        const state::MarketStateSnapshot* snapshots,
+        std::size_t snapshot_count
     ) const;
 };
 

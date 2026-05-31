@@ -22,6 +22,7 @@ struct SignalConfig {
     std::uint32_t max_intents_per_scan = 1024;
     std::int32_t max_intents_per_second = 100;
     std::uint32_t max_bundle_legs = 16;
+    std::uint64_t intent_ttl_ns = 5'000'000'000ULL;
 
     bool emit_rejections = true;
 

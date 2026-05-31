@@ -13,6 +13,7 @@
 #include "engine/signal/pricing/VWAPPrecheck.h"
 #include "engine/signal/publish/CapturingIntentPublisher.h"
 #include "engine/signal/publish/JsonlIntentWriter.h"
+#include "engine/signal/public/SignalRiskHandoff.h"
 #include "engine/signal/rank/OpportunityRanker.h"
 #include "engine/signal/reader/MarketStateViewSnapshotReader.h"
 #include "engine/signal/reader/OracleArtifactReader.h"
@@ -263,6 +264,13 @@ void mix_u64(std::uint64_t* hash, std::uint64_t value) noexcept {
     }
 }
 
+void mix_string(std::uint64_t* hash, const std::string& value) noexcept {
+    for (const unsigned char c : value) {
+        *hash ^= c;
+        *hash *= kFnvPrime;
+    }
+}
+
 [[nodiscard]] std::string escape_json(std::string_view value) {
     std::string out;
     out.reserve(value.size());
@@ -470,25 +478,6 @@ void write_risk_decision(
         << ",\"risk_bundle_qty\":" << result.cost.risk_bundle_qty
         << ",\"output_hash\":" << result.output_hash
         << "}\n";
-}
-
-[[nodiscard]] std::vector<state::MarketStateSnapshot> snapshots_for_intent(
-    const signal::OpportunityIntent& intent,
-    const state::MarketStateView& view
-) {
-    std::vector<state::MarketStateSnapshot> snapshots;
-    std::unordered_set<std::string> seen_assets;
-    for (std::uint16_t i = 0; i < intent.leg_count; ++i) {
-        const auto& asset_id = intent.legs[i].asset_id;
-        if (asset_id.empty() || !seen_assets.insert(asset_id).second) {
-            continue;
-        }
-        const auto result = view.get_snapshot(asset_id);
-        if (result.ok) {
-            snapshots.push_back(result.value);
-        }
-    }
-    return snapshots;
 }
 
 void update_signal_stats(
@@ -705,6 +694,7 @@ int run(const Config& config) {
     signal_config.max_lob_age_ns = 30 * static_cast<std::int64_t>(kNsPerSecond);
     signal_config.max_snapshot_version_skew = 1'000'000;
     signal_config.max_intents_per_second = 10'000;
+    signal_config.intent_ttl_ns = config.intent_ttl_ms * kNsPerMs;
     signal::SignalEngine signal_engine(
         signal_config,
         &snapshot_reader,
@@ -717,13 +707,16 @@ int run(const Config& config) {
     );
     signal::JsonlIntentWriter signal_writer(&signal_out);
 
-    risk::RiskEngine risk_engine;
     auto risk_policy = risk::with_computed_policy_hash(risk::RiskPolicySnapshot{});
     risk_policy.max_book_age_ns = 30 * static_cast<std::int64_t>(kNsPerSecond);
     risk_policy.max_intent_age_ns = 30 * static_cast<std::int64_t>(kNsPerSecond);
     risk_policy.max_snapshot_skew_ns = 1'000'000;
     risk_policy.max_allowed_cost_drift_tick = 1'000'000'000;
     risk_policy.min_depth_margin_ratio = 1.0;
+    risk_policy.min_depth_margin_bps = 10'000;
+    risk::RiskRuntimeContext risk_runtime;
+    risk_runtime.policy = &risk_policy;
+    risk::RiskEngine risk_engine(risk_runtime);
 
     execution::PaperExecutionAdapter paper_adapter;
     Stats stats;
@@ -876,14 +869,11 @@ int run(const Config& config) {
 
             const auto& intents = signal_publisher.intents();
             while (written_intents < intents.size()) {
-                auto intent = intents[written_intents++];
-                if (intent.created_ts_ns == 0) {
-                    intent.created_ts_ns = now;
-                }
-                if (intent.expires_at_ns <= now) {
-                    intent.expires_at_ns =
-                        now + config.intent_ttl_ms * kNsPerMs;
-                }
+                const auto intent_index = written_intents++;
+                const auto& intent = intents[intent_index];
+                const auto evidence = signal_publisher.evidence_at(
+                    intent_index
+                );
                 if (!signal_writer.write(intent)) {
                     throw std::runtime_error("failed to write signal intent");
                 }
@@ -892,15 +882,14 @@ int run(const Config& config) {
                     continue;
                 }
 
-                auto snapshots = snapshots_for_intent(intent, market_view);
+                const auto handoff = signal::make_signal_risk_handoff(
+                    intent,
+                    evidence,
+                    now
+                );
+                const auto risk_input = risk::make_risk_input_view(handoff);
 
-                risk::RiskEvaluationContext risk_context;
-                risk_context.now_ns = now;
-                risk_context.latest_snapshots = snapshots;
-                risk_context.policy = risk_policy;
-
-                const auto risk_result =
-                    risk_engine.evaluate(intent, risk_context);
+                const auto risk_result = risk_engine.evaluate(risk_input);
                 write_risk_decision(risk_out, intent, risk_result);
                 stats.risk_evaluated.fetch_add(1);
                 mix_u64(&output_hash, risk_result.output_hash);
@@ -927,7 +916,12 @@ int run(const Config& config) {
 
                 execution::ExecutionContext execution_context;
                 execution_context.now_ns = now;
-                execution_context.snapshots = std::move(snapshots);
+                if (evidence.snapshots != nullptr) {
+                    execution_context.snapshots.assign(
+                        evidence.snapshots,
+                        evidence.snapshots + evidence.snapshot_count
+                    );
+                }
                 execution_context.config = execution_config;
 
                 const auto execution_result =

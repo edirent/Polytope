@@ -12,6 +12,13 @@ struct RiskDecision {
     RiskRejectReason reject_reason = RiskRejectReason::NotEvaluated;
 
     std::uint64_t decision_id = 0;
+    std::uint64_t intent_id = 0;
+    std::uint64_t bundle_id = 0;
+    std::uint64_t idempotency_hash = 0;
+    std::uint64_t oracle_artifact_hash = 0;
+    std::uint64_t constraint_hash = 0;
+    std::uint64_t bundle_hash = 0;
+    std::uint64_t snapshot_version_hash = 0;
     std::uint64_t policy_version = 0;
     std::uint64_t policy_hash = 0;
 

@@ -67,6 +67,7 @@ void SignalConfig_DefaultsAreSafe() {
         "max_intents_per_second"
     );
     expect_equal(config.max_bundle_legs, 16U, "max_bundle_legs");
+    expect_equal(config.intent_ttl_ns, 5'000'000'000ULL, "intent_ttl_ns");
     expect_true(config.emit_rejections, "emit_rejections");
     expect_equal(config.max_lob_age_ns, 1'000'000'000LL, "max_lob_age_ns");
     expect_equal(
@@ -96,9 +97,18 @@ void OpportunityIntent_DefaultIsCandidateOnly() {
     expect_false(intent.enough_depth, "enough_depth");
     expect_equal(intent.estimated_edge_tick, 0LL, "estimated_edge_tick");
     expect_equal(intent.bundle_qty, 0LL, "bundle_qty");
+    expect_equal(intent.original_bundle_qty, 0LL, "original_bundle_qty");
+    expect_equal(intent.idempotency_hash, 0ULL, "idempotency_hash");
+    expect_equal(intent.proof_hash, 0ULL, "proof_hash");
+    expect_equal(
+        intent.reject_code,
+        trading_engine::signal::IntentRejectCode::None,
+        "reject_code"
+    );
     expect_equal(intent.unit_edge_tick, 0LL, "unit_edge_tick");
     expect_equal(intent.total_edge_tick, 0LL, "total_edge_tick");
     expect_equal(intent.edge_bps, 0LL, "edge_bps");
+    expect_equal(intent.max_leg_slippage_tick, 0LL, "max_leg_slippage_tick");
     expect_equal(intent.leg_count, 0U, "leg_count");
     expect_equal(intent.snapshot_version_hash, 0ULL, "snapshot_version_hash");
     expect_equal(intent.oracle_artifact_version, 0ULL, "oracle_artifact_version");
@@ -141,6 +151,61 @@ void SignalRunResult_DefaultCountersZero() {
     expect_equal(result.paper_opportunities, 0ULL, "paper_opportunities");
     expect_equal(result.intents_published, 0ULL, "intents_published");
     expect_equal(result.output_hash, 0ULL, "output_hash");
+    expect_equal(
+        result.stage_timings.bundle_scan_ns,
+        0ULL,
+        "stage_timings.bundle_scan_ns"
+    );
+    expect_equal(
+        result.stage_timings.settlement_check_ns,
+        0ULL,
+        "stage_timings.settlement_check_ns"
+    );
+    expect_equal(
+        result.stage_timings.snapshot_reader_ns,
+        0ULL,
+        "stage_timings.snapshot_reader_ns"
+    );
+    expect_equal(
+        result.stage_timings.snapshot_consistency_guard_ns,
+        0ULL,
+        "stage_timings.snapshot_consistency_guard_ns"
+    );
+    expect_equal(
+        result.stage_timings.price_vector_builder_ns,
+        0ULL,
+        "stage_timings.price_vector_builder_ns"
+    );
+    expect_equal(
+        result.stage_timings.vwap_precheck_ns,
+        0ULL,
+        "stage_timings.vwap_precheck_ns"
+    );
+    expect_equal(
+        result.stage_timings.edge_calculator_ns,
+        0ULL,
+        "stage_timings.edge_calculator_ns"
+    );
+    expect_equal(
+        result.stage_timings.intent_builder_ns,
+        0ULL,
+        "stage_timings.intent_builder_ns"
+    );
+    expect_equal(
+        result.stage_timings.dedupe_ns,
+        0ULL,
+        "stage_timings.dedupe_ns"
+    );
+    expect_equal(
+        result.stage_timings.rate_limiter_ns,
+        0ULL,
+        "stage_timings.rate_limiter_ns"
+    );
+    expect_equal(
+        result.stage_timings.publisher_ns,
+        0ULL,
+        "stage_timings.publisher_ns"
+    );
     expect_equal(result.metrics.scan_count, 0ULL, "metrics.scan_count");
     expect_equal(
         result.metrics.reject_insufficient_depth,

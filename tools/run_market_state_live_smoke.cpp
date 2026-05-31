@@ -382,19 +382,23 @@ int run(const Config& config) {
         }
 
         std::lock_guard<std::mutex> lock(state_mutex);
+        bool published = false;
         for (const auto& event : from_normalized_batch(asset_batch)) {
             const auto result = store.apply(event);
             if (!result.ok()) {
                 stats.state_errors.fetch_add(1);
             }
+            if (result.snapshot_published) {
+                stats.snapshots_published.fetch_add(1);
+                published = true;
+            }
         }
-        const auto snapshot = view.get_snapshot(config.asset_id);
-        if (snapshot.ok) {
-            stats.snapshots_published.fetch_add(1);
-            if (snapshot.value.usable_for_depth) {
+        if (published) {
+            const auto snapshot = view.get_snapshot(config.asset_id);
+            if (snapshot.ok && snapshot.value.usable_for_depth) {
                 stats.usable_for_depth_count.fetch_add(1);
             }
-            if (snapshot.value.usable_for_signal) {
+            if (snapshot.ok && snapshot.value.usable_for_signal) {
                 stats.usable_for_signal_count.fetch_add(1);
             }
         }
@@ -466,8 +470,7 @@ int run(const Config& config) {
             if (!result.ok()) {
                 stats.state_errors.fetch_add(1);
             }
-            const auto snapshot = view.get_snapshot(config.asset_id);
-            if (snapshot.ok) {
+            if (result.snapshot_published) {
                 stats.snapshots_published.fetch_add(1);
             }
         } catch (...) {

@@ -18,12 +18,14 @@ namespace {
 
 using trading_engine::risk::CapturingApprovedIntentPublisher;
 using trading_engine::risk::CapturingRiskPublisher;
+using trading_engine::risk::CapturingRiskPublisherFast;
 using trading_engine::risk::JsonlRiskDecisionWriter;
 using trading_engine::risk::RiskDecisionType;
 using trading_engine::risk::RiskEngine;
 using trading_engine::risk::RiskEvaluationContext;
 using trading_engine::risk::RiskRejectReason;
 using trading_engine::risk::RiskAuditTrace;
+using trading_engine::risk::RiskAuditStepCode;
 using trading_engine::signal::IntentStatus;
 using trading_engine::signal::OpportunityIntent;
 using trading_engine::state::MarketStateSnapshot;
@@ -114,17 +116,36 @@ void RiskAuditTrace_RecordsEveryExecutedGuard() {
     const auto result = engine.evaluate(intent(), context());
 
     expect_true(result.decision.approved(), "approved");
-    const auto& steps = result.audit_trace.steps;
-    expect_true(steps.size() >= 15U, "step count");
-    expect_equal(steps.front().guard_name, std::string{"KillSwitchGuard"}, "first");
+    expect_true(result.audit_trace.steps.empty(), "full trace default empty");
+    const auto& steps = result.audit_trace.lite.steps;
+    const auto step_count = result.audit_trace.lite.step_count;
+    expect_true(step_count >= 15U, "step count");
+    expect_equal(steps.front().step, RiskAuditStepCode::KillSwitchGuard, "first");
     expect_equal(
-        steps.back().guard_name,
-        std::string{"ReservationBook.try_reserve"},
+        steps[step_count - 1].step,
+        RiskAuditStepCode::ReservationBook,
         "last"
     );
-    for (const auto& step : steps) {
-        expect_true(step.pass, step.guard_name);
+    for (std::uint8_t i = 0; i < step_count; ++i) {
+        expect_true(steps[i].pass, "step pass");
     }
+}
+
+void RiskAuditTrace_FullTraceMaterializesStringStepsWhenEnabled() {
+    RiskEngine engine;
+    auto ctx = context();
+    ctx.enable_full_audit_trace = true;
+
+    const auto result = engine.evaluate(intent(), ctx);
+
+    expect_true(result.decision.approved(), "approved");
+    expect_true(!result.audit_trace.steps.empty(), "full trace populated");
+    expect_true(result.audit_trace.lite.step_count > 0, "lite trace populated");
+    expect_equal(
+        result.audit_trace.steps.front().guard_name,
+        std::string{"KillSwitchGuard"},
+        "full first"
+    );
 }
 
 void RiskAuditTrace_StopsAtRejectingGuard() {
@@ -140,13 +161,15 @@ void RiskAuditTrace_StopsAtRejectingGuard() {
         RiskRejectReason::ExpiredIntent,
         "reject"
     );
-    const auto& steps = result.audit_trace.steps;
+    const auto& steps = result.audit_trace.lite.steps;
+    const auto step_count = result.audit_trace.lite.step_count;
+    expect_true(step_count > 0, "step count");
     expect_equal(
-        steps.back().guard_name,
-        std::string{"IntentValidator"},
+        steps[step_count - 1].step,
+        RiskAuditStepCode::IntentValidator,
         "rejecting step"
     );
-    expect_false(steps.back().pass, "rejecting step pass");
+    expect_false(steps[step_count - 1].pass, "rejecting step pass");
 }
 
 void CapturingRiskPublisher_CapturesDecisionAndTrace() {
@@ -166,6 +189,30 @@ void CapturingRiskPublisher_CapturesDecisionAndTrace() {
         publisher.decisions()[0].decision.approved(),
         "captured approved"
     );
+}
+
+void CapturingRiskPublisherFast_CapturesNumericDecisionOnly() {
+    RiskEngine engine;
+    const auto result = engine.evaluate(intent(), context());
+
+    CapturingRiskPublisherFast publisher;
+    publisher.publish_decision(result.decision, result.audit_trace);
+
+    expect_equal(publisher.decisions().size(), 1U, "decisions");
+    const auto& published = publisher.decisions().front();
+    expect_equal(published.intent_id, 100ULL, "intent");
+    expect_equal(published.bundle_id, 200ULL, "bundle");
+    expect_equal(
+        published.status,
+        result.decision.status,
+        "status"
+    );
+    expect_equal(
+        published.reject_reason,
+        result.decision.reject_reason,
+        "reject"
+    );
+    expect_true(published.audit_step_count > 0, "audit steps");
 }
 
 void CapturingApprovedIntentPublisher_CapturesApprovedIntent() {
@@ -227,8 +274,10 @@ using TestFn = void (*)();
 const std::unordered_map<std::string, TestFn>& tests() {
     static const std::unordered_map<std::string, TestFn> test_map{
         {"RiskAuditTrace_RecordsEveryExecutedGuard", &RiskAuditTrace_RecordsEveryExecutedGuard},
+        {"RiskAuditTrace_FullTraceMaterializesStringStepsWhenEnabled", &RiskAuditTrace_FullTraceMaterializesStringStepsWhenEnabled},
         {"RiskAuditTrace_StopsAtRejectingGuard", &RiskAuditTrace_StopsAtRejectingGuard},
         {"CapturingRiskPublisher_CapturesDecisionAndTrace", &CapturingRiskPublisher_CapturesDecisionAndTrace},
+        {"CapturingRiskPublisherFast_CapturesNumericDecisionOnly", &CapturingRiskPublisherFast_CapturesNumericDecisionOnly},
         {"CapturingApprovedIntentPublisher_CapturesApprovedIntent", &CapturingApprovedIntentPublisher_CapturesApprovedIntent},
         {"JsonlRiskDecisionWriter_WritesAuditTrace", &JsonlRiskDecisionWriter_WritesAuditTrace},
         {"JsonlRiskDecisionWriter_DoesNotContainOrderFields", &JsonlRiskDecisionWriter_DoesNotContainOrderFields}

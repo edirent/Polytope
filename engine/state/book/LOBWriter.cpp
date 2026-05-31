@@ -44,8 +44,23 @@ namespace {
     out.entity_id = std::move(state_result.entity_id);
     out.message = std::move(state_result.message);
     out.state_changed = state_result.state_changed;
+    out.mutation = state_result.mutation;
+    out.book_version = state_result.book_version;
+    out.chain_version = state_result.chain_version;
+    out.quality_version = state_result.quality_version;
+    out.snapshot_version_hash = state_result.snapshot_version_hash;
     out.entity_hash = state_result.entity_hash;
     out.global_hash = state_result.global_hash;
+    out.cheap_fingerprint = state_result.cheap_fingerprint;
+    out.full_hash_computed = state_result.full_hash_computed;
+    out.make_result_ns = state_result.make_result_ns;
+    out.hash_entity_ns = state_result.hash_entity_ns;
+    out.hash_global_ns = state_result.hash_global_ns;
+    out.snapshot_build_ns = state_result.snapshot_build_ns;
+    out.snapshot_publish_ns = state_result.snapshot_publish_ns;
+    out.hash_cache_hits = state_result.hash_cache_hits;
+    out.hash_cache_misses = state_result.hash_cache_misses;
+    out.snapshot_published = state_result.snapshot_published;
     return out;
 }
 

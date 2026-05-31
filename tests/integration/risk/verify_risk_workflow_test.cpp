@@ -229,6 +229,7 @@ void VerifyRiskWorkflow_EmitsSummary() {
              "risk_workflow:",
              "decisions:",
              "repricing:",
+             "risk_vwap_mode:",
              "reservation:",
              "metrics:",
              "hashes:"
@@ -249,6 +250,7 @@ void VerifyRiskWorkflow_EmitsSummary() {
              "rejected_partial_fill_risk:",
              "rejected_max_loss:",
              "rejected_rate_limited:",
+             "vwap_reused_signal_cost:",
              "vwap_recomputed:",
              "cost_drift_min:",
              "cost_drift_max:",
@@ -274,6 +276,7 @@ void VerifyRiskWorkflow_EmitsSummary() {
              "risk.reservation.created:",
              "risk.reservation.expired:",
              "risk.reservation.released:",
+             "risk.vwap.reused_signal_cost:",
              "risk.vwap.recomputed:",
              "risk.latency.evaluate_ns:",
              "risk_output_hash:",

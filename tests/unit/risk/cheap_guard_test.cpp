@@ -128,6 +128,29 @@ void DuplicateIntentGuard_RejectsRepeatedIdempotencyKey() {
     );
 }
 
+void DuplicateIntentGuard_UsesIdempotencyHashWithoutStringKey() {
+    DuplicateIntentGuard guard;
+    auto intent = make_intent();
+    intent.idempotency_hash = 12345;
+    intent.idempotency_key.clear();
+
+    const auto first = guard.check(intent, 1'500);
+    const auto second = guard.check(intent, 1'501);
+
+    expect_true(first.pass, "first pass");
+    expect_false(second.pass, "second pass");
+    expect_equal(
+        second.rejection,
+        RiskDecisionType::RejectDuplicateIntent,
+        "rejection"
+    );
+    expect_equal(
+        second.reject_flag,
+        kRiskRejectFlagDuplicateIntent,
+        "flag"
+    );
+}
+
 void RateLimitGuard_RejectsOverLimit() {
     RateLimitGuard guard(1);
     const auto intent = make_intent();
@@ -209,6 +232,10 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "DuplicateIntentGuard_RejectsRepeatedIdempotencyKey",
             &DuplicateIntentGuard_RejectsRepeatedIdempotencyKey
+        },
+        {
+            "DuplicateIntentGuard_UsesIdempotencyHashWithoutStringKey",
+            &DuplicateIntentGuard_UsesIdempotencyHashWithoutStringKey
         },
         {
             "RateLimitGuard_RejectsOverLimit",

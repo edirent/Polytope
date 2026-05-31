@@ -59,7 +59,11 @@ struct WorkflowSummary {
     std::uint64_t rejected_max_loss = 0;
     std::uint64_t rejected_rate_limited = 0;
 
+    std::uint64_t vwap_reused_signal_cost = 0;
+    std::uint64_t vwap_reused_signal_snapshot = 0;
     std::uint64_t vwap_recomputed = 0;
+    std::uint64_t snapshot_fast_path = 0;
+    std::uint64_t snapshot_requery = 0;
     std::int64_t cost_drift_min = 0;
     std::int64_t cost_drift_max = 0;
     bool has_cost_drift = false;
@@ -69,6 +73,7 @@ struct WorkflowSummary {
     std::uint64_t reservations_expired = 0;
 
     risk::RiskMetrics metrics;
+    risk::RiskStageTimings stage_timings;
 
     std::uint64_t risk_output_hash = kFnvOffset;
     bool determinism_passed = true;
@@ -326,6 +331,11 @@ std::vector<state::MarketStateSnapshot> load_snapshots(
         snapshot.bid_count = get_u32(object, "bid_count");
         snapshot.ask_count = get_u32(object, "ask_count");
         snapshot.state_hash = get_u64(object, "state_hash");
+        snapshot.snapshot_version_hash = get_u64(
+            object,
+            "snapshot_version_hash",
+            snapshot.state_hash
+        );
         snapshot.usable_for_depth = get_bool(object, "usable_for_depth");
         snapshot.usable_for_signal = get_bool(object, "usable_for_signal");
 
@@ -354,6 +364,9 @@ signal::IntentLeg parse_intent_leg(const json::object& object) {
     leg.estimated_vwap_tick = get_i64(object, "estimated_vwap_tick");
     leg.worst_price_tick = get_i64(object, "worst_price_tick");
     leg.estimated_cost_tick = get_i64(object, "estimated_cost_tick");
+    leg.requested_qty_lots = get_i64(object, "requested_qty_lots");
+    leg.executable_qty_lots = get_i64(object, "executable_qty_lots");
+    leg.depth_margin_bps = get_i64(object, "depth_margin_bps");
     leg.enough_depth = get_bool(object, "enough_depth");
     return leg;
 }
@@ -380,10 +393,20 @@ signal::OpportunityIntent parse_intent(const json::object& object) {
     intent.snapshot_version = get_u64(object, "snapshot_version");
     intent.snapshot_version_hash = get_u64(object, "snapshot_version_hash");
     intent.bundle_qty = get_i64(object, "bundle_qty");
+    intent.original_bundle_qty = get_i64(
+        object,
+        "original_bundle_qty",
+        intent.bundle_qty
+    );
     intent.unit_edge_tick = get_i64(object, "unit_edge_tick");
     intent.total_edge_tick = get_i64(object, "total_edge_tick");
     intent.edge_bps = get_i64(object, "edge_bps");
     intent.slippage_buffer_tick = get_i64(object, "slippage_buffer_tick");
+    intent.max_leg_slippage_tick = get_i64(
+        object,
+        "max_leg_slippage_tick",
+        intent.slippage_buffer_tick
+    );
     intent.created_ts_ns = get_u64(object, "created_ts_ns");
     intent.expires_at_ns = get_u64(object, "expires_at_ns");
     intent.oracle_artifact_version =
@@ -487,6 +510,13 @@ RiskConfigFixture load_risk_config(const std::filesystem::path& path) {
         get_i64(*policy_object, "max_unhedged_loss_tick", 0);
     policy.min_depth_margin_ratio =
         get_double(*policy_object, "min_depth_margin_ratio", 1.20);
+    policy.min_depth_margin_bps = get_i64(
+        *policy_object,
+        "min_depth_margin_bps",
+        static_cast<std::int64_t>(
+            policy.min_depth_margin_ratio * 10'000.0
+        )
+    );
     policy.max_pending_intents_per_bundle =
         get_u32(*policy_object, "max_pending_intents_per_bundle", 1);
     policy.max_pending_intents_total =
@@ -500,17 +530,26 @@ RiskConfigFixture load_risk_config(const std::filesystem::path& path) {
     return fixture;
 }
 
-const risk::RiskAuditStep* failing_step(
+std::string failing_step_name(
     const risk::RiskPipelineResult& result
 ) {
     for (auto it = result.audit_trace.steps.rbegin();
          it != result.audit_trace.steps.rend();
          ++it) {
         if (!it->pass) {
-            return &*it;
+            return it->guard_name;
         }
     }
-    return nullptr;
+
+    const auto& lite = result.audit_trace.lite;
+    for (std::uint8_t i = lite.step_count; i > 0; --i) {
+        const auto& step = lite.steps[i - 1];
+        if (!step.pass) {
+            return risk::risk_audit_step_name(step.step);
+        }
+    }
+
+    return {};
 }
 
 void update_cost_drift(
@@ -535,9 +574,30 @@ void record_decision(
     ++summary->intents_evaluated;
     ++summary->metrics.evaluate_count;
     summary->metrics.observe_evaluate_latency(evaluate_latency_ns);
+    risk::accumulate_stage_timings(
+        &summary->stage_timings,
+        result.result.stage_timings
+    );
     if (result.cost_revalidated) {
-        ++summary->vwap_recomputed;
-        ++summary->metrics.vwap_recomputed;
+        if (result.cost.vwap_mode == risk::RiskVWAPMode::ReuseSignalSnapshot) {
+            ++summary->vwap_reused_signal_snapshot;
+            ++summary->vwap_reused_signal_cost;
+            ++summary->snapshot_fast_path;
+            ++summary->metrics.vwap_reused_signal_snapshot;
+            ++summary->metrics.vwap_reused_signal_cost;
+            ++summary->metrics.snapshot_fast_path;
+        } else if (result.cost.vwap_mode ==
+                   risk::RiskVWAPMode::ReusedSignalCost) {
+            ++summary->vwap_reused_signal_cost;
+            ++summary->snapshot_fast_path;
+            ++summary->metrics.vwap_reused_signal_cost;
+            ++summary->metrics.snapshot_fast_path;
+        } else {
+            ++summary->vwap_recomputed;
+            ++summary->snapshot_requery;
+            ++summary->metrics.vwap_recomputed;
+            ++summary->metrics.snapshot_requery;
+        }
         update_cost_drift(summary, result.cost.cost_drift_tick);
     }
     if (result.reservation.ok) {
@@ -556,6 +616,10 @@ void record_decision(
     );
     mix_i64(&summary->risk_output_hash, result.cost.risk_total_cost_tick);
     mix_i64(&summary->risk_output_hash, result.cost.cost_drift_tick);
+    mix_u64(
+        &summary->risk_output_hash,
+        static_cast<std::uint64_t>(result.cost.vwap_mode)
+    );
     mix_string(&summary->risk_output_hash, result.decision.reject_detail);
 
     if (result.decision.approved()) {
@@ -565,8 +629,7 @@ void record_decision(
     }
     ++summary->metrics.reject_count;
 
-    const auto* step = failing_step(result);
-    const auto step_name = step == nullptr ? std::string{} : step->guard_name;
+    const auto step_name = failing_step_name(result);
 
     switch (result.decision.reject_reason) {
         case risk::RiskRejectReason::InvalidIntent:
@@ -647,19 +710,22 @@ WorkflowSummary run_workflow_once(
     const std::vector<state::MarketStateSnapshot>& snapshots,
     const RiskConfigFixture& config
 ) {
-    risk::RiskEngine engine;
+    risk::RiskRuntimeContext runtime;
+    runtime.policy = &config.policy;
+    risk::RiskEngine engine(runtime);
     WorkflowSummary summary;
     summary.intents_loaded = intents.size();
 
     for (const auto& intent : intents) {
         using Clock = std::chrono::steady_clock;
-        risk::RiskEvaluationContext context;
-        context.now_ns = config.now_ns;
-        context.latest_snapshots = snapshots;
-        context.policy = config.policy;
-        context.ledger_snapshot = engine.ledger_snapshot();
+        risk::RiskInputView input;
+        input.intent = &intent;
+        input.snapshots = snapshots.data();
+        input.snapshot_count = static_cast<std::uint16_t>(snapshots.size());
+        input.snapshot_version_hash = 0;
+        input.now_ns = config.now_ns;
         const auto started = Clock::now();
-        const auto result = engine.evaluate(intent, std::move(context));
+        const auto result = engine.evaluate(input);
         const auto elapsed = Clock::now() - started;
         record_decision(
             &summary,
@@ -706,7 +772,12 @@ bool deterministic_equal(
                rhs.rejected_partial_fill_risk &&
            lhs.rejected_max_loss == rhs.rejected_max_loss &&
            lhs.rejected_rate_limited == rhs.rejected_rate_limited &&
+           lhs.vwap_reused_signal_cost == rhs.vwap_reused_signal_cost &&
+           lhs.vwap_reused_signal_snapshot ==
+               rhs.vwap_reused_signal_snapshot &&
            lhs.vwap_recomputed == rhs.vwap_recomputed &&
+           lhs.snapshot_fast_path == rhs.snapshot_fast_path &&
+           lhs.snapshot_requery == rhs.snapshot_requery &&
            lhs.cost_drift_min == rhs.cost_drift_min &&
            lhs.cost_drift_max == rhs.cost_drift_max &&
            lhs.reservations_created == rhs.reservations_created &&
@@ -738,7 +809,13 @@ bool deterministic_equal(
                rhs.metrics.reservation_released &&
            lhs.metrics.reservation_expired ==
                rhs.metrics.reservation_expired &&
+           lhs.metrics.vwap_reused_signal_cost ==
+               rhs.metrics.vwap_reused_signal_cost &&
+           lhs.metrics.vwap_reused_signal_snapshot ==
+               rhs.metrics.vwap_reused_signal_snapshot &&
            lhs.metrics.vwap_recomputed == rhs.metrics.vwap_recomputed &&
+           lhs.metrics.snapshot_fast_path == rhs.metrics.snapshot_fast_path &&
+           lhs.metrics.snapshot_requery == rhs.metrics.snapshot_requery &&
            lhs.risk_output_hash == rhs.risk_output_hash;
 }
 
@@ -805,9 +882,25 @@ void print_summary(const WorkflowSummary& summary) {
         << "  rejected_rate_limited: "
         << summary.rejected_rate_limited << "\n\n"
         << "repricing:\n"
+        << "  vwap_reused_signal_cost: "
+        << summary.vwap_reused_signal_cost << "\n"
+        << "  vwap_reused_signal_snapshot: "
+        << summary.vwap_reused_signal_snapshot << "\n"
         << "  vwap_recomputed: " << summary.vwap_recomputed << "\n"
+        << "  snapshot_fast_path: " << summary.snapshot_fast_path << "\n"
+        << "  snapshot_requery: " << summary.snapshot_requery << "\n"
         << "  cost_drift_min: " << summary.cost_drift_min << "\n"
         << "  cost_drift_max: " << summary.cost_drift_max << "\n\n"
+        << "risk_vwap_mode:\n"
+        << "  ReuseSignalSnapshot: "
+        << summary.vwap_reused_signal_snapshot << "\n"
+        << "  ReusedSignalCost: "
+        << summary.vwap_reused_signal_cost << "\n"
+        << "  RecomputedFromSnapshot: "
+        << summary.vwap_recomputed << "\n\n"
+        << "risk_snapshot_path:\n"
+        << "  fast_path: " << summary.snapshot_fast_path << "\n"
+        << "  requery: " << summary.snapshot_requery << "\n\n"
         << "reservation:\n"
         << "  reservations_created: "
         << summary.reservations_created << "\n"
@@ -852,13 +945,68 @@ void print_summary(const WorkflowSummary& summary) {
         << metrics.reservation_expired << "\n"
         << "  risk.reservation.released: "
         << metrics.reservation_released << "\n"
+        << "  risk.vwap.reused_signal_cost: "
+        << metrics.vwap_reused_signal_cost << "\n"
+        << "  risk.vwap.reused_signal_snapshot: "
+        << metrics.vwap_reused_signal_snapshot << "\n"
         << "  risk.vwap.recomputed: "
         << metrics.vwap_recomputed << "\n"
+        << "  risk.snapshot.fast_path: "
+        << metrics.snapshot_fast_path << "\n"
+        << "  risk.snapshot.requery: "
+        << metrics.snapshot_requery << "\n"
         << "  risk.latency.evaluate_ns:\n"
         << "    count: " << metrics.evaluate_latency_ns.count << "\n"
         << "    last: " << metrics.evaluate_latency_ns.last_ns << "\n"
         << "    min: " << metrics.evaluate_latency_ns.min_ns << "\n"
         << "    max: " << metrics.evaluate_latency_ns.max_ns << "\n\n"
+        << "risk_stage_timings_ns:\n"
+        << "  total_ns: "
+        << summary.stage_timings.total_ns << "\n"
+        << "  stage_sum_ns: "
+        << summary.stage_timings.stage_sum_ns << "\n"
+        << "  unattributed_ns: "
+        << summary.stage_timings.unattributed_ns << "\n"
+        << "  kill_switch_guard_ns: "
+        << summary.stage_timings.kill_switch_guard_ns << "\n"
+        << "  intent_validator_ns: "
+        << summary.stage_timings.intent_validator_ns << "\n"
+        << "  evidence_verifier_ns: "
+        << summary.stage_timings.evidence_verifier_ns << "\n"
+        << "  expiry_guard_ns: "
+        << summary.stage_timings.expiry_guard_ns << "\n"
+        << "  duplicate_guard_ns: "
+        << summary.stage_timings.duplicate_guard_ns << "\n"
+        << "  rate_limit_guard_ns: "
+        << summary.stage_timings.rate_limit_guard_ns << "\n"
+        << "  market_state_guard_ns: "
+        << summary.stage_timings.market_state_guard_ns << "\n"
+        << "  snapshot_freshness_guard_ns: "
+        << summary.stage_timings.snapshot_freshness_guard_ns << "\n"
+        << "  cost_revalidator_ns: "
+        << summary.stage_timings.cost_revalidator_ns << "\n"
+        << "  vwap_revalidator_ns: "
+        << summary.stage_timings.vwap_revalidator_ns << "\n"
+        << "  edge_guard_ns: "
+        << summary.stage_timings.edge_guard_ns << "\n"
+        << "  max_loss_guard_ns: "
+        << summary.stage_timings.max_loss_guard_ns << "\n"
+        << "  exposure_guard_ns: "
+        << summary.stage_timings.exposure_guard_ns << "\n"
+        << "  inventory_guard_ns: "
+        << summary.stage_timings.inventory_guard_ns << "\n"
+        << "  partial_fill_guard_ns: "
+        << summary.stage_timings.partial_fill_guard_ns << "\n"
+        << "  reservation_book_ns: "
+        << summary.stage_timings.reservation_book_ns << "\n"
+        << "  audit_trace_ns: "
+        << summary.stage_timings.audit_trace_ns << "\n"
+        << "  risk_decision_build_ns: "
+        << summary.stage_timings.risk_decision_build_ns << "\n"
+        << "  publisher_ns: "
+        << summary.stage_timings.publisher_ns << "\n"
+        << "  metrics_ns: "
+        << summary.stage_timings.metrics_ns << "\n\n"
         << "hashes:\n"
         << "  risk_output_hash: " << summary.risk_output_hash << "\n"
         << "  determinism_passed: "

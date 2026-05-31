@@ -20,6 +20,7 @@ struct SnapshotReadResult {
     std::string error;
 
     SnapshotVersion snapshot_version;
+    std::uint64_t snapshot_consistency_guard_ns = 0;
 
     std::vector<MarketStateSnapshot> snapshots;
 };

@@ -180,8 +180,29 @@ bool JsonlRiskDecisionWriter::write(
     write_json_string(output, "decision_id");
     output << ':' << decision.decision_id;
     write_u64_field(output, "trace_id", trace.trace_id);
-    write_u64_field(output, "intent_id", trace.intent_id);
-    write_u64_field(output, "bundle_id", trace.bundle_id);
+    write_u64_field(
+        output,
+        "intent_id",
+        decision.intent_id != 0 ? decision.intent_id : trace.intent_id
+    );
+    write_u64_field(
+        output,
+        "bundle_id",
+        decision.bundle_id != 0 ? decision.bundle_id : trace.bundle_id
+    );
+    write_u64_field(output, "idempotency_hash", decision.idempotency_hash);
+    write_u64_field(
+        output,
+        "oracle_artifact_hash",
+        decision.oracle_artifact_hash
+    );
+    write_u64_field(output, "constraint_hash", decision.constraint_hash);
+    write_u64_field(output, "bundle_hash", decision.bundle_hash);
+    write_u64_field(
+        output,
+        "snapshot_version_hash",
+        decision.snapshot_version_hash
+    );
     write_u64_field(output, "policy_version", decision.policy_version);
     write_u64_field(output, "policy_hash", decision.policy_hash);
     output << ',';
@@ -197,27 +218,52 @@ bool JsonlRiskDecisionWriter::write(
     output << ':';
     write_json_string(output, decision.reject_detail);
     output << ",\"steps\":[";
-    for (std::size_t i = 0; i < trace.steps.size(); ++i) {
-        if (i > 0) {
+    if (!trace.steps.empty()) {
+        for (std::size_t i = 0; i < trace.steps.size(); ++i) {
+            if (i > 0) {
+                output << ',';
+            }
+            const auto& step = trace.steps[i];
+            output << '{';
+            write_json_string(output, "guard_name");
+            output << ':';
+            write_json_string(output, step.guard_name);
             output << ',';
+            write_json_string(output, "pass");
+            output << ':' << (step.pass ? "true" : "false");
+            output << ',';
+            write_json_string(output, "rejection");
+            output << ':';
+            write_json_string(output, decision_type_to_string(step.rejection));
+            output << ',';
+            write_json_string(output, "reason");
+            output << ':';
+            write_json_string(output, step.reason);
+            output << '}';
         }
-        const auto& step = trace.steps[i];
-        output << '{';
-        write_json_string(output, "guard_name");
-        output << ':';
-        write_json_string(output, step.guard_name);
-        output << ',';
-        write_json_string(output, "pass");
-        output << ':' << (step.pass ? "true" : "false");
-        output << ',';
-        write_json_string(output, "rejection");
-        output << ':';
-        write_json_string(output, decision_type_to_string(step.rejection));
-        output << ',';
-        write_json_string(output, "reason");
-        output << ':';
-        write_json_string(output, step.reason);
-        output << '}';
+    } else {
+        const auto& lite = trace.lite;
+        for (std::uint8_t i = 0; i < lite.step_count; ++i) {
+            if (i > 0) {
+                output << ',';
+            }
+            const auto& step = lite.steps[i];
+            output << '{';
+            write_json_string(output, "guard_name");
+            output << ':';
+            write_json_string(output, risk_audit_step_name(step.step));
+            output << ',';
+            write_json_string(output, "pass");
+            output << ':' << (step.pass ? "true" : "false");
+            output << ',';
+            write_json_string(output, "rejection");
+            output << ':';
+            write_json_string(output, decision_type_to_string(step.rejection));
+            output << ',';
+            write_json_string(output, "detail_code");
+            output << ':' << step.detail_code;
+            output << '}';
+        }
     }
     output << "]}\n";
     return static_cast<bool>(output);

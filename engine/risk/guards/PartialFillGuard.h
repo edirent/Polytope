@@ -3,11 +3,9 @@
 #include "engine/risk/public/RiskPolicySnapshot.h"
 #include "engine/risk/reprice/CostRevalidationResult.h"
 #include "engine/signal/public/OpportunityIntent.h"
-#include "engine/state/MarketStateSnapshot.h"
 
 #include <cstdint>
 #include <string>
-#include <vector>
 
 namespace trading_engine::risk {
 
@@ -32,7 +30,6 @@ class PartialFillGuard {
 public:
     [[nodiscard]] PartialFillGuardResult check(
         const signal::OpportunityIntent& intent,
-        const std::vector<state::MarketStateSnapshot>& snapshots,
         const CostRevalidationResult& cost,
         const RiskPolicySnapshot& policy
     ) const;

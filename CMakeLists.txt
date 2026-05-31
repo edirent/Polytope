@@ -125,6 +125,127 @@ foreach(test_case
     add_test(NAME ${test_case} COMMAND state_hasher_tests ${test_case})
 endforeach()
 
+add_executable(state_hash_cache_tests
+    tests/unit/state/state_hash_cache_test.cpp
+)
+
+target_include_directories(state_hash_cache_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(state_hash_cache_tests PRIVATE
+    engine_state
+)
+
+foreach(test_case
+    StateHashCache_EntityHashMatchesStateHasher
+    StateHashCache_ReusesCleanEntityHash
+    StateHashCache_MarkDirtyRecomputesEntityHash
+    StateHashCache_RecomputesDirtyEntityHash
+    StateHashCache_GlobalHashReturnsCachedUntilDirty
+    StateHashCache_RecomputesGlobalOnlyWhenDirty
+    EntityStateStore_StateHashCacheDirtyOnMutation
+    EntityStateStore_GlobalHashCacheDirtyOnMutation
+    StateHashCache_MissingEntityReturnsZero
+)
+    add_test(NAME ${test_case} COMMAND state_hash_cache_tests ${test_case})
+endforeach()
+
+add_executable(state_hash_policy_tests
+    tests/unit/state/state_hash_policy_test.cpp
+)
+
+target_include_directories(state_hash_policy_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(state_hash_policy_tests PRIVATE
+    engine_state
+)
+
+foreach(test_case
+    StateHashPolicy_DefaultRuntimeIsHotPathLight
+    StateHashPolicy_HotPathSnapshotSkipsFullHash
+    StateHashPolicy_ReplayFullSnapshotComputesFullHash
+    StateHashPolicy_DebugVerifySnapshotComputesFullHash
+    StateHashPolicy_HeartbeatSkipsFullHashInHotPath
+)
+    add_test(NAME ${test_case} COMMAND state_hash_policy_tests ${test_case})
+endforeach()
+
+add_executable(state_runtime_config_tests
+    tests/unit/state/state_runtime_config_test.cpp
+)
+
+target_include_directories(state_runtime_config_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(state_runtime_config_tests PRIVATE
+    engine_state
+)
+
+foreach(test_case
+    StateRuntimeConfig_DefaultsHotPathLight
+    MarketStateStore_DefaultRuntimeConfigIsHotPathLight
+    MarketStateStore_AcceptsReplayFullConfig
+    MarketStateStore_DefaultDoesNotPublishNoop
+    MarketStateStore_HotPathLightDoesNotComputeApplyFullHash
+    EntityStateStore_DefaultKeepsReplayFullCompatibility
+    EntityStateStore_ReplayFullSkipsFullHashWhenUnchanged
+    MarketStateStore_DoesNotPublishNoopEvenWhenConfigured
+    MarketStateStore_DoesNotPublishHeartbeatEvenWhenConfigured
+)
+    add_test(NAME ${test_case} COMMAND state_runtime_config_tests ${test_case})
+endforeach()
+
+add_executable(state_mutation_flags_tests
+    tests/unit/state/state_mutation_flags_test.cpp
+)
+
+target_include_directories(state_mutation_flags_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(state_mutation_flags_tests PRIVATE
+    engine_state
+)
+
+foreach(test_case
+    StateMutationFlags_SnapshotMarksBookChanged
+    StateMutationFlags_DeltaMarksBookChanged
+    StateMutationFlags_DeltaMarksHashDirty
+    StateMutationFlags_TargetDeltaBeforeSnapshotIsBookMutation
+    StateMutationFlags_HeartbeatDoesNotPublishOrHash
+    StateMutationFlags_ChainFillMarksChainChanged
+    StateMutationFlags_ChainRemovedFillMarksChainChanged
+    StateMutationFlags_HotPathSnapshotPublishesVersionHashOnly
+    StateMutationFlags_ReplayFullSnapshotPublishesFullBookHashFromResult
+)
+    add_test(NAME ${test_case} COMMAND state_mutation_flags_tests ${test_case})
+endforeach()
+
+add_executable(publish_gating_tests
+    tests/unit/state/publish_gating_test.cpp
+)
+
+target_include_directories(publish_gating_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(publish_gating_tests PRIVATE
+    engine_state
+)
+
+foreach(test_case
+    PublishGating_SnapshotPublishes
+    PublishGating_DeltaRequiresPublish
+    PublishGating_HeartbeatDoesNotPublish
+    PublishGating_QualityNoChangeDoesNotPublish
+)
+    add_test(NAME ${test_case} COMMAND publish_gating_tests ${test_case})
+endforeach()
+
 add_executable(market_state_view_tests
     tests/unit/state/market_state_view_test.cpp
 )
@@ -190,8 +311,28 @@ foreach(test_case
     RiskConfig_DefaultsAreSafe
     RiskResult_DefaultCountersZero
     RiskAuditTrace_DefaultsAreSafe
+    RiskInputView_DefaultsAreNonOwningEmpty
+    RiskInputView_PreservesPointersWithoutOwning
+    RiskInputEnvelope_DefaultsAreSafe
+    MarketDepthView_DefaultsAreSafe
 )
     add_test(NAME ${test_case} COMMAND risk_contract_tests ${test_case})
+endforeach()
+
+add_executable(risk_input_view_tests
+    tests/unit/risk/risk_input_view_test.cpp
+)
+
+target_link_libraries(risk_input_view_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    RiskInputView_DoesNotOwnIntent
+    RiskInputView_DoesNotCopySnapshots
+    RiskInputView_ReferencesSignalSnapshotEvidence
+)
+    add_test(NAME ${test_case} COMMAND risk_input_view_tests ${test_case})
 endforeach()
 
 add_executable(risk_metrics_tests
@@ -260,6 +401,7 @@ foreach(test_case
     KillSwitchGuard_RejectsWhenEnabled
     IntentExpiryGuard_RejectsExpired
     DuplicateIntentGuard_RejectsRepeatedIdempotencyKey
+    DuplicateIntentGuard_UsesIdempotencyHashWithoutStringKey
     RateLimitGuard_RejectsOverLimit
     CheapGuardFailure_ShortCircuitsBeforeVwap
     CheapGuardRejectCountersAreCorrect
@@ -299,6 +441,10 @@ target_link_libraries(risk_cost_revalidator_tests PRIVATE
 
 foreach(test_case
     CostRevalidator_RecomputesVWAPFromLatestSnapshot
+    CostRevalidator_ReusesSignalSnapshotWhenSnapshotHashMatches
+    CostRevalidator_ReusesPrecomputedSnapshotVersionHash
+    CostRevalidator_RecomputesWhenSnapshotHashDiffers
+    CostRevalidator_DoesNotReuseStaleSnapshot
     CostRevalidator_RejectsInsufficientDepth
     CostRevalidator_RejectsCostDriftTooHigh
     CostRevalidator_AllowsSmallCostDrift
@@ -369,6 +515,8 @@ target_link_libraries(risk_engine_core_tests PRIVATE
 
 foreach(test_case
     RiskEngine_ApprovesSafeIntentAndCreatesReservation
+    RiskEngine_EvaluateViewApprovesWithoutContextCopy
+    RiskEngine_RuntimeContextEvaluateUsesLongLivedPolicyAndPublisher
     RiskEngine_RejectsExpiredBeforeVWAP
     RiskEngine_RejectsDuplicateBeforeVWAP
     RiskEngine_RejectsStaleBook
@@ -381,6 +529,24 @@ foreach(test_case
     add_test(NAME ${test_case} COMMAND risk_engine_core_tests ${test_case})
 endforeach()
 
+add_executable(risk_engine_view_evaluate_tests
+    tests/unit/risk/risk_engine_view_evaluate_test.cpp
+)
+
+target_link_libraries(risk_engine_view_evaluate_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    RiskEngine_EvaluateViewAcceptsValidInput
+    RiskEngine_EvaluateViewRejectsExpiredIntent
+    RiskEngine_EvaluateViewRejectsStaleSnapshots
+    RiskEngine_EvaluateViewFastPathNoSnapshotRequery
+    RiskEngine_EvaluateViewFallbackRequeryOnHashMismatch
+)
+    add_test(NAME ${test_case} COMMAND risk_engine_view_evaluate_tests ${test_case})
+endforeach()
+
 add_executable(risk_publisher_tests
     tests/unit/risk/risk_publisher_test.cpp
 )
@@ -391,8 +557,10 @@ target_link_libraries(risk_publisher_tests PRIVATE
 
 foreach(test_case
     RiskAuditTrace_RecordsEveryExecutedGuard
+    RiskAuditTrace_FullTraceMaterializesStringStepsWhenEnabled
     RiskAuditTrace_StopsAtRejectingGuard
     CapturingRiskPublisher_CapturesDecisionAndTrace
+    CapturingRiskPublisherFast_CapturesNumericDecisionOnly
     CapturingApprovedIntentPublisher_CapturesApprovedIntent
     JsonlRiskDecisionWriter_WritesAuditTrace
     JsonlRiskDecisionWriter_DoesNotContainOrderFields
@@ -428,6 +596,7 @@ target_link_libraries(signal_intent_builder_tests PRIVATE
 
 foreach(test_case
     IntentBuilder_FillsLifecycleFields
+    IntentBuilder_FillsCostEvidenceFields
     IntentBuilder_FillsArtifactHashes
     IntentBuilder_FillsSnapshotVersion
     IntentBuilder_GeneratesStableIdempotencyKey
@@ -700,6 +869,7 @@ target_link_libraries(signal_paper_intent_publisher_tests PRIVATE
 foreach(test_case
     CapturingIntentPublisher_CapturesIntent
     CapturingIntentPublisher_PreservesOrder
+    CapturingIntentPublisher_CapturesEvidence
     JsonlIntentWriter_WritesValidJsonLine
     JsonlIntentWriter_DoesNotRequireExecution
 )
@@ -1920,6 +2090,31 @@ add_test(
         DecodeStateViewReplay_Market39SnapshotQueryable
 )
 
+add_executable(state_hash_cache_determinism_tests
+    tests/integration/state/state_hash_cache_determinism_test.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(state_hash_cache_determinism_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(state_hash_cache_determinism_tests PRIVATE
+    engine_state
+    engine_decode
+)
+
+foreach(test_case
+    StateHashCacheDeterminism_DebugVerifyMatchesFullRecompute
+    StateHashCacheDeterminism_ReplayFullPreservesLegacyBookHash
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND state_hash_cache_determinism_tests ${test_case}
+    )
+endforeach()
+
 add_executable(ws_book_to_snapshot_workflow_tests
     tests/integration/workflow/ws_book_to_snapshot_test.cpp
     engine/feed/raw_ingest/RawPacket.cpp
@@ -1956,6 +2151,42 @@ add_test(
     NAME ChainFillToSnapshot_ConfirmedAndUnsafeFillsAreSeparated
     COMMAND chain_fill_to_snapshot_workflow_tests
 )
+
+add_executable(worldcup_state_filter_hash_mode_tests
+    tests/integration/workflow/worldcup_state_filter_hash_mode_test.cpp
+)
+
+target_include_directories(worldcup_state_filter_hash_mode_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(worldcup_state_filter_hash_mode_tests PRIVATE
+    engine_state
+)
+
+add_test(
+    NAME WorldCupStateFilterHashMode_FiltersPairedAssetAcrossHashModes
+    COMMAND worldcup_state_filter_hash_mode_tests
+)
+
+add_executable(signal_to_risk_handoff_tests
+    tests/integration/workflow/signal_to_risk_handoff_test.cpp
+)
+
+target_include_directories(signal_to_risk_handoff_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(signal_to_risk_handoff_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    SignalToRiskHandoff_PreservesSnapshotVersionHash
+    SignalToRiskHandoff_DoesNotPatchIntentLifecycle
+)
+    add_test(NAME ${test_case} COMMAND signal_to_risk_handoff_tests ${test_case})
+endforeach()
 
 add_executable(combined_market_state_workflow_tests
     tests/integration/workflow/combined_market_state_workflow_test.cpp
@@ -2217,6 +2448,45 @@ add_test(
         --check-determinism
 )
 
+add_executable(verify_state_hash_cache
+    tools/verify_state_hash_cache.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(verify_state_hash_cache PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(verify_state_hash_cache PRIVATE
+    engine_state
+    engine_decode
+)
+
+add_test(
+    NAME VerifyStateHashCacheDebugVerify
+    COMMAND verify_state_hash_cache
+        --raw ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/polymarket/market_39.raw
+        --hash-mode debug-verify
+        --expect-legacy-book-hash 12959912045291989833
+)
+
+add_test(
+    NAME VerifyStateHashCacheReplayFull
+    COMMAND verify_state_hash_cache
+        --raw ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/polymarket/market_39.raw
+        --hash-mode replay-full
+        --expect-legacy-book-hash 12959912045291989833
+)
+
+add_test(
+    NAME VerifyStateHashCacheHotPathLight
+    COMMAND verify_state_hash_cache
+        --raw ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/polymarket/market_39.raw
+        --hash-mode hot-path-light
+        --expect-legacy-book-hash 12959912045291989833
+)
+
 add_executable(bench_feed_decode_latency
     tools/bench_feed_decode_latency.cpp
     engine/feed/raw_ingest/RawPacket.cpp
@@ -2345,6 +2615,25 @@ target_link_libraries(run_worldcup_feed_to_execution PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads
+)
+
+add_executable(probe_market_event_to_execution_plan_latency
+    tools/probe_market_event_to_execution_plan_latency.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(probe_market_event_to_execution_plan_latency PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(probe_market_event_to_execution_plan_latency PRIVATE
+    engine_decode
+    engine_state
+    engine_signal
+    engine_risk
+    engine_execution
 )
 
 add_executable(chain_ws_http_parity_smoke

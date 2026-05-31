@@ -35,7 +35,11 @@ struct RiskMetrics {
     std::uint64_t reservation_expired = 0;
     std::uint64_t reservation_released = 0;
 
+    std::uint64_t vwap_reused_signal_cost = 0;
+    std::uint64_t vwap_reused_signal_snapshot = 0;
     std::uint64_t vwap_recomputed = 0;
+    std::uint64_t snapshot_fast_path = 0;
+    std::uint64_t snapshot_requery = 0;
     RiskLatencyMetric evaluate_latency_ns;
 
     void observe_evaluate_latency(std::uint64_t latency_ns) noexcept;

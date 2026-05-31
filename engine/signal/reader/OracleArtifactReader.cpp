@@ -8,6 +8,7 @@
 
 #include <limits>
 #include <optional>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace trading_engine::signal {
@@ -343,12 +344,74 @@ std::int64_t i64_field(const json::object& object, const char* name) {
     return true;
 }
 
+[[nodiscard]] std::vector<BundleRuntimePlan> build_runtime_plans(
+    const std::vector<CandidateBundle>& bundles,
+    std::uint64_t artifact_hash,
+    std::uint64_t constraint_hash
+) {
+    std::unordered_map<std::string, std::uint32_t> asset_indices;
+    SideResolver side_resolver;
+    std::vector<BundleRuntimePlan> plans;
+    plans.reserve(bundles.size());
+
+    for (const auto& bundle : bundles) {
+        BundleRuntimePlan plan;
+        plan.bundle = &bundle;
+        plan.bundle_id = bundle.bundle_id;
+        plan.bundle_hash =
+            trading_engine::oracle::hash_candidate_bundle(bundle);
+        plan.oracle_artifact_hash = artifact_hash;
+        plan.constraint_hash = constraint_hash;
+        plan.leg_count = std::min<std::uint16_t>(
+            bundle.leg_count,
+            kMaxIntentLegs
+        );
+        plan.guaranteed_payout_tick = bundle.guaranteed_payout_tick;
+        plan.min_unit_edge_tick = bundle.min_edge_tick;
+        plan.min_total_edge_tick = bundle.min_edge_tick;
+
+        for (std::uint16_t i = 0; i < plan.leg_count; ++i) {
+            const auto& leg = bundle.legs[i];
+            plan.market_ids[i] = &leg.market_id;
+            plan.asset_ids[i] = &leg.asset_id;
+            plan.sides[i] = leg.side;
+            plan.executable_sides[i] = side_resolver.resolve(leg.side);
+            plan.ratio_qty_lots[i] = leg.quantity_lots;
+            plan.max_price_ticks[i] = leg.max_price_tick;
+
+            auto [it, inserted] = asset_indices.emplace(
+                leg.asset_id,
+                static_cast<std::uint32_t>(asset_indices.size())
+            );
+            plan.asset_indices[i] = it->second;
+
+            bool already_unique = false;
+            for (std::uint16_t j = 0; j < plan.unique_asset_count; ++j) {
+                if (plan.unique_asset_indices[j] == it->second) {
+                    already_unique = true;
+                    break;
+                }
+            }
+            if (!already_unique && plan.unique_asset_count < kMaxIntentLegs) {
+                plan.unique_asset_ids[plan.unique_asset_count] = &leg.asset_id;
+                plan.unique_asset_indices[plan.unique_asset_count] = it->second;
+                ++plan.unique_asset_count;
+            }
+        }
+
+        plans.push_back(plan);
+    }
+
+    return plans;
+}
+
 }  // namespace
 
 OracleLoadResult OracleArtifactReader::load(
     const std::filesystem::path& artifact_dir
 ) {
     bundles_.clear();
+    runtime_plans_.clear();
     artifact_version_ = 0;
     artifact_hash_ = 0;
     constraint_hash_ = 0;
@@ -399,6 +462,11 @@ OracleLoadResult OracleArtifactReader::load(
     constraint_hash_ =
         parse_hex_u64(artifact.contents.manifest.constraint_hash);
     bundle_hash_ = trading_engine::oracle::hash_candidate_bundles(bundles_);
+    runtime_plans_ = build_runtime_plans(
+        bundles_,
+        artifact_hash_,
+        constraint_hash_
+    );
 
     result.ok = true;
     result.bundle_count = static_cast<std::uint64_t>(bundles_.size());
@@ -407,6 +475,11 @@ OracleLoadResult OracleArtifactReader::load(
 
 std::span<const CandidateBundle> OracleArtifactReader::active_bundles() const {
     return bundles_;
+}
+
+std::span<const BundleRuntimePlan> OracleArtifactReader::active_runtime_plans(
+) const {
+    return runtime_plans_;
 }
 
 std::uint64_t OracleArtifactReader::artifact_version() const {

@@ -163,6 +163,11 @@ MarketStateSnapshot parse_snapshot(const json::object& object) {
     parse_levels(object, "bids", &snapshot.bids);
     parse_levels(object, "asks", &snapshot.asks);
     snapshot.state_hash = u64_field(object, "state_hash");
+    snapshot.snapshot_version_hash =
+        u64_field(object, "snapshot_version_hash");
+    if (snapshot.snapshot_version_hash == 0) {
+        snapshot.snapshot_version_hash = snapshot.state_hash;
+    }
     snapshot.quality = quality_from_string(string_field(object, "quality"));
     snapshot.usable_for_depth = bool_field(object, "usable_for_depth");
     snapshot.usable_for_signal = bool_field(object, "usable_for_signal");
@@ -246,6 +251,35 @@ SnapshotReadResult FixtureMarketSnapshotReader::read_for_bundle(
     }
 
     return validate_bundle_snapshots(bundle, config, snapshots, now_ns);
+}
+
+SnapshotBatchReadResult FixtureMarketSnapshotReader::read_for_plan(
+    const BundleRuntimePlan& plan,
+    const SignalConfig& config,
+    std::uint64_t now_ns
+) const {
+    std::array<MarketStateSnapshot, kMaxIntentLegs> snapshots{};
+    std::uint16_t snapshot_count = 0;
+    for (std::uint16_t i = 0;
+         i < plan.unique_asset_count && snapshot_count < kMaxIntentLegs;
+         ++i) {
+        const auto* asset_id = plan.unique_asset_ids[i];
+        if (!asset_id) {
+            continue;
+        }
+        const auto it = snapshots_.find(*asset_id);
+        if (it != snapshots_.end()) {
+            snapshots[snapshot_count++] = it->second;
+        }
+    }
+
+    return validate_plan_snapshots(
+        plan,
+        config,
+        snapshots,
+        snapshot_count,
+        now_ns
+    );
 }
 
 }  // namespace trading_engine::signal

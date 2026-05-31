@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oracle/public/CandidateBundle.h"
+#include "engine/signal/scan/BundleRuntimePlan.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -27,6 +28,8 @@ public:
     );
 
     [[nodiscard]] std::span<const CandidateBundle> active_bundles() const;
+    [[nodiscard]] std::span<const BundleRuntimePlan> active_runtime_plans()
+        const;
 
     [[nodiscard]] std::uint64_t artifact_version() const;
     [[nodiscard]] std::uint64_t artifact_hash() const;
@@ -35,6 +38,7 @@ public:
 
 private:
     std::vector<CandidateBundle> bundles_;
+    std::vector<BundleRuntimePlan> runtime_plans_;
     std::uint64_t artifact_version_ = 0;
     std::uint64_t artifact_hash_ = 0;
     std::uint64_t constraint_hash_ = 0;

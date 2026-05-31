@@ -13,6 +13,7 @@
 #include "engine/risk/guards/RateLimitGuard.h"
 #include "engine/risk/guards/SnapshotFreshnessGuard.h"
 #include "engine/risk/ledger/ReservationBook.h"
+#include "engine/risk/public/RiskInputView.h"
 #include "engine/risk/reprice/CostRevalidator.h"
 #include "engine/risk/validate/IntentEvidenceVerifier.h"
 #include "engine/risk/validate/IntentValidator.h"
@@ -27,6 +28,13 @@ public:
         const signal::OpportunityIntent& intent,
         const RiskEvaluationContext& context,
         ReservationBook* reservations
+    );
+
+    [[nodiscard]] RiskPipelineResult evaluate_view(
+        const RiskInputView& input,
+        ReservationBook* reservations,
+        IRiskDecisionPublisher* decision_publisher = nullptr,
+        bool enable_full_audit_trace = false
     );
 
     void clear_duplicate_cache();

@@ -21,6 +21,9 @@ struct IntentLeg {
     std::int64_t estimated_vwap_tick = 0;
     std::int64_t worst_price_tick = 0;
     std::int64_t estimated_cost_tick = 0;
+    std::int64_t requested_qty_lots = 0;
+    std::int64_t executable_qty_lots = 0;
+    std::int64_t depth_margin_bps = 0;
 
     bool enough_depth = false;
 };
@@ -49,13 +52,19 @@ struct OpportunityIntent {
     std::uint64_t snapshot_version = 0;
     std::uint64_t snapshot_version_hash = 0;
 
+    std::uint64_t idempotency_hash = 0;
+    std::uint64_t proof_hash = 0;
+    IntentRejectCode reject_code = IntentRejectCode::None;
+
     std::int64_t bundle_qty = 0;
+    std::int64_t original_bundle_qty = 0;
 
     std::int64_t unit_edge_tick = 0;
     std::int64_t total_edge_tick = 0;
     std::int64_t edge_bps = 0;
 
     std::int64_t slippage_buffer_tick = 0;
+    std::int64_t max_leg_slippage_tick = 0;
 
     std::uint64_t created_ts_ns = 0;
     std::uint64_t expires_at_ns = 0;

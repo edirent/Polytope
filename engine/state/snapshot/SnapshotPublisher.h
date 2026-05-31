@@ -3,8 +3,10 @@
 #include "state/MarketStateQueryResult.h"
 #include "state/snapshot/SnapshotBuffer.h"
 
+#include <cstdint>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <string>
 #include <unordered_map>
 
@@ -16,6 +18,12 @@ public:
 
     [[nodiscard]] StateQueryResult<MarketStateSnapshot> read(
         const std::string& asset_id
+    ) const;
+
+    [[nodiscard]] std::uint16_t read_many(
+        std::span<const std::string* const> asset_ids,
+        MarketStateSnapshot* out,
+        std::uint16_t max_out
     ) const;
 
 private:

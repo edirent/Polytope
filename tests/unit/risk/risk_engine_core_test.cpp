@@ -1,4 +1,5 @@
 #include "engine/risk/core/RiskEngine.h"
+#include "engine/risk/publish/CapturingRiskPublisher.h"
 
 #include <exception>
 #include <iostream>
@@ -13,8 +14,12 @@ namespace {
 using trading_engine::risk::RiskDecisionStatus;
 using trading_engine::risk::RiskEngine;
 using trading_engine::risk::RiskEvaluationContext;
+using trading_engine::risk::RiskInputView;
 using trading_engine::risk::RiskRejectReason;
 using trading_engine::risk::RiskPolicySnapshot;
+using trading_engine::risk::RiskRuntimeContext;
+using trading_engine::risk::RiskVWAPMode;
+using trading_engine::risk::CapturingRiskPublisherFast;
 using trading_engine::signal::IntentStatus;
 using trading_engine::signal::OpportunityIntent;
 using trading_engine::state::MarketStateSnapshot;
@@ -67,6 +72,15 @@ MarketStateSnapshot snapshot(
     return out;
 }
 
+std::uint64_t idempotency_hash_for(const std::string& key) {
+    std::uint64_t hash = 14695981039346656037ULL;
+    for (const unsigned char ch : key) {
+        hash ^= ch;
+        hash *= 1099511628211ULL;
+    }
+    return hash == 0 ? 1 : hash;
+}
+
 OpportunityIntent intent(
     std::string key = "intent-key",
     std::string asset_id = "asset-1",
@@ -86,9 +100,11 @@ OpportunityIntent intent(
     out.latency_buffer_tick = 0;
     out.estimated_edge_tick = 12'000;
     out.oracle_artifact_hash = 123;
+    out.constraint_hash = 234;
     out.bundle_hash = 456;
     out.snapshot_version = 7;
     out.snapshot_version_hash = 111;
+    out.idempotency_hash = idempotency_hash_for(key);
     out.bundle_qty = bundle_qty;
     out.unit_edge_tick = 1'200;
     out.total_edge_tick = 12'000;
@@ -120,11 +136,109 @@ void RiskEngine_ApprovesSafeIntentAndCreatesReservation() {
     const auto result = engine.evaluate(intent(), context());
 
     expect_true(result.decision.approved(), "approved");
+    expect_equal(result.decision.intent_id, 100ULL, "decision intent");
+    expect_equal(result.decision.bundle_id, 200ULL, "decision bundle");
+    expect_equal(
+        result.decision.idempotency_hash,
+        idempotency_hash_for("intent-key"),
+        "decision key hash"
+    );
+    expect_equal(result.decision.oracle_artifact_hash, 123ULL, "artifact hash");
+    expect_equal(result.decision.constraint_hash, 234ULL, "constraint hash");
+    expect_equal(result.decision.bundle_hash, 456ULL, "bundle hash");
+    expect_equal(
+        result.decision.snapshot_version_hash,
+        111ULL,
+        "snapshot hash"
+    );
     expect_true(result.approved_intent.valid(), "approved intent valid");
     expect_true(result.reservation.ok, "reservation ok");
     expect_true(result.reservation.reservation_id != 0, "reservation id");
     expect_true(result.reservation_attempted, "reservation attempted");
     expect_equal(engine.ledger_snapshot().active_reservations, 1ULL, "active");
+}
+
+void RiskEngine_EvaluateViewApprovesWithoutContextCopy() {
+    RiskEngine engine;
+    auto view_intent = intent("view");
+    view_intent.legs[0].enough_depth = true;
+    view_intent.legs[0].requested_qty_lots = 10;
+    view_intent.legs[0].executable_qty_lots = 12;
+    view_intent.legs[0].depth_margin_bps = 12'000;
+    const auto view_snapshot = snapshot("asset-1", 800, 100.0);
+    const RiskPolicySnapshot policy;
+
+    RiskInputView view;
+    view.intent = &view_intent;
+    view.snapshots = &view_snapshot;
+    view.snapshot_count = 1;
+    view.snapshot_version_hash = view_intent.snapshot_version_hash;
+    view.latest_snapshot_version_hash = view_intent.snapshot_version_hash;
+    view.now_ns = 1'500;
+    view.policy = &policy;
+
+    const auto result = engine.evaluate_view(view);
+
+    expect_true(result.decision.approved(), "approved");
+    expect_true(result.approved_intent.valid(), "approved intent valid");
+    expect_true(result.reservation.ok, "reservation ok");
+    expect_true(result.reservation.reservation_id != 0, "reservation id");
+    expect_equal(
+        result.cost.vwap_mode,
+        RiskVWAPMode::ReuseSignalSnapshot,
+        "vwap mode"
+    );
+    expect_equal(
+        result.result.metrics.snapshot_fast_path,
+        1ULL,
+        "snapshot fast path"
+    );
+    expect_equal(
+        result.result.metrics.snapshot_requery,
+        0ULL,
+        "snapshot requery"
+    );
+    expect_equal(engine.ledger_snapshot().active_reservations, 1ULL, "active");
+}
+
+void RiskEngine_RuntimeContextEvaluateUsesLongLivedPolicyAndPublisher() {
+    auto policy = RiskPolicySnapshot{};
+    policy.max_allowed_cost_drift_tick = 1'000'000;
+    CapturingRiskPublisherFast publisher;
+    RiskRuntimeContext runtime;
+    runtime.policy = &policy;
+    runtime.publisher = &publisher;
+    RiskEngine engine(runtime);
+
+    auto view_intent = intent("runtime");
+    view_intent.legs[0].enough_depth = true;
+    view_intent.legs[0].requested_qty_lots = 10;
+    view_intent.legs[0].executable_qty_lots = 12;
+    view_intent.legs[0].depth_margin_bps = 12'000;
+    const auto view_snapshot = snapshot("asset-1", 800, 100.0);
+
+    RiskInputView view;
+    view.intent = &view_intent;
+    view.snapshots = &view_snapshot;
+    view.snapshot_count = 1;
+    view.snapshot_version_hash = view_intent.snapshot_version_hash;
+    view.latest_snapshot_version_hash = view_intent.snapshot_version_hash;
+    view.now_ns = 1'500;
+
+    const auto result = engine.evaluate(view);
+
+    expect_true(result.decision.approved(), "approved");
+    expect_equal(
+        result.cost.vwap_mode,
+        RiskVWAPMode::ReuseSignalSnapshot,
+        "vwap mode"
+    );
+    expect_equal(publisher.decisions().size(), 1U, "published decision");
+    expect_equal(
+        publisher.decisions().front().intent_id,
+        view_intent.intent_id,
+        "published intent"
+    );
 }
 
 void RiskEngine_RejectsExpiredBeforeVWAP() {
@@ -135,6 +249,8 @@ void RiskEngine_RejectsExpiredBeforeVWAP() {
     const auto result = engine.evaluate(expired, context());
 
     expect_false(result.decision.approved(), "approved");
+    expect_equal(result.decision.intent_id, 100ULL, "decision intent");
+    expect_equal(result.decision.bundle_id, 200ULL, "decision bundle");
     expect_equal(
         result.decision.reject_reason,
         RiskRejectReason::ExpiredIntent,
@@ -299,6 +415,8 @@ using TestFn = void (*)();
 const std::unordered_map<std::string, TestFn>& tests() {
     static const std::unordered_map<std::string, TestFn> test_map{
         {"RiskEngine_ApprovesSafeIntentAndCreatesReservation", &RiskEngine_ApprovesSafeIntentAndCreatesReservation},
+        {"RiskEngine_EvaluateViewApprovesWithoutContextCopy", &RiskEngine_EvaluateViewApprovesWithoutContextCopy},
+        {"RiskEngine_RuntimeContextEvaluateUsesLongLivedPolicyAndPublisher", &RiskEngine_RuntimeContextEvaluateUsesLongLivedPolicyAndPublisher},
         {"RiskEngine_RejectsExpiredBeforeVWAP", &RiskEngine_RejectsExpiredBeforeVWAP},
         {"RiskEngine_RejectsDuplicateBeforeVWAP", &RiskEngine_RejectsDuplicateBeforeVWAP},
         {"RiskEngine_RejectsStaleBook", &RiskEngine_RejectsStaleBook},

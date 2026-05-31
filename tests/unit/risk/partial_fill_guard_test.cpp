@@ -5,8 +5,6 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <utility>
-#include <vector>
 
 namespace {
 
@@ -16,7 +14,6 @@ using trading_engine::risk::RiskDecisionType;
 using trading_engine::risk::RiskPolicySnapshot;
 using trading_engine::signal::IntentStatus;
 using trading_engine::signal::OpportunityIntent;
-using trading_engine::state::MarketStateSnapshot;
 
 [[noreturn]] void fail(const std::string& message) {
     throw std::runtime_error(message);
@@ -64,25 +61,29 @@ OpportunityIntent make_intent(std::uint16_t leg_count) {
     return intent;
 }
 
-CostRevalidationResult cost(std::int64_t risk_bundle_qty) {
+CostRevalidationResult cost(
+    std::int64_t risk_bundle_qty,
+    std::uint16_t leg_count,
+    std::int64_t requested_qty_lots,
+    std::int64_t executable_qty_lots
+) {
     CostRevalidationResult out;
     out.ok = true;
     out.risk_bundle_qty = risk_bundle_qty;
     out.risk_total_cost_tick = 100;
     out.rejection = RiskDecisionType::Approve;
-    return out;
-}
-
-MarketStateSnapshot snapshot(std::string asset_id, double ask_size) {
-    MarketStateSnapshot out;
-    out.entity_id = std::move(asset_id);
-    out.market_id = "market";
-    out.live = true;
-    out.has_ask = true;
-    out.ask_count = 1;
-    out.asks[0].price_tick = 10;
-    out.asks[0].size = ask_size;
-    out.usable_for_depth = true;
+    out.leg_count = leg_count;
+    for (std::uint16_t i = 0; i < leg_count; ++i) {
+        auto& leg = out.legs[i];
+        leg.asset_id = "asset-" + std::to_string(i);
+        leg.requested_qty_lots = requested_qty_lots;
+        leg.executable_qty_lots = executable_qty_lots;
+        leg.depth_margin_bps =
+            requested_qty_lots > 0
+                ? executable_qty_lots * 10'000 / requested_qty_lots
+                : 0;
+        leg.enough_depth = executable_qty_lots >= requested_qty_lots;
+    }
     return out;
 }
 
@@ -93,8 +94,7 @@ void PartialFillGuard_AllowsSingleLeg() {
 
     const auto result = PartialFillGuard{}.check(
         make_intent(1),
-        {snapshot("asset-0", 10.0)},
-        cost(1),
+        cost(1, 1, 10, 10),
         policy
     );
 
@@ -111,11 +111,11 @@ void PartialFillGuard_AllowsSingleLeg() {
 void PartialFillGuard_RejectsMultiLegBarelyEnoughDepth() {
     RiskPolicySnapshot policy;
     policy.min_depth_margin_ratio = 1.20;
+    policy.min_depth_margin_bps = 12'000;
 
     const auto result = PartialFillGuard{}.check(
         make_intent(2),
-        {snapshot("asset-0", 10.0), snapshot("asset-1", 10.0)},
-        cost(1),
+        cost(1, 2, 10, 10),
         policy
     );
 
@@ -137,11 +137,11 @@ void PartialFillGuard_RejectsMultiLegBarelyEnoughDepth() {
 void PartialFillGuard_UsesReservationQty() {
     RiskPolicySnapshot policy;
     policy.min_depth_margin_ratio = 1.20;
+    policy.min_depth_margin_bps = 12'000;
 
     const auto result = PartialFillGuard{}.check(
         make_intent(2),
-        {snapshot("asset-0", 60.0), snapshot("asset-1", 60.0)},
-        cost(5),
+        cost(5, 2, 50, 60),
         policy
     );
 
@@ -153,12 +153,12 @@ void PartialFillGuard_UsesReservationQty() {
 void PartialFillGuard_InterfaceHasUnhedgedLossPlaceholder() {
     RiskPolicySnapshot policy;
     policy.min_depth_margin_ratio = 1.0;
+    policy.min_depth_margin_bps = 10'000;
     policy.max_unhedged_loss_tick = 777;
 
     const auto result = PartialFillGuard{}.check(
         make_intent(2),
-        {snapshot("asset-0", 10.0), snapshot("asset-1", 10.0)},
-        cost(1),
+        cost(1, 2, 10, 10),
         policy
     );
 

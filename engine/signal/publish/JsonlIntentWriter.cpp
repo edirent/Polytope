@@ -137,6 +137,7 @@ bool JsonlIntentWriter::write(const OpportunityIntent& intent) {
     write_u64_field(output, "bundle_hash", intent.bundle_hash);
     write_u64_field(output, "snapshot_version", intent.snapshot_version);
     write_i64_field(output, "bundle_qty", intent.bundle_qty);
+    write_i64_field(output, "original_bundle_qty", intent.original_bundle_qty);
     write_i64_field(output, "unit_edge_tick", intent.unit_edge_tick);
     write_i64_field(output, "total_edge_tick", intent.total_edge_tick);
     write_i64_field(output, "edge_bps", intent.edge_bps);
@@ -144,6 +145,11 @@ bool JsonlIntentWriter::write(const OpportunityIntent& intent) {
         output,
         "slippage_buffer_tick",
         intent.slippage_buffer_tick
+    );
+    write_i64_field(
+        output,
+        "max_leg_slippage_tick",
+        intent.max_leg_slippage_tick
     );
     write_u64_field(output, "created_ts_ns", intent.created_ts_ns);
     write_u64_field(output, "expires_at_ns", intent.expires_at_ns);
@@ -191,6 +197,13 @@ bool JsonlIntentWriter::write(const OpportunityIntent& intent) {
         write_i64_field(output, "estimated_vwap_tick", leg.estimated_vwap_tick);
         write_i64_field(output, "worst_price_tick", leg.worst_price_tick);
         write_i64_field(output, "estimated_cost_tick", leg.estimated_cost_tick);
+        write_i64_field(output, "requested_qty_lots", leg.requested_qty_lots);
+        write_i64_field(
+            output,
+            "executable_qty_lots",
+            leg.executable_qty_lots
+        );
+        write_i64_field(output, "depth_margin_bps", leg.depth_margin_bps);
         write_bool_field(output, "enough_depth", leg.enough_depth);
         output << '}';
     }

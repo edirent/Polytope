@@ -1,6 +1,7 @@
 #include "state/EntityStateStore.h"
 #include "state/StateHasher.h"
 
+#include <chrono>
 #include <cmath>
 #include <utility>
 
@@ -9,6 +10,99 @@ namespace trading_engine::state {
 namespace {
 
 constexpr double kBboEpsilon = 1e-12;
+constexpr std::uint64_t kCheapHashOffset = 14695981039346656037ULL;
+constexpr std::uint64_t kCheapHashPrime = 1099511628211ULL;
+
+std::uint64_t now_ns() {
+    const auto now = std::chrono::steady_clock::now();
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now.time_since_epoch()
+        ).count()
+    );
+}
+
+std::uint64_t checked_sub(
+    std::uint64_t end_ns,
+    std::uint64_t start_ns
+) noexcept {
+    return end_ns >= start_ns ? end_ns - start_ns : 0;
+}
+
+StateRuntimeConfig legacy_replay_full_config() noexcept {
+    StateRuntimeConfig config;
+    config.hash_mode = StateHashMode::ReplayFull;
+    config.publish_on_noop = true;
+    config.publish_on_heartbeat = true;
+    config.compute_full_hash_on_publish = true;
+    return config;
+}
+
+void cheap_mix_byte(std::uint64_t& hash, std::uint8_t value) noexcept {
+    hash ^= value;
+    hash *= kCheapHashPrime;
+}
+
+void cheap_mix_u64(std::uint64_t& hash, std::uint64_t value) noexcept {
+    for (int i = 0; i < 8; ++i) {
+        cheap_mix_byte(
+            hash,
+            static_cast<std::uint8_t>((value >> (i * 8)) & 0xffU)
+        );
+    }
+}
+
+void cheap_mix_string(std::uint64_t& hash, const std::string& value) noexcept {
+    cheap_mix_u64(hash, static_cast<std::uint64_t>(value.size()));
+    for (const unsigned char ch : value) {
+        cheap_mix_byte(hash, ch);
+    }
+}
+
+std::uint64_t status_flags_for(const EntityState* entity) noexcept {
+    if (!entity) {
+        return 0;
+    }
+
+    std::uint64_t flags = 0;
+    flags |= static_cast<std::uint64_t>(entity->status) & 0xffU;
+    flags |= entity->initialized ? (1ULL << 8U) : 0ULL;
+    flags |= entity->recovering ? (1ULL << 9U) : 0ULL;
+    flags |= entity->inconsistent ? (1ULL << 10U) : 0ULL;
+    flags |= entity->closed ? (1ULL << 11U) : 0ULL;
+    flags |= entity->book.crossed ? (1ULL << 12U) : 0ULL;
+    flags |= entity->book.resolved ? (1ULL << 13U) : 0ULL;
+    return flags;
+}
+
+std::uint64_t cheap_snapshot_fingerprint(
+    const std::string& entity_id,
+    std::uint64_t book_version,
+    std::uint64_t chain_version,
+    std::uint64_t quality_version,
+    std::uint64_t last_ws_packet_id,
+    std::uint64_t last_chain_block,
+    std::uint64_t status_flags
+) noexcept {
+    std::uint64_t hash = kCheapHashOffset;
+    cheap_mix_string(hash, entity_id);
+    cheap_mix_u64(hash, book_version);
+    cheap_mix_u64(hash, chain_version);
+    cheap_mix_u64(hash, quality_version);
+    cheap_mix_u64(hash, last_ws_packet_id);
+    cheap_mix_u64(hash, last_chain_block);
+    cheap_mix_u64(hash, status_flags);
+    return hash;
+}
+
+StateMutationKind mutation_kind_for(StateApplyCode code) noexcept {
+    switch (code) {
+        case StateApplyCode::IgnoredHeartbeat:
+            return StateMutationKind::Heartbeat;
+        default:
+            return StateMutationKind::None;
+    }
+}
 
 /**
  * @brief Return true if price is valid for Polymarket probability-style prices.
@@ -54,6 +148,46 @@ void apply_level(MapT& side, double price, double size) {
 }
 
 }  // namespace
+
+StateApplyResult mark_book_snapshot(StateApplyResult result) {
+    result.mutation.state_changed = result.state_changed;
+    result.mutation.book_changed = result.state_changed;
+    result.mutation.publish_required = result.state_changed;
+    result.mutation.kind = result.state_changed
+        ? StateMutationKind::BookSnapshot
+        : StateMutationKind::None;
+    return result;
+}
+
+StateApplyResult mark_book_delta(StateApplyResult result) {
+    result.mutation.state_changed = result.state_changed;
+    result.mutation.book_changed = result.state_changed;
+    result.mutation.publish_required = result.state_changed;
+    result.mutation.kind = result.state_changed
+        ? StateMutationKind::BookDelta
+        : StateMutationKind::None;
+    return result;
+}
+
+StateApplyResult mark_lifecycle(StateApplyResult result) {
+    result.mutation.state_changed = result.state_changed;
+    result.mutation.lifecycle_changed = result.state_changed;
+    result.mutation.publish_required = result.state_changed;
+    result.mutation.kind = result.state_changed
+        ? StateMutationKind::Lifecycle
+        : StateMutationKind::None;
+    return result;
+}
+
+EntityStateStore::EntityStateStore()
+    : EntityStateStore(legacy_replay_full_config()) {}
+
+EntityStateStore::EntityStateStore(StateRuntimeConfig runtime_config)
+    : runtime_config_(runtime_config) {}
+
+const StateRuntimeConfig& EntityStateStore::runtime_config() const noexcept {
+    return runtime_config_;
+}
 
 bool StateApplyResult::ok() const noexcept {
     switch (code) {
@@ -105,6 +239,7 @@ StateApplyResult EntityStateStore::apply(const NormalizedEvent& event) {
 
 void EntityStateStore::reset() {
     entities_.clear();
+    hash_cache_.clear();
 
     events_seen_ = 0;
     snapshots_applied_ = 0;
@@ -157,17 +292,22 @@ std::size_t EntityStateStore::entity_count() const noexcept {
 
 std::uint64_t EntityStateStore::state_hash(
     const std::string& entity_id
-) const noexcept {
-    const auto* entity = get(entity_id);
-
-    if (!entity) {
-        return 0;
-    }
-
-    return StateHasher::hash_entity(*entity);
+) const {
+    return hash_cache_.entity_hash(entity_id, *this);
 }
 
-std::uint64_t EntityStateStore::global_hash() const noexcept {
+std::uint64_t EntityStateStore::global_hash() const {
+    return hash_cache_.global_hash(*this);
+}
+
+std::uint64_t EntityStateStore::debug_recomputed_state_hash(
+    const std::string& entity_id
+) const noexcept {
+    const auto* entity = get(entity_id);
+    return entity ? StateHasher::hash_entity(*entity) : 0;
+}
+
+std::uint64_t EntityStateStore::debug_recomputed_global_hash() const noexcept {
     return StateHasher::hash_entity_map(entities_);
 }
 
@@ -289,20 +429,20 @@ StateApplyResult EntityStateStore::apply_snapshot(
         ++entity.error_count;
         ++errors_;
 
-        return make_result(
+        return mark_book_snapshot(make_result(
             StateApplyCode::InvalidValue,
             entity_id,
             "snapshot contained invalid price/size/tick values",
             true
-        );
+        ));
     }
 
-    return make_result(
+    return mark_book_snapshot(make_result(
         StateApplyCode::Applied,
         entity_id,
         "snapshot applied",
         true
-    );
+    ));
 }
 
 StateApplyResult EntityStateStore::apply_delta(
@@ -312,12 +452,12 @@ StateApplyResult EntityStateStore::apply_delta(
 
     if (entity_id.empty()) {
         ++errors_;
-        return make_result(
+        return mark_book_delta(make_result(
             StateApplyCode::MissingEntityId,
             {},
             "delta event missing entity id",
             false
-        );
+        ));
     }
 
     EntityState& entity = get_or_create_entity(entity_id);
@@ -325,12 +465,12 @@ StateApplyResult EntityStateStore::apply_delta(
     if (entity.closed) {
         ++entity.ignored_count;
 
-        return make_result(
+        return mark_book_delta(make_result(
             StateApplyCode::ClosedEntityIgnored,
             entity_id,
             "delta ignored because entity is closed",
             false
-        );
+        ));
     }
 
     if (!entity.initialized) {
@@ -342,12 +482,12 @@ StateApplyResult EntityStateStore::apply_delta(
 
         mark_entity_packet(entity, event);
 
-        return make_result(
+        return mark_book_delta(make_result(
             StateApplyCode::DeltaBeforeSnapshot,
             entity_id,
             "delta arrived before snapshot",
             true
-        );
+        ));
     }
 
     bool changed = false;
@@ -398,39 +538,39 @@ StateApplyResult EntityStateStore::apply_delta(
         ++errors_;
 
         if (bad_side_seen) {
-            return make_result(
+            return mark_book_delta(make_result(
                 StateApplyCode::UnknownSide,
                 entity_id,
                 "delta contained unknown side",
                 changed
-            );
+            ));
         }
 
-        return make_result(
+        return mark_book_delta(make_result(
             StateApplyCode::InvalidValue,
             entity_id,
             "delta contained invalid price or size",
             changed
-        );
+        ));
     }
 
     if (!changed) {
         ++entity.ignored_count;
 
-        return make_result(
+        return mark_book_delta(make_result(
             StateApplyCode::Noop,
             entity_id,
             "delta had no valid changes",
             false
-        );
+        ));
     }
 
-    return make_result(
+    return mark_book_delta(make_result(
         StateApplyCode::Applied,
         entity_id,
         "delta applied",
         true
-    );
+    ));
 }
 
 StateApplyResult EntityStateStore::apply_status_change(
@@ -440,12 +580,12 @@ StateApplyResult EntityStateStore::apply_status_change(
 
     if (entity_id.empty()) {
         ++errors_;
-        return make_result(
+        return mark_book_delta(make_result(
             StateApplyCode::MissingEntityId,
             {},
             "status change missing entity id",
             false
-        );
+        ));
     }
 
     EntityState& entity = get_or_create_entity(entity_id);
@@ -453,12 +593,12 @@ StateApplyResult EntityStateStore::apply_status_change(
     if (entity.closed) {
         ++entity.ignored_count;
 
-        return make_result(
+        return mark_book_delta(make_result(
             StateApplyCode::ClosedEntityIgnored,
             entity_id,
             "status change ignored because entity is closed",
             false
-        );
+        ));
     }
 
     bool changed = false;
@@ -521,20 +661,20 @@ StateApplyResult EntityStateStore::apply_status_change(
         ++entity.error_count;
         ++errors_;
 
-        return make_result(
+        return mark_book_delta(make_result(
             StateApplyCode::InvalidValue,
             entity_id,
             "status change contained invalid values",
             changed
-        );
+        ));
     }
 
-    return make_result(
+    return mark_book_delta(make_result(
         changed ? StateApplyCode::Applied : StateApplyCode::Noop,
         entity_id,
         changed ? "status change applied" : "status change had no state fields",
         changed
-    );
+    ));
 }
 
 StateApplyResult EntityStateStore::apply_lifecycle_event(
@@ -544,12 +684,12 @@ StateApplyResult EntityStateStore::apply_lifecycle_event(
 
     if (entity_id.empty()) {
         ++errors_;
-        return make_result(
+        return mark_lifecycle(make_result(
             StateApplyCode::MissingEntityId,
             {},
             "lifecycle event missing entity id",
             false
-        );
+        ));
     }
 
     EntityState& entity = get_or_create_entity(entity_id);
@@ -572,12 +712,12 @@ StateApplyResult EntityStateStore::apply_lifecycle_event(
 
     mark_entity_packet(entity, event);
 
-    return make_result(
+    return mark_lifecycle(make_result(
         StateApplyCode::Applied,
         entity_id,
         "lifecycle event applied",
         true
-    );
+    ));
 }
 
 StateApplyResult EntityStateStore::apply_trade_event(
@@ -711,21 +851,70 @@ StateApplyResult EntityStateStore::make_result(
     std::string entity_id,
     std::string message,
     bool state_changed
-) const noexcept {
+) const {
+    const auto make_result_start_ns = now_ns();
     StateApplyResult result;
+    const auto finish = [&]() {
+        result.make_result_ns = checked_sub(now_ns(), make_result_start_ns);
+        return result;
+    };
 
     result.code = code;
     result.entity_id = std::move(entity_id);
     result.message = std::move(message);
     result.state_changed = state_changed;
-
+    result.mutation.state_changed = state_changed;
+    result.mutation.heartbeat_seen = code == StateApplyCode::IgnoredHeartbeat;
+    result.mutation.publish_required = false;
+    result.mutation.kind = mutation_kind_for(code);
+    std::uint64_t last_ws_packet_id = 0;
+    std::uint64_t status_flags = 0;
     if (!result.entity_id.empty()) {
-        result.entity_hash = state_hash(result.entity_id);
+        const auto* entity = get(result.entity_id);
+        if (entity) {
+            result.book_version = entity->last_packet_id;
+            last_ws_packet_id = entity->last_packet_id;
+            status_flags = status_flags_for(entity);
+        }
     }
 
-    result.global_hash = global_hash();
+    result.snapshot_version_hash = cheap_snapshot_fingerprint(
+        result.entity_id,
+        result.book_version,
+        result.chain_version,
+        result.quality_version,
+        last_ws_packet_id,
+        0,
+        status_flags
+    );
+    result.cheap_fingerprint = result.snapshot_version_hash;
 
-    return result;
+    if (result.mutation.state_changed && !result.entity_id.empty()) {
+        hash_cache_.mark_dirty(result.entity_id);
+    }
+
+    if (!result.mutation.state_changed ||
+        runtime_config_.hash_mode == StateHashMode::HotPathLight) {
+        return finish();
+    }
+
+    (void)hash_cache_.take_access_stats();
+    if (!result.entity_id.empty()) {
+        const auto hash_start_ns = now_ns();
+        result.entity_hash = state_hash(result.entity_id);
+        result.hash_entity_ns = checked_sub(now_ns(), hash_start_ns);
+    }
+
+    const auto global_hash_start_ns = now_ns();
+    result.global_hash = global_hash();
+    result.hash_global_ns = checked_sub(now_ns(), global_hash_start_ns);
+    result.full_hash_computed = true;
+
+    const auto cache_stats = hash_cache_.take_access_stats();
+    result.hash_cache_hits = cache_stats.hits;
+    result.hash_cache_misses = cache_stats.misses;
+
+    return finish();
 }
 
 std::string to_string(EntityStatus status) {

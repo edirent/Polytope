@@ -37,10 +37,12 @@ void OpportunityIntent_DefaultLifecycleFieldsSafe() {
 
     expect_equal(intent.status, IntentStatus::CandidateOnly, "status");
     expect_equal(intent.bundle_qty, 0LL, "bundle_qty");
+    expect_equal(intent.original_bundle_qty, 0LL, "original_bundle_qty");
     expect_equal(intent.unit_edge_tick, 0LL, "unit_edge_tick");
     expect_equal(intent.total_edge_tick, 0LL, "total_edge_tick");
     expect_equal(intent.edge_bps, 0LL, "edge_bps");
     expect_equal(intent.slippage_buffer_tick, 0LL, "slippage_buffer_tick");
+    expect_equal(intent.max_leg_slippage_tick, 0LL, "max_leg_slippage_tick");
     expect_equal(intent.created_ts_ns, 0ULL, "created_ts_ns");
     expect_equal(intent.expires_at_ns, 0ULL, "expires_at_ns");
 }

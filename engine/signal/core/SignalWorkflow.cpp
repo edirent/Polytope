@@ -107,10 +107,12 @@ std::uint64_t hash_published_intents(
         hash_u64(&hash, intent.bundle_hash);
         hash_u64(&hash, intent.snapshot_version);
         hash_i64(&hash, intent.bundle_qty);
+        hash_i64(&hash, intent.original_bundle_qty);
         hash_i64(&hash, intent.unit_edge_tick);
         hash_i64(&hash, intent.total_edge_tick);
         hash_i64(&hash, intent.edge_bps);
         hash_i64(&hash, intent.slippage_buffer_tick);
+        hash_i64(&hash, intent.max_leg_slippage_tick);
         hash_u64(&hash, intent.created_ts_ns);
         hash_u64(&hash, intent.expires_at_ns);
         hash_u64(&hash, intent.leg_count);

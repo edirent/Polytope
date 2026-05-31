@@ -35,6 +35,14 @@ struct MarketStateSnapshot {
     std::array<PriceLevel, kMaxSnapshotDepth> asks{};
 
     std::string winning_asset_id;
+    std::uint64_t snapshot_version_hash{0};
+
+    /**
+     * @brief Legacy deterministic book hash.
+     *
+     * HotPathLight may leave this as 0 or a cached value. Use
+     * snapshot_version_hash for Signal/Risk evidence binding.
+     */
     std::uint64_t state_hash{0};
 
     bool has_confirmed_trade{false};

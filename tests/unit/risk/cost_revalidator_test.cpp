@@ -12,8 +12,13 @@ namespace {
 using trading_engine::risk::CostRevalidator;
 using trading_engine::risk::RiskDecisionType;
 using trading_engine::risk::RiskPolicySnapshot;
+using trading_engine::risk::RiskStageTimings;
+using trading_engine::risk::RiskVWAPMode;
 using trading_engine::signal::OpportunityIntent;
 using trading_engine::state::MarketStateSnapshot;
+
+inline constexpr std::uint64_t kFnvOffset = 14695981039346656037ULL;
+inline constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 
 [[noreturn]] void fail(const std::string& message) {
     throw std::runtime_error(message);
@@ -42,6 +47,34 @@ void expect_equal(
     }
 }
 
+void mix_u64(std::uint64_t value, std::uint64_t* hash) noexcept {
+    for (std::uint8_t i = 0; i < 8; ++i) {
+        *hash ^= static_cast<std::uint8_t>((value >> (i * 8U)) & 0xffU);
+        *hash *= kFnvPrime;
+    }
+}
+
+void mix_string(const std::string& value, std::uint64_t* hash) noexcept {
+    for (const unsigned char c : value) {
+        *hash ^= c;
+        *hash *= kFnvPrime;
+    }
+}
+
+std::uint64_t combined_hash(const MarketStateSnapshot& snapshot) {
+    std::uint64_t hash = kFnvOffset;
+    mix_string(snapshot.entity_id, &hash);
+    mix_u64(snapshot.version, &hash);
+    mix_u64(
+        snapshot.snapshot_version_hash != 0
+            ? snapshot.snapshot_version_hash
+            : snapshot.state_hash,
+        &hash
+    );
+    mix_u64(snapshot.last_book_update_ns, &hash);
+    return hash;
+}
+
 MarketStateSnapshot snapshot(
     std::string asset_id,
     std::int64_t ask_price_tick,
@@ -52,6 +85,7 @@ MarketStateSnapshot snapshot(
     out.market_id = "market-1";
     out.version = 10;
     out.last_book_update_ns = 1'000;
+    out.snapshot_version_hash = 111;
     out.live = true;
     out.usable_for_depth = true;
     out.has_ask = true;
@@ -66,6 +100,7 @@ OpportunityIntent intent() {
     out.intent_id = 1;
     out.bundle_id = 2;
     out.bundle_qty = 10;
+    out.original_bundle_qty = 10;
     out.estimated_cost_tick = 1'000;
     out.estimated_fee_tick = 3;
     out.slippage_buffer_tick = 4;
@@ -74,6 +109,7 @@ OpportunityIntent intent() {
     out.legs[0].market_id = "market-1";
     out.legs[0].asset_id = "asset-1";
     out.legs[0].quantity_lots = 1;
+    out.legs[0].enough_depth = true;
     return out;
 }
 
@@ -100,6 +136,147 @@ void CostRevalidator_RecomputesVWAPFromLatestSnapshot() {
     expect_equal(result.fee_tick, 3LL, "fee");
     expect_equal(result.slippage_buffer_tick, 4LL, "slippage");
     expect_equal(result.latency_buffer_tick, 5LL, "latency");
+    expect_equal(result.leg_count, static_cast<std::uint16_t>(1), "leg count");
+    expect_equal(
+        result.legs[0].requested_qty_lots,
+        10LL,
+        "leg requested"
+    );
+    expect_equal(
+        result.legs[0].executable_qty_lots,
+        10LL,
+        "leg executable"
+    );
+    expect_equal(
+        result.legs[0].depth_margin_bps,
+        10'000LL,
+        "leg depth margin"
+    );
+    expect_true(result.legs[0].enough_depth, "leg enough depth");
+    expect_equal(
+        result.vwap_mode,
+        RiskVWAPMode::RecomputedFromSnapshot,
+        "mode"
+    );
+}
+
+void CostRevalidator_ReusesSignalSnapshotWhenSnapshotHashMatches() {
+    const auto latest = snapshot("asset-1", 120, 10.0);
+    auto in = intent();
+    in.snapshot_version_hash = combined_hash(latest);
+    in.expires_at_ns = 2'000;
+    in.estimated_cost_tick = 777;
+    in.max_leg_slippage_tick = 6;
+    in.legs[0].requested_qty_lots = 10;
+    in.legs[0].executable_qty_lots = 12;
+    in.legs[0].depth_margin_bps = 12'000;
+
+    RiskStageTimings timings;
+    const auto result = CostRevalidator{}.revalidate(
+        in,
+        std::vector<MarketStateSnapshot>{latest},
+        permissive_policy(),
+        1'500,
+        combined_hash(latest),
+        &timings
+    );
+
+    expect_true(result.ok, "ok");
+    expect_equal(result.risk_total_cost_tick, 777LL, "risk cost");
+    expect_equal(result.cost_drift_tick, 0LL, "cost drift");
+    expect_equal(result.risk_bundle_qty, 10LL, "bundle qty");
+    expect_equal(result.max_leg_slippage_tick, 6LL, "slippage");
+    expect_equal(result.leg_count, static_cast<std::uint16_t>(1), "leg count");
+    expect_equal(
+        result.legs[0].requested_qty_lots,
+        10LL,
+        "leg requested"
+    );
+    expect_equal(
+        result.legs[0].executable_qty_lots,
+        12LL,
+        "leg executable"
+    );
+    expect_equal(
+        result.legs[0].depth_margin_bps,
+        12'000LL,
+        "leg margin"
+    );
+    expect_equal(result.vwap_mode, RiskVWAPMode::ReuseSignalSnapshot, "mode");
+    expect_true(timings.vwap_revalidator_ns > 0, "vwap timing");
+}
+
+void CostRevalidator_ReusesPrecomputedSnapshotVersionHash() {
+    const auto latest = snapshot("asset-1", 120, 10.0);
+    auto in = intent();
+    in.snapshot_version_hash = combined_hash(latest);
+    in.expires_at_ns = 2'000;
+    in.estimated_cost_tick = 777;
+
+    const auto result = CostRevalidator{}.revalidate(
+        in,
+        std::vector<MarketStateSnapshot>{latest},
+        permissive_policy(),
+        1'500,
+        combined_hash(latest),
+        nullptr
+    );
+
+    expect_true(result.ok, "ok");
+    expect_equal(result.risk_total_cost_tick, 777LL, "risk cost");
+    expect_equal(result.cost_drift_tick, 0LL, "cost drift");
+    expect_equal(result.vwap_mode, RiskVWAPMode::ReuseSignalSnapshot, "mode");
+}
+
+void CostRevalidator_RecomputesWhenSnapshotHashDiffers() {
+    const auto latest = snapshot("asset-1", 120, 10.0);
+    auto in = intent();
+    in.snapshot_version_hash = combined_hash(latest) ^ 0x1234ULL;
+    in.expires_at_ns = 2'000;
+    in.estimated_cost_tick = 1'000;
+
+    const auto result = CostRevalidator{}.revalidate(
+        in,
+        std::vector<MarketStateSnapshot>{latest},
+        permissive_policy(),
+        1'500,
+        nullptr
+    );
+
+    expect_true(result.ok, "ok");
+    expect_equal(result.risk_total_cost_tick, 1'200LL, "risk cost");
+    expect_equal(
+        result.vwap_mode,
+        RiskVWAPMode::RecomputedFromSnapshot,
+        "mode"
+    );
+}
+
+void CostRevalidator_DoesNotReuseStaleSnapshot() {
+    const auto latest = snapshot("asset-1", 120, 10.0);
+    auto in = intent();
+    in.snapshot_version_hash = combined_hash(latest);
+    in.expires_at_ns = 3'000;
+    in.estimated_cost_tick = 777;
+    auto policy = permissive_policy();
+    policy.max_book_age_ns = 100;
+
+    const auto result = CostRevalidator{}.revalidate(
+        in,
+        std::vector<MarketStateSnapshot>{latest},
+        policy,
+        2'000,
+        combined_hash(latest),
+        nullptr
+    );
+
+    expect_true(result.ok, "ok");
+    expect_equal(result.risk_total_cost_tick, 1'200LL, "risk cost");
+    expect_equal(
+        result.vwap_mode,
+        RiskVWAPMode::RecomputedFromSnapshot,
+        "mode"
+    );
 }
 
 void CostRevalidator_RejectsInsufficientDepth() {
@@ -182,6 +359,22 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "CostRevalidator_RejectsInsufficientDepth",
             &CostRevalidator_RejectsInsufficientDepth
+        },
+        {
+            "CostRevalidator_ReusesSignalSnapshotWhenSnapshotHashMatches",
+            &CostRevalidator_ReusesSignalSnapshotWhenSnapshotHashMatches
+        },
+        {
+            "CostRevalidator_ReusesPrecomputedSnapshotVersionHash",
+            &CostRevalidator_ReusesPrecomputedSnapshotVersionHash
+        },
+        {
+            "CostRevalidator_RecomputesWhenSnapshotHashDiffers",
+            &CostRevalidator_RecomputesWhenSnapshotHashDiffers
+        },
+        {
+            "CostRevalidator_DoesNotReuseStaleSnapshot",
+            &CostRevalidator_DoesNotReuseStaleSnapshot
         },
         {
             "CostRevalidator_RejectsCostDriftTooHigh",

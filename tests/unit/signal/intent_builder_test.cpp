@@ -17,6 +17,7 @@ using trading_engine::signal::FillSimulationLeg;
 using trading_engine::signal::IntentBuildInput;
 using trading_engine::signal::IntentBuilder;
 using trading_engine::signal::IntentStatus;
+using trading_engine::signal::materialize_intent_strings;
 using trading_engine::signal::SnapshotReadResult;
 
 [[noreturn]] void fail(const std::string& message) {
@@ -70,6 +71,7 @@ CostResult cost() {
     out.bundle_qty = 5;
     out.total_cost_tick = 4'000'000;
     out.avg_cost_tick = 800'000;
+    out.max_leg_slippage_tick = 10'000;
     out.legs.push_back(FillSimulationLeg{
         .asset_id = "asset_yes",
         .requested_qty_lots = 1,
@@ -129,6 +131,14 @@ void IntentBuilder_FillsLifecycleFields() {
     expect_true(intent.intent_id != 0, "intent id");
 }
 
+void IntentBuilder_FillsCostEvidenceFields() {
+    const auto intent = IntentBuilder{}.build(input());
+
+    expect_equal(intent.bundle_qty, 5LL, "bundle qty");
+    expect_equal(intent.original_bundle_qty, 5LL, "original bundle qty");
+    expect_equal(intent.max_leg_slippage_tick, 10'000LL, "max slippage");
+}
+
 void IntentBuilder_FillsArtifactHashes() {
     const auto intent = IntentBuilder{}.build(input());
 
@@ -136,7 +146,7 @@ void IntentBuilder_FillsArtifactHashes() {
     expect_equal(intent.oracle_artifact_hash, 11ULL, "artifact hash");
     expect_equal(intent.constraint_hash, 22ULL, "constraint hash");
     expect_equal(intent.bundle_hash, 33ULL, "bundle hash");
-    expect_true(!intent.proof_ref.empty(), "proof ref");
+    expect_true(intent.proof_hash != 0, "proof hash");
 }
 
 void IntentBuilder_FillsSnapshotVersion() {
@@ -147,9 +157,17 @@ void IntentBuilder_FillsSnapshotVersion() {
 }
 
 void IntentBuilder_GeneratesStableIdempotencyKey() {
-    const auto first = IntentBuilder{}.build(input());
-    const auto second = IntentBuilder{}.build(input());
+    auto first = IntentBuilder{}.build(input());
+    auto second = IntentBuilder{}.build(input());
 
+    expect_true(first.idempotency_hash != 0, "idempotency hash");
+    expect_equal(
+        first.idempotency_hash,
+        second.idempotency_hash,
+        "idempotency hash stable"
+    );
+    materialize_intent_strings(&first);
+    materialize_intent_strings(&second);
     expect_true(!first.idempotency_key.empty(), "idempotency key");
     expect_equal(
         first.idempotency_key,
@@ -177,6 +195,10 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "IntentBuilder_FillsLifecycleFields",
             &IntentBuilder_FillsLifecycleFields
+        },
+        {
+            "IntentBuilder_FillsCostEvidenceFields",
+            &IntentBuilder_FillsCostEvidenceFields
         },
         {
             "IntentBuilder_FillsArtifactHashes",

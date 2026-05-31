@@ -2,6 +2,8 @@
 
 #include "engine/signal/public/OpportunityIntent.h"
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -42,7 +44,32 @@ struct CostResult {
 
     CostFailureReason failure_reason = CostFailureReason::None;
 
+    std::uint64_t price_vector_builder_ns = 0;
+    std::uint64_t vwap_precheck_ns = 0;
+
+    std::uint16_t fixed_leg_count = 0;
+    std::array<FillSimulationLeg, kMaxIntentLegs> fixed_legs{};
+
     std::vector<FillSimulationLeg> legs;
 };
+
+[[nodiscard]] inline std::uint16_t cost_leg_count(
+    const CostResult& cost
+) noexcept {
+    if (cost.fixed_leg_count != 0) {
+        return cost.fixed_leg_count;
+    }
+    return static_cast<std::uint16_t>(
+        std::min<std::size_t>(cost.legs.size(), kMaxIntentLegs)
+    );
+}
+
+[[nodiscard]] inline const FillSimulationLeg& cost_leg_at(
+    const CostResult& cost,
+    std::uint16_t index
+) noexcept {
+    return cost.fixed_leg_count != 0 ? cost.fixed_legs[index] :
+                                      cost.legs[index];
+}
 
 }  // namespace trading_engine::signal

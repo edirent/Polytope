@@ -13,6 +13,7 @@ add_library(engine_state
     core/MarketStateEventFilter.cpp
     core/MarketStateStore.cpp
     core/StateUniverse.cpp
+    hash/StateHashCache.cpp
     quality/BookQualityState.cpp
     quality/DataQualityGate.cpp
     quality/ReconciliationState.cpp

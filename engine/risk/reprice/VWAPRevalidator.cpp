@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <unordered_map>
 #include <utility>
 
 namespace trading_engine::risk {
@@ -82,6 +81,22 @@ namespace {
     }
     *total = static_cast<std::int64_t>(next);
     return true;
+}
+
+[[nodiscard]] std::int64_t depth_margin_bps(
+    std::int64_t executable_qty_lots,
+    std::int64_t requested_qty_lots
+) noexcept {
+    if (requested_qty_lots <= 0 || executable_qty_lots <= 0) {
+        return 0;
+    }
+    const auto value =
+        static_cast<__int128>(executable_qty_lots) * 10'000 /
+        static_cast<__int128>(requested_qty_lots);
+    if (value > std::numeric_limits<std::int64_t>::max()) {
+        return std::numeric_limits<std::int64_t>::max();
+    }
+    return static_cast<std::int64_t>(value);
 }
 
 struct LegReprice {
@@ -172,6 +187,14 @@ CostRevalidationResult VWAPRevalidator::reprice(
     const signal::OpportunityIntent& intent,
     const std::vector<state::MarketStateSnapshot>& snapshots
 ) const {
+    return reprice(intent, snapshots.data(), snapshots.size());
+}
+
+CostRevalidationResult VWAPRevalidator::reprice(
+    const signal::OpportunityIntent& intent,
+    const state::MarketStateSnapshot* snapshots,
+    std::size_t snapshot_count
+) const {
     if (intent.bundle_qty <= 0 || intent.leg_count == 0 ||
         intent.leg_count > signal::kMaxIntentLegs) {
         return reject(
@@ -180,16 +203,14 @@ CostRevalidationResult VWAPRevalidator::reprice(
         );
     }
 
-    std::unordered_map<std::string, const state::MarketStateSnapshot*> by_asset;
-    by_asset.reserve(snapshots.size());
-    for (const auto& snapshot : snapshots) {
-        by_asset.emplace(snapshot.entity_id, &snapshot);
-    }
-
     CostRevalidationResult result;
     result.ok = true;
     result.rejection = RiskDecisionType::Approve;
     result.risk_bundle_qty = std::numeric_limits<std::int64_t>::max();
+    result.leg_count = std::min<std::uint16_t>(
+        intent.leg_count,
+        kMaxRevalidatedLegCosts
+    );
 
     for (std::uint16_t i = 0; i < intent.leg_count; ++i) {
         const auto& leg = intent.legs[i];
@@ -206,8 +227,15 @@ CostRevalidationResult VWAPRevalidator::reprice(
             );
         }
 
-        const auto it = by_asset.find(leg.asset_id);
-        if (it == by_asset.end() || it->second == nullptr) {
+        const state::MarketStateSnapshot* snapshot = nullptr;
+        for (std::size_t snapshot_index = 0; snapshot_index < snapshot_count;
+             ++snapshot_index) {
+            if (snapshots[snapshot_index].entity_id == leg.asset_id) {
+                snapshot = &snapshots[snapshot_index];
+                break;
+            }
+        }
+        if (snapshot == nullptr) {
             return reject(
                 RiskDecisionType::RejectInsufficientDepth,
                 "missing latest snapshot"
@@ -229,11 +257,22 @@ CostRevalidationResult VWAPRevalidator::reprice(
         LegReprice leg_reprice;
         auto leg_result = reprice_buy_leg(
             leg,
-            *it->second,
+            *snapshot,
             planned_qty_lots,
             &leg_reprice
         );
+        auto& leg_cost = result.legs[i];
+        leg_cost.asset_id = leg.asset_id;
+        leg_cost.requested_qty_lots = planned_qty_lots;
+        leg_cost.executable_qty_lots = leg_reprice.executable_lots;
+        leg_cost.depth_margin_bps = depth_margin_bps(
+            leg_reprice.executable_lots,
+            planned_qty_lots
+        );
+        leg_cost.enough_depth = leg_reprice.executable_lots >= planned_qty_lots;
         if (!leg_result.ok) {
+            leg_result.leg_count = result.leg_count;
+            leg_result.legs = result.legs;
             leg_result.risk_bundle_qty =
                 leg.quantity_lots > 0
                     ? leg_reprice.executable_lots / leg.quantity_lots

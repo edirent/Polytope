@@ -39,7 +39,12 @@ void SignalEngine_PublishesOpportunityWithLifecycleFields() {
     const auto& intent = harness.publisher.intents()[0];
     expect_equal(intent.status, IntentStatus::PaperOpportunity, "status");
     expect_equal(intent.created_ts_ns, scan_context.now_monotonic_ns, "created");
-    expect_equal(intent.expires_at_ns, scan_context.now_monotonic_ns, "expires");
+    expect_equal(
+        intent.expires_at_ns,
+        scan_context.now_monotonic_ns + harness.config.intent_ttl_ns,
+        "expires"
+    );
+    expect_true(intent.idempotency_hash != 0, "idempotency hash");
     expect_true(!intent.idempotency_key.empty(), "idempotency key");
     expect_true(!intent.proof_ref.empty(), "proof ref");
     expect_true(intent.oracle_artifact_hash != 0, "artifact hash");

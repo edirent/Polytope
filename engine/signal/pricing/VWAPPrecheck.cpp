@@ -3,9 +3,12 @@
 #include "engine/signal/pricing/PriceVectorBuilder.h"
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <vector>
 
 namespace trading_engine::signal {
@@ -16,6 +19,16 @@ namespace {
     CostResult result;
     result.failure_reason = reason;
     return result;
+}
+
+[[nodiscard]] std::uint64_t elapsed_ns(
+    std::chrono::steady_clock::time_point start
+) noexcept {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start
+        ).count()
+    );
 }
 
 [[nodiscard]] std::int64_t level_size_lots(
@@ -52,6 +65,18 @@ struct LegCapacity {
     FillSimulationLeg leg;
     std::int64_t best_price_tick = 0;
 };
+
+[[nodiscard]] const MarketStateSnapshot* snapshot_for_asset(
+    const SnapshotBatchReadResult& snapshots,
+    const std::string& asset_id
+) noexcept {
+    for (std::uint16_t i = 0; i < snapshots.snapshot_count; ++i) {
+        if (snapshots.snapshots[i].entity_id == asset_id) {
+            return &snapshots.snapshots[i];
+        }
+    }
+    return nullptr;
+}
 
 [[nodiscard]] bool checked_add_i64(
     std::int64_t value,
@@ -140,6 +165,50 @@ struct LegCapacity {
     return CostFailureReason::None;
 }
 
+[[nodiscard]] CostFailureReason calculate_buy_capacity(
+    const std::string& asset_id,
+    std::int64_t target_qty_lots,
+    ExecutableBookSide executable_side,
+    const MarketStateSnapshot* snapshot,
+    LegCapacity* out
+) {
+    if (target_qty_lots <= 0) {
+        return CostFailureReason::InvalidQuantity;
+    }
+    if (executable_side != ExecutableBookSide::Asks || !snapshot) {
+        return CostFailureReason::InvalidLeg;
+    }
+    if (!snapshot->has_ask || snapshot->ask_count == 0) {
+        return CostFailureReason::MissingBookSide;
+    }
+
+    out->leg.asset_id = asset_id;
+    out->leg.requested_qty_lots = target_qty_lots;
+
+    const auto level_count = std::min<std::uint32_t>(
+        snapshot->ask_count,
+        trading_engine::state::kMaxSnapshotDepth
+    );
+
+    for (std::uint32_t i = 0; i < level_count; ++i) {
+        const auto& level = snapshot->asks[i];
+        const auto available = level_size_lots(level);
+        if (level.price_tick <= 0 || available <= 0) {
+            continue;
+        }
+        if (out->best_price_tick == 0) {
+            out->best_price_tick = level.price_tick;
+        }
+        if (!checked_add_i64(available, &out->leg.executable_qty_lots)) {
+            return CostFailureReason::InvalidLeg;
+        }
+    }
+
+    out->leg.enough_depth =
+        out->leg.executable_qty_lots >= out->leg.requested_qty_lots;
+    return CostFailureReason::None;
+}
+
 [[nodiscard]] CostFailureReason price_buy_leg_for_quantity(
     const PriceLeg& leg,
     std::int64_t quantity_lots,
@@ -197,16 +266,76 @@ struct LegCapacity {
     return CostFailureReason::None;
 }
 
+[[nodiscard]] CostFailureReason price_buy_leg_for_quantity(
+    const std::string& asset_id,
+    const MarketStateSnapshot* snapshot,
+    std::int64_t quantity_lots,
+    FillSimulationLeg* out
+) {
+    if (quantity_lots <= 0) {
+        return CostFailureReason::InvalidQuantity;
+    }
+    if (!snapshot) {
+        return CostFailureReason::InvalidLeg;
+    }
+
+    const auto level_count = std::min<std::uint32_t>(
+        snapshot->ask_count,
+        trading_engine::state::kMaxSnapshotDepth
+    );
+
+    std::int64_t remaining = quantity_lots;
+    std::int64_t leg_cost = 0;
+    std::int64_t worst_price_tick = 0;
+    for (std::uint32_t i = 0; i < level_count && remaining > 0; ++i) {
+        const auto& level = snapshot->asks[i];
+        const auto available = level_size_lots(level);
+        if (level.price_tick <= 0 || available <= 0) {
+            continue;
+        }
+
+        const auto take = std::min(remaining, available);
+        if (!checked_add_cost(level.price_tick, take, &leg_cost)) {
+            return CostFailureReason::InvalidLeg;
+        }
+        worst_price_tick = std::max(worst_price_tick, level.price_tick);
+        remaining -= take;
+    }
+
+    if (remaining > 0) {
+        return CostFailureReason::InsufficientDepth;
+    }
+
+    out->asset_id = asset_id;
+    out->total_cost_tick = leg_cost;
+    out->vwap_price_tick = leg_cost / quantity_lots;
+    out->worst_price_tick = worst_price_tick;
+    out->enough_depth = true;
+    out->book_age_ns = 0;
+    return CostFailureReason::None;
+}
+
 }  // namespace
 
 CostResult VWAPPrecheck::price_bundle(
     const CandidateBundle& bundle,
     const std::vector<MarketStateSnapshot>& snapshots
 ) const {
+    const auto vector_start = std::chrono::steady_clock::now();
     const auto vector_result = build_price_vector(bundle, snapshots);
+    const auto vector_ns = elapsed_ns(vector_start);
     if (!vector_result.ok) {
-        return failure(vector_result.failure_reason);
+        auto result = failure(vector_result.failure_reason);
+        result.price_vector_builder_ns = vector_ns;
+        return result;
     }
+
+    const auto vwap_start = std::chrono::steady_clock::now();
+    auto finish = [&](CostResult result) {
+        result.price_vector_builder_ns = vector_ns;
+        result.vwap_precheck_ns = elapsed_ns(vwap_start);
+        return result;
+    };
 
     CostResult result;
     std::vector<LegCapacity> capacities;
@@ -221,7 +350,7 @@ CostResult VWAPPrecheck::price_bundle(
         if (reason != CostFailureReason::None) {
             result.failure_reason = reason;
             result.legs.push_back(capacity.leg);
-            return result;
+            return finish(std::move(result));
         }
         result.legs.push_back(capacity.leg);
         capacities.push_back(capacity);
@@ -232,7 +361,7 @@ CostResult VWAPPrecheck::price_bundle(
         if (!leg.enough_depth || leg.requested_qty_lots <= 0) {
             result.failure_reason = CostFailureReason::InsufficientDepth;
             result.executable = false;
-            return result;
+            return finish(std::move(result));
         }
         result.bundle_qty = std::min(
             result.bundle_qty,
@@ -244,7 +373,7 @@ CostResult VWAPPrecheck::price_bundle(
         result.bundle_qty == std::numeric_limits<std::int64_t>::max()) {
         result.failure_reason = CostFailureReason::InsufficientDepth;
         result.executable = false;
-        return result;
+        return finish(std::move(result));
     }
 
     std::int64_t total_bundle_lots = 0;
@@ -257,7 +386,7 @@ CostResult VWAPPrecheck::price_bundle(
                 result.bundle_qty,
                 &planned_qty_lots
             )) {
-            return failure(CostFailureReason::InvalidQuantity);
+            return finish(failure(CostFailureReason::InvalidQuantity));
         }
 
         auto priced = result.legs[i];
@@ -270,7 +399,7 @@ CostResult VWAPPrecheck::price_bundle(
             result.failure_reason = reason;
             result.executable = false;
             result.legs[i] = priced;
-            return result;
+            return finish(std::move(result));
         }
 
         result.max_leg_slippage_tick = std::max(
@@ -278,16 +407,16 @@ CostResult VWAPPrecheck::price_bundle(
             priced.worst_price_tick - capacities[i].best_price_tick
         );
         if (!checked_add_i64(priced.total_cost_tick, &result.total_cost_tick)) {
-            return failure(CostFailureReason::InvalidLeg);
+            return finish(failure(CostFailureReason::InvalidLeg));
         }
         if (!checked_add_i64(planned_qty_lots, &total_bundle_lots)) {
-            return failure(CostFailureReason::InvalidQuantity);
+            return finish(failure(CostFailureReason::InvalidQuantity));
         }
         result.legs[i] = priced;
     }
 
     if (total_bundle_lots <= 0) {
-        return failure(CostFailureReason::InvalidQuantity);
+        return finish(failure(CostFailureReason::InvalidQuantity));
     }
 
     result.avg_cost_tick = ceil_div_positive(
@@ -296,7 +425,125 @@ CostResult VWAPPrecheck::price_bundle(
     );
     result.executable = true;
     result.failure_reason = CostFailureReason::None;
-    return result;
+    return finish(std::move(result));
+}
+
+CostResult VWAPPrecheck::price_runtime_plan(
+    const BundleRuntimePlan& plan,
+    const SnapshotBatchReadResult& snapshots
+) const {
+    const auto vwap_start = std::chrono::steady_clock::now();
+    auto finish = [&](CostResult result) {
+        result.vwap_precheck_ns = elapsed_ns(vwap_start);
+        return result;
+    };
+
+    if (!plan.bundle || plan.leg_count == 0 ||
+        plan.leg_count > kMaxIntentLegs || !snapshots.ok) {
+        return finish(failure(CostFailureReason::InvalidLeg));
+    }
+
+    CostResult result;
+    std::array<LegCapacity, kMaxIntentLegs> capacities{};
+    std::array<const MarketStateSnapshot*, kMaxIntentLegs> leg_snapshots{};
+
+    for (std::uint16_t i = 0; i < plan.leg_count; ++i) {
+        if (!plan.asset_ids[i]) {
+            return finish(failure(CostFailureReason::InvalidLeg));
+        }
+
+        const auto* snapshot = snapshot_for_asset(
+            snapshots,
+            *plan.asset_ids[i]
+        );
+        if (!snapshot) {
+            return finish(failure(CostFailureReason::MissingSnapshot));
+        }
+        leg_snapshots[i] = snapshot;
+
+        const auto reason = calculate_buy_capacity(
+            *plan.asset_ids[i],
+            plan.ratio_qty_lots[i],
+            plan.executable_sides[i],
+            snapshot,
+            &capacities[i]
+        );
+        result.fixed_legs[i] = capacities[i].leg;
+        result.fixed_leg_count = static_cast<std::uint16_t>(i + 1U);
+        if (reason != CostFailureReason::None) {
+            result.failure_reason = reason;
+            return finish(std::move(result));
+        }
+    }
+
+    result.bundle_qty = std::numeric_limits<std::int64_t>::max();
+    for (std::uint16_t i = 0; i < plan.leg_count; ++i) {
+        const auto& leg = result.fixed_legs[i];
+        if (!leg.enough_depth || leg.requested_qty_lots <= 0) {
+            result.failure_reason = CostFailureReason::InsufficientDepth;
+            return finish(std::move(result));
+        }
+        result.bundle_qty = std::min(
+            result.bundle_qty,
+            leg.executable_qty_lots / leg.requested_qty_lots
+        );
+    }
+
+    if (result.bundle_qty <= 0 ||
+        result.bundle_qty == std::numeric_limits<std::int64_t>::max()) {
+        result.failure_reason = CostFailureReason::InsufficientDepth;
+        return finish(std::move(result));
+    }
+
+    std::int64_t total_bundle_lots = 0;
+    for (std::uint16_t i = 0; i < plan.leg_count; ++i) {
+        std::int64_t planned_qty_lots = 0;
+        if (!checked_mul_i64(
+                plan.ratio_qty_lots[i],
+                result.bundle_qty,
+                &planned_qty_lots
+            )) {
+            return finish(failure(CostFailureReason::InvalidQuantity));
+        }
+
+        const auto* snapshot = leg_snapshots[i];
+        auto priced = result.fixed_legs[i];
+        const auto reason = price_buy_leg_for_quantity(
+            *plan.asset_ids[i],
+            snapshot,
+            planned_qty_lots,
+            &priced
+        );
+        if (reason != CostFailureReason::None) {
+            result.failure_reason = reason;
+            result.fixed_legs[i] = priced;
+            return finish(std::move(result));
+        }
+
+        result.max_leg_slippage_tick = std::max(
+            result.max_leg_slippage_tick,
+            priced.worst_price_tick - capacities[i].best_price_tick
+        );
+        if (!checked_add_i64(priced.total_cost_tick, &result.total_cost_tick)) {
+            return finish(failure(CostFailureReason::InvalidLeg));
+        }
+        if (!checked_add_i64(planned_qty_lots, &total_bundle_lots)) {
+            return finish(failure(CostFailureReason::InvalidQuantity));
+        }
+        result.fixed_legs[i] = priced;
+    }
+
+    if (total_bundle_lots <= 0) {
+        return finish(failure(CostFailureReason::InvalidQuantity));
+    }
+
+    result.avg_cost_tick = ceil_div_positive(
+        result.total_cost_tick,
+        result.bundle_qty
+    );
+    result.executable = true;
+    result.failure_reason = CostFailureReason::None;
+    return finish(std::move(result));
 }
 
 }  // namespace trading_engine::signal

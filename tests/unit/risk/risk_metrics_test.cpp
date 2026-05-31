@@ -47,7 +47,19 @@ void RiskMetrics_DefaultCountersZero() {
     expect_equal(metrics.reservation_created, 0ULL, "reservation_created");
     expect_equal(metrics.reservation_expired, 0ULL, "reservation_expired");
     expect_equal(metrics.reservation_released, 0ULL, "reservation_released");
+    expect_equal(
+        metrics.vwap_reused_signal_cost,
+        0ULL,
+        "vwap_reused_signal_cost"
+    );
+    expect_equal(
+        metrics.vwap_reused_signal_snapshot,
+        0ULL,
+        "vwap_reused_signal_snapshot"
+    );
     expect_equal(metrics.vwap_recomputed, 0ULL, "vwap_recomputed");
+    expect_equal(metrics.snapshot_fast_path, 0ULL, "snapshot_fast_path");
+    expect_equal(metrics.snapshot_requery, 0ULL, "snapshot_requery");
     expect_equal(metrics.evaluate_latency_ns.count, 0ULL, "latency count");
 }
 

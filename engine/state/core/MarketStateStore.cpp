@@ -1,9 +1,16 @@
 #include "state/core/MarketStateStore.h"
 
+#include <utility>
+
 namespace trading_engine::state {
 
-MarketStateStore::MarketStateStore()
-    : shards_{LOBShard{0}} {}
+MarketStateStore::MarketStateStore(StateRuntimeConfig runtime_config)
+    : runtime_config_(runtime_config),
+      shards_{LOBShard{0, runtime_config_}} {}
+
+const StateRuntimeConfig& MarketStateStore::runtime_config() const noexcept {
+    return runtime_config_;
+}
 
 StateApplyResult MarketStateStore::apply(const MarketStateEvent& event) {
     const std::string asset_id =
@@ -21,6 +28,28 @@ StateQueryResult<MarketStateSnapshot> MarketStateStore::get_snapshot(
     return shards_[shard_for_asset(asset_id)].snapshot(asset_id);
 }
 
+std::uint16_t MarketStateStore::get_snapshots(
+    std::span<const std::string* const> asset_ids,
+    MarketStateSnapshot* out,
+    std::uint16_t max_out
+) const {
+    if (ShardRouter::kNumShards == 1) {
+        return shards_[0].snapshots(asset_ids, out, max_out);
+    }
+
+    std::uint16_t count = 0;
+    for (const auto* asset_id : asset_ids) {
+        if (!asset_id || count >= max_out) {
+            continue;
+        }
+        auto snapshot = get_snapshot(*asset_id);
+        if (snapshot.ok) {
+            out[count++] = std::move(snapshot.value);
+        }
+    }
+    return count;
+}
+
 bool MarketStateStore::exists(const std::string& asset_id) const {
     return get_snapshot(asset_id).ok;
 }
@@ -32,7 +61,7 @@ std::uint64_t MarketStateStore::state_hash(
     return snapshot.ok ? snapshot.value.state_hash : 0;
 }
 
-std::uint64_t MarketStateStore::global_hash() const noexcept {
+std::uint64_t MarketStateStore::global_hash() const {
     std::uint64_t hash = 0;
     for (const auto& shard : shards_) {
         hash ^= shard.book_hash();

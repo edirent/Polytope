@@ -18,12 +18,14 @@
       "bundle_hash": 7241865238501750092,
       "snapshot_version": 20,
       "bundle_qty": 20,
+      "original_bundle_qty": 20,
       "unit_edge_tick": 190000,
       "total_edge_tick": 3800000,
       "edge_bps": 2345,
       "slippage_buffer_tick": 0,
+      "max_leg_slippage_tick": 10000,
       "created_ts_ns": 1,
-      "expires_at_ns": 1,
+      "expires_at_ns": 5000000001,
       "snapshot_version_hash": 12761872077578761906,
       "oracle_artifact_version": 1,
       "idempotency_key": "124389ec596c8c3e",
@@ -38,6 +40,9 @@
           "estimated_vwap_tick": 405000,
           "worst_price_tick": 410000,
           "estimated_cost_tick": 8100000,
+          "requested_qty_lots": 20,
+          "executable_qty_lots": 20,
+          "depth_margin_bps": 10000,
           "enough_depth": true
         },
         {
@@ -48,6 +53,9 @@
           "estimated_vwap_tick": 405000,
           "worst_price_tick": 410000,
           "estimated_cost_tick": 8100000,
+          "requested_qty_lots": 20,
+          "executable_qty_lots": 20,
+          "depth_margin_bps": 10000,
           "enough_depth": true
         }
       ]

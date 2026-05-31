@@ -25,6 +25,7 @@ add_library(engine_signal STATIC
     reader/MarketSnapshotReader.cpp
     reader/MarketStateViewSnapshotReader.cpp
     reader/OracleArtifactReader.cpp
+    reader/SnapshotBatchReader.cpp
     reader/SnapshotConsistencyGuard.cpp
     scan/BundleRegistry.cpp
     scan/CandidateBundleScanner.cpp

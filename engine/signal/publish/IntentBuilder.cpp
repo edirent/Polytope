@@ -54,6 +54,22 @@ void hash_i64(std::uint64_t* hash, std::int64_t value) noexcept {
     return static_cast<std::int64_t>(value);
 }
 
+[[nodiscard]] std::int64_t depth_margin_bps(
+    std::int64_t executable_qty_lots,
+    std::int64_t requested_qty_lots
+) noexcept {
+    if (requested_qty_lots <= 0 || executable_qty_lots <= 0) {
+        return 0;
+    }
+    const auto value =
+        static_cast<__int128>(executable_qty_lots) * 10'000 /
+        static_cast<__int128>(requested_qty_lots);
+    if (value > std::numeric_limits<std::int64_t>::max()) {
+        return std::numeric_limits<std::int64_t>::max();
+    }
+    return static_cast<std::int64_t>(value);
+}
+
 [[nodiscard]] std::uint64_t effective_bundle_hash(
     const IntentBuildInput& input
 ) noexcept {
@@ -74,6 +90,17 @@ void hash_i64(std::uint64_t* hash, std::int64_t value) noexcept {
     hash_u64(&hash, input.oracle_artifact_version);
     hash_u64(&hash, input.constraint_hash);
     hash_u64(&hash, bundle_hash);
+    return hash;
+}
+
+[[nodiscard]] std::uint64_t make_proof_hash(
+    const OpportunityIntent& intent
+) noexcept {
+    std::uint64_t hash = kFnvOffset;
+    hash_u64(&hash, intent.oracle_artifact_hash);
+    hash_u64(&hash, intent.constraint_hash);
+    hash_u64(&hash, intent.bundle_hash);
+    hash_u64(&hash, intent.snapshot_version_hash);
     return hash;
 }
 
@@ -101,12 +128,11 @@ void copy_priced_legs(
 ) {
     intent->leg_count = std::max<std::uint16_t>(
         intent->leg_count,
-        static_cast<std::uint16_t>(
-            std::min<std::size_t>(cost.legs.size(), kMaxIntentLegs)
-        )
+        cost_leg_count(cost)
     );
-    for (std::uint16_t i = 0; i < intent->leg_count && i < cost.legs.size(); ++i) {
-        const auto& source = cost.legs[i];
+    const auto priced_count = cost_leg_count(cost);
+    for (std::uint16_t i = 0; i < intent->leg_count && i < priced_count; ++i) {
+        const auto& source = cost_leg_at(cost, i);
         if (source.asset_id.empty()) {
             continue;
         }
@@ -116,6 +142,15 @@ void copy_priced_legs(
         target.estimated_vwap_tick = source.vwap_price_tick;
         target.worst_price_tick = source.worst_price_tick;
         target.estimated_cost_tick = source.total_cost_tick;
+        target.requested_qty_lots = saturating_mul_i64(
+            source.requested_qty_lots,
+            cost.bundle_qty
+        );
+        target.executable_qty_lots = source.executable_qty_lots;
+        target.depth_margin_bps = depth_margin_bps(
+            target.executable_qty_lots,
+            target.requested_qty_lots
+        );
         target.enough_depth = source.enough_depth;
     }
 }
@@ -159,20 +194,25 @@ OpportunityIntent IntentBuilder::build(
     const IntentBuildInput& input
 ) const {
     OpportunityIntent intent;
-    if (!input.bundle || !input.snapshot || !input.cost || !input.edge) {
+    if (!input.bundle || !input.cost || !input.edge) {
         intent.status = IntentStatus::CandidateOnly;
         return intent;
     }
 
     const auto& bundle = *input.bundle;
-    const auto& snapshot = *input.snapshot;
     const auto& cost = *input.cost;
     const auto& edge = *input.edge;
+    const auto snapshot_version = input.snapshot
+        ? input.snapshot->snapshot_version
+        : input.snapshot_version;
 
     intent.bundle_id = bundle.bundle_id;
     intent.status = edge.passed
         ? IntentStatus::PaperOpportunity
         : IntentStatus::RejectedLowEdge;
+    intent.reject_code = edge.passed
+        ? IntentRejectCode::None
+        : IntentRejectCode::LowEdge;
     intent.valid_under_settlement = input.valid_under_settlement;
     intent.passed_quality_gate = input.passed_quality_gate;
     intent.enough_depth = cost.executable;
@@ -183,10 +223,11 @@ OpportunityIntent IntentBuilder::build(
     intent.oracle_artifact_hash =
         effective_artifact_hash(input, intent.bundle_hash);
 
-    intent.snapshot_version = snapshot.snapshot_version.max_book_version;
-    intent.snapshot_version_hash = snapshot.snapshot_version.combined_hash;
+    intent.snapshot_version = snapshot_version.max_book_version;
+    intent.snapshot_version_hash = snapshot_version.combined_hash;
 
     intent.bundle_qty = edge.bundle_qty;
+    intent.original_bundle_qty = edge.bundle_qty;
     intent.guaranteed_payout_tick = saturating_mul_i64(
         edge.guaranteed_payout_per_bundle_tick,
         edge.bundle_qty
@@ -204,6 +245,7 @@ OpportunityIntent IntentBuilder::build(
         edge.slippage_buffer_per_bundle_tick,
         edge.bundle_qty
     );
+    intent.max_leg_slippage_tick = cost.max_leg_slippage_tick;
     intent.unit_edge_tick = edge.unit_edge_tick;
     intent.total_edge_tick = edge.total_edge_tick;
     intent.estimated_edge_tick = edge.total_edge_tick;
@@ -224,9 +266,21 @@ OpportunityIntent IntentBuilder::build(
         .unit_edge_tick = intent.unit_edge_tick
     };
     intent.intent_id = make_intent_id(identity);
-    intent.idempotency_key = make_idempotency_key(identity);
-    intent.proof_ref = proof_ref(intent);
+    intent.idempotency_hash = intent.intent_id;
+    intent.proof_hash = make_proof_hash(intent);
     return intent;
+}
+
+void materialize_intent_strings(OpportunityIntent* intent) {
+    if (!intent) {
+        return;
+    }
+    if (intent->idempotency_key.empty() && intent->idempotency_hash != 0) {
+        intent->idempotency_key = hex_u64(intent->idempotency_hash);
+    }
+    if (intent->proof_ref.empty() && intent->proof_hash != 0) {
+        intent->proof_ref = proof_ref(*intent);
+    }
 }
 
 }  // namespace trading_engine::signal

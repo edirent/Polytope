@@ -6,6 +6,7 @@
 #include "engine/signal/public/SignalConfig.h"
 #include "engine/signal/publish/IntentDeduper.h"
 #include "engine/signal/publish/IntentRateLimiter.h"
+#include "engine/signal/reader/SnapshotBatchReader.h"
 #include "engine/signal/publish/IIntentPublisher.h"
 #include "engine/signal/rank/OpportunityRanker.h"
 #include "engine/signal/reader/MarketSnapshotReader.h"
@@ -34,6 +35,7 @@ public:
 private:
     SignalConfig config_;
     const IMarketSnapshotReader* snapshot_reader_ = nullptr;
+    const ISnapshotBatchReader* snapshot_batch_reader_ = nullptr;
     const OracleArtifactReader* artifact_reader_ = nullptr;
     const SettlementMaskChecker* settlement_checker_ = nullptr;
     const VWAPPrecheck* vwap_ = nullptr;

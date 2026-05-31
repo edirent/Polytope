@@ -6,6 +6,7 @@
 #include "state/core/MarketStateStore.h"
 
 #include <cstdint>
+#include <span>
 #include <string>
 
 namespace trading_engine::state {
@@ -61,12 +62,18 @@ public:
         std::uint32_t max_depth = kMaxSnapshotDepth
     ) const;
 
+    [[nodiscard]] std::uint16_t get_snapshots(
+        std::span<const std::string* const> entity_ids,
+        MarketStateSnapshot* out,
+        std::uint16_t max_out
+    ) const;
+
     [[nodiscard]] std::uint64_t state_hash(
         const std::string& entity_id
-    ) const noexcept;
+    ) const;
     [[nodiscard]] std::uint64_t state_hash(std::uint64_t entity_id) const;
 
-    [[nodiscard]] std::uint64_t global_hash() const noexcept;
+    [[nodiscard]] std::uint64_t global_hash() const;
 
 private:
     [[nodiscard]] StateQueryError executable_error(

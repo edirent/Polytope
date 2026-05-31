@@ -3,23 +3,33 @@
 #include "state/MarketStateQueryResult.h"
 #include "state/MarketStateSnapshot.h"
 #include "state/core/MarketStateEvent.h"
+#include "state/core/StateHashPolicy.h"
 #include "state/shard/LOBShard.h"
 #include "state/shard/ShardRouter.h"
 
 #include <array>
 #include <cstdint>
+#include <span>
 #include <string>
 
 namespace trading_engine::state {
 
 class MarketStateStore {
 public:
-    MarketStateStore();
+    explicit MarketStateStore(StateRuntimeConfig runtime_config = {});
+
+    [[nodiscard]] const StateRuntimeConfig& runtime_config() const noexcept;
 
     StateApplyResult apply(const MarketStateEvent& event);
 
     [[nodiscard]] StateQueryResult<MarketStateSnapshot> get_snapshot(
         const std::string& asset_id
+    ) const;
+
+    [[nodiscard]] std::uint16_t get_snapshots(
+        std::span<const std::string* const> asset_ids,
+        MarketStateSnapshot* out,
+        std::uint16_t max_out
     ) const;
 
     [[nodiscard]] bool exists(const std::string& asset_id) const;
@@ -28,7 +38,7 @@ public:
         const std::string& asset_id
     ) const;
 
-    [[nodiscard]] std::uint64_t global_hash() const noexcept;
+    [[nodiscard]] std::uint64_t global_hash() const;
 
 private:
     [[nodiscard]] std::uint32_t shard_for_asset(
@@ -36,6 +46,7 @@ private:
     ) const noexcept;
 
 private:
+    StateRuntimeConfig runtime_config_;
     std::array<LOBShard, ShardRouter::kNumShards> shards_;
     ShardRouter router_;
 };

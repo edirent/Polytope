@@ -3,6 +3,7 @@
 #include "engine/signal/reader/SnapshotConsistencyGuard.h"
 
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -14,14 +15,26 @@ namespace {
 [[nodiscard]] SnapshotReadResult reject(
     IntentStatus status,
     std::string error,
-    SnapshotVersion version = {}
+    SnapshotVersion version = {},
+    std::uint64_t guard_ns = 0
 ) {
     SnapshotReadResult result;
     result.ok = false;
     result.rejection_status = status;
     result.error = std::move(error);
     result.snapshot_version = version;
+    result.snapshot_consistency_guard_ns = guard_ns;
     return result;
+}
+
+[[nodiscard]] std::uint64_t elapsed_ns(
+    std::chrono::steady_clock::time_point start
+) noexcept {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start
+        ).count()
+    );
 }
 
 std::vector<std::string> unique_bundle_assets(const CandidateBundle& bundle) {
@@ -88,16 +101,19 @@ SnapshotReadResult validate_bundle_snapshots(
     }
 
     SnapshotConsistencyGuard guard;
+    const auto guard_start = std::chrono::steady_clock::now();
     const auto guard_result = guard.check(
         snapshots,
         guard_now_ns(snapshots, now_ns),
         config
     );
+    const auto guard_ns = elapsed_ns(guard_start);
     if (!guard_result.ok) {
         return reject(
             guard_result.rejection_status,
             guard_result.error,
-            guard_result.version
+            guard_result.version,
+            guard_ns
         );
     }
 
@@ -105,6 +121,7 @@ SnapshotReadResult validate_bundle_snapshots(
     result.ok = true;
     result.snapshots = snapshots;
     result.snapshot_version = guard_result.version;
+    result.snapshot_consistency_guard_ns = guard_ns;
     return result;
 }
 

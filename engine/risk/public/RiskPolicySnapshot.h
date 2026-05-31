@@ -30,6 +30,7 @@ struct RiskPolicySnapshot {
     std::int64_t max_unhedged_loss_tick = 0;
 
     double min_depth_margin_ratio = 1.20;
+    std::int64_t min_depth_margin_bps = 12'000;
 
     std::uint32_t max_pending_intents_per_bundle = 1;
     std::uint32_t max_pending_intents_total = 1024;
@@ -88,6 +89,7 @@ inline void mix_double(std::uint64_t* hash, double value) noexcept {
     detail::mix_i64(&hash, policy.max_slippage_tick);
     detail::mix_i64(&hash, policy.max_unhedged_loss_tick);
     detail::mix_double(&hash, policy.min_depth_margin_ratio);
+    detail::mix_i64(&hash, policy.min_depth_margin_bps);
     detail::mix_u32(&hash, policy.max_pending_intents_per_bundle);
     detail::mix_u32(&hash, policy.max_pending_intents_total);
     detail::mix_u32(&hash, policy.max_approvals_per_second);

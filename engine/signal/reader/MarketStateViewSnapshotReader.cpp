@@ -1,5 +1,6 @@
 #include "engine/signal/reader/MarketStateViewSnapshotReader.h"
 
+#include <span>
 #include <unordered_set>
 
 namespace trading_engine::signal {
@@ -29,6 +30,30 @@ SnapshotReadResult MarketStateViewSnapshotReader::read_for_bundle(
     }
 
     return validate_bundle_snapshots(bundle, config, snapshots, now_ns);
+}
+
+SnapshotBatchReadResult MarketStateViewSnapshotReader::read_for_plan(
+    const BundleRuntimePlan& plan,
+    const SignalConfig& config,
+    std::uint64_t now_ns
+) const {
+    std::array<MarketStateSnapshot, kMaxIntentLegs> snapshots{};
+    const auto snapshot_count = view_.get_snapshots(
+        std::span<const std::string* const>{
+            plan.unique_asset_ids.data(),
+            plan.unique_asset_count
+        },
+        snapshots.data(),
+        kMaxIntentLegs
+    );
+
+    return validate_plan_snapshots(
+        plan,
+        config,
+        snapshots,
+        snapshot_count,
+        now_ns
+    );
 }
 
 }  // namespace trading_engine::signal

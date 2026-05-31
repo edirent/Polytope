@@ -12,6 +12,7 @@ namespace trading_engine::signal {
 struct IntentBuildInput {
     const CandidateBundle* bundle = nullptr;
     const SnapshotReadResult* snapshot = nullptr;
+    SnapshotVersion snapshot_version{};
     const CostResult* cost = nullptr;
     const EdgeBreakdown* edge = nullptr;
 
@@ -33,5 +34,7 @@ public:
         const IntentBuildInput& input
     ) const;
 };
+
+void materialize_intent_strings(OpportunityIntent* intent);
 
 }  // namespace trading_engine::signal

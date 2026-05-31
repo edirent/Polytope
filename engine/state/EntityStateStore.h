@@ -1,6 +1,9 @@
 #pragma once
 
 #include "decode/public/NormalizedEvent.h"
+#include "state/core/StateHashPolicy.h"
+#include "state/core/StateMutationFlags.h"
+#include "state/hash/StateHashCache.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -137,6 +140,13 @@ struct StateApplyResult {
      */
     bool state_changed{false};
 
+    StateMutationFlags mutation;
+
+    std::uint64_t book_version{0};
+    std::uint64_t chain_version{0};
+    std::uint64_t quality_version{0};
+    std::uint64_t snapshot_version_hash{0};
+
     /**
      * @brief Hash of the affected entity after apply.
      *
@@ -150,12 +160,66 @@ struct StateApplyResult {
     std::uint64_t global_hash{0};
 
     /**
+     * @brief Cheap per-apply fingerprint for hot path diagnostics.
+     *
+     * This is not a replay/full-state hash. In HotPathLight mode this is the
+     * only hash-like value filled by apply().
+     */
+    std::uint64_t cheap_fingerprint{0};
+
+    /**
+     * @brief True when entity_hash/global_hash contain full deterministic hashes.
+     */
+    bool full_hash_computed{false};
+
+    /**
+     * @brief Time spent constructing this result, including optional full hashes.
+     */
+    std::uint64_t make_result_ns{0};
+
+    /**
+     * @brief Time spent computing or reading the affected entity full hash.
+     */
+    std::uint64_t hash_entity_ns{0};
+
+    /**
+     * @brief Time spent computing or reading the global full hash.
+     */
+    std::uint64_t hash_global_ns{0};
+
+    /**
+     * @brief Time spent building a copy-out snapshot before publish.
+     *
+     * Plain EntityStateStore applies leave this as 0. Higher-level state
+     * writers such as LOBShard fill it for latency attribution.
+     */
+    std::uint64_t snapshot_build_ns{0};
+
+    /**
      * @brief Time spent publishing a copy-out snapshot after this apply.
      *
      * Plain EntityStateStore applies leave this as 0. Higher-level state
      * writers such as LOBShard fill it for latency attribution.
      */
     std::uint64_t snapshot_publish_ns{0};
+
+    /**
+     * @brief Full-hash cache hits observed while constructing this result.
+     */
+    std::uint64_t hash_cache_hits{0};
+
+    /**
+     * @brief Full-hash cache misses observed while constructing this result.
+     */
+    std::uint64_t hash_cache_misses{0};
+
+    /**
+     * @brief True only when this apply actually published a copy-out snapshot.
+     *
+     * This is intentionally separate from state_changed because heartbeat and
+     * noop applies can be valid without producing a new strategy-visible view.
+     */
+    bool snapshot_published{false};
 
     /**
      * @brief True if this result is acceptable and does not indicate a state error.
@@ -267,7 +331,10 @@ struct EntityState {
  */
 class EntityStateStore {
 public:
-    EntityStateStore() = default;
+    EntityStateStore();
+    explicit EntityStateStore(StateRuntimeConfig runtime_config);
+
+    [[nodiscard]] const StateRuntimeConfig& runtime_config() const noexcept;
 
     /**
      * @brief Apply one normalized event to the store.
@@ -319,12 +386,30 @@ public:
      */
     [[nodiscard]] std::uint64_t state_hash(
         const std::string& entity_id
-    ) const noexcept;
+    ) const;
 
     /**
      * @brief Return deterministic hash for the entire store.
      */
-    [[nodiscard]] std::uint64_t global_hash() const noexcept;
+    [[nodiscard]] std::uint64_t global_hash() const;
+
+    /**
+     * @brief Recompute one entity hash without using StateHashCache.
+     *
+     * This is for deterministic debug verification only; hot paths should use
+     * state_hash().
+     */
+    [[nodiscard]] std::uint64_t debug_recomputed_state_hash(
+        const std::string& entity_id
+    ) const noexcept;
+
+    /**
+     * @brief Recompute global hash without using StateHashCache.
+     *
+     * This is for deterministic debug verification only; hot paths should use
+     * global_hash().
+     */
+    [[nodiscard]] std::uint64_t debug_recomputed_global_hash() const noexcept;
 
     [[nodiscard]] std::uint64_t events_seen() const noexcept;
     [[nodiscard]] std::uint64_t snapshots_applied() const noexcept;
@@ -360,9 +445,11 @@ private:
         std::string entity_id,
         std::string message,
         bool state_changed
-    ) const noexcept;
+    ) const;
 
 private:
+    friend class StateHashCache;
+
     /**
      * @brief std::map gives deterministic entity iteration order for hashing.
      */
@@ -376,6 +463,9 @@ private:
     std::uint64_t heartbeats_ignored_{0};
     std::uint64_t unknown_events_ignored_{0};
     std::uint64_t errors_{0};
+
+    StateRuntimeConfig runtime_config_;
+    mutable StateHashCache hash_cache_;
 };
 
 [[nodiscard]] std::string to_string(EntityStatus status);

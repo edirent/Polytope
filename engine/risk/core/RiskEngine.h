@@ -3,15 +3,31 @@
 #include "engine/risk/core/RiskContext.h"
 #include "engine/risk/core/RiskPipeline.h"
 #include "engine/risk/ledger/ReservationBook.h"
+#include "engine/risk/public/RiskInputView.h"
 
 namespace trading_engine::risk {
 
 class RiskEngine {
 public:
+    RiskEngine();
+    explicit RiskEngine(RiskRuntimeContext runtime_context);
+
     [[nodiscard]] RiskPipelineResult evaluate(
         const signal::OpportunityIntent& intent,
-        RiskEvaluationContext context
+        const RiskEvaluationContext& context
     );
+
+    [[nodiscard]] RiskPipelineResult evaluate(
+        const RiskInputView& input
+    );
+
+    [[nodiscard]] RiskPipelineResult evaluate_view(
+        const RiskInputView& input,
+        IRiskDecisionPublisher* decision_publisher = nullptr,
+        bool enable_full_audit_trace = false
+    );
+
+    void set_runtime_context(RiskRuntimeContext runtime_context);
 
     [[nodiscard]] RiskLedgerSnapshot ledger_snapshot() const;
 
@@ -19,8 +35,13 @@ public:
     void expire_old(std::uint64_t now_ns);
 
 private:
+    [[nodiscard]] ReservationBook* reservation_book() noexcept;
+    [[nodiscard]] const ReservationBook* reservation_book() const noexcept;
+
     ReservationBook reservations_;
     RiskPipeline pipeline_;
+    RiskRuntimeContext runtime_;
+    RiskLedgerSnapshot ledger_snapshot_cache_;
 };
 
 }  // namespace trading_engine::risk

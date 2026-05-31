@@ -19,6 +19,8 @@ using trading_engine::signal::IntentStatus;
 using trading_engine::signal::JsonlIntentWriter;
 using trading_engine::signal::OpportunityIntent;
 using trading_engine::signal::PaperIntentPublisher;
+using trading_engine::signal::SignalEvidenceView;
+using trading_engine::state::MarketStateSnapshot;
 
 namespace json = boost::json;
 
@@ -101,6 +103,32 @@ void CapturingIntentPublisher_PreservesOrder() {
     expect_equal(publisher.intents()[2].intent_id, 3ULL, "intent 2");
 }
 
+void CapturingIntentPublisher_CapturesEvidence() {
+    CapturingIntentPublisher publisher;
+    MarketStateSnapshot snapshot;
+    snapshot.entity_id = "asset_yes";
+    snapshot.snapshot_version_hash = 999;
+
+    SignalEvidenceView evidence;
+    evidence.snapshots = &snapshot;
+    evidence.snapshot_count = 1;
+    evidence.snapshot_version_hash = 999;
+    evidence.read_ts_ns = 1234;
+
+    publisher.publish(intent(4), evidence);
+
+    const auto captured = publisher.evidence_at(0);
+    expect_equal(captured.snapshot_count, static_cast<std::uint16_t>(1), "count");
+    expect_equal(captured.snapshot_version_hash, 999ULL, "hash");
+    expect_equal(captured.read_ts_ns, 1234ULL, "read ts");
+    expect_true(captured.snapshots != nullptr, "snapshots");
+    expect_equal(
+        captured.snapshots[0].entity_id,
+        std::string{"asset_yes"},
+        "asset"
+    );
+}
+
 void JsonlIntentWriter_WritesValidJsonLine() {
     std::ostringstream output;
     JsonlIntentWriter writer(&output);
@@ -152,6 +180,10 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "CapturingIntentPublisher_PreservesOrder",
             &CapturingIntentPublisher_PreservesOrder
+        },
+        {
+            "CapturingIntentPublisher_CapturesEvidence",
+            &CapturingIntentPublisher_CapturesEvidence
         },
         {
             "JsonlIntentWriter_WritesValidJsonLine",

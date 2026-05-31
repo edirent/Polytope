@@ -15,6 +15,14 @@ namespace {
     return result;
 }
 
+[[nodiscard]] std::uint64_t evidence_hash(
+    const state::MarketStateSnapshot& snapshot
+) noexcept {
+    return snapshot.snapshot_version_hash != 0
+        ? snapshot.snapshot_version_hash
+        : snapshot.state_hash;
+}
+
 }  // namespace
 
 GuardResult SnapshotFreshnessGuard::check(
@@ -36,7 +44,7 @@ GuardResult SnapshotFreshnessGuard::check(
     }
 
     auto result = pass_guard();
-    if (snapshot.state_hash != intent.snapshot_version_hash) {
+    if (evidence_hash(snapshot) != intent.snapshot_version_hash) {
         const auto version_drift = snapshot.version > intent.snapshot_version
             ? snapshot.version - intent.snapshot_version
             : intent.snapshot_version - snapshot.version;

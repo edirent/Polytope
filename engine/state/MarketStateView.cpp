@@ -293,9 +293,17 @@ StateQueryResult<MarketStateSnapshot> MarketStateView::get_snapshot(
     return get_snapshot(to_entity_id(entity_id), max_depth);
 }
 
+std::uint16_t MarketStateView::get_snapshots(
+    std::span<const std::string* const> entity_ids,
+    MarketStateSnapshot* out,
+    std::uint16_t max_out
+) const {
+    return store_.get_snapshots(entity_ids, out, max_out);
+}
+
 std::uint64_t MarketStateView::state_hash(
     const std::string& entity_id
-) const noexcept {
+) const {
     return store_.state_hash(entity_id);
 }
 
@@ -303,7 +311,7 @@ std::uint64_t MarketStateView::state_hash(std::uint64_t entity_id) const {
     return state_hash(to_entity_id(entity_id));
 }
 
-std::uint64_t MarketStateView::global_hash() const noexcept {
+std::uint64_t MarketStateView::global_hash() const {
     return store_.global_hash();
 }
 

@@ -40,6 +40,10 @@ RiskWorkflowResult run_risk_workflow(
             result.result.rejected_snapshot_freshness;
         out.aggregate.rejected_partial_fill_risk +=
             result.result.rejected_partial_fill_risk;
+        accumulate_stage_timings(
+            &out.aggregate.stage_timings,
+            result.result.stage_timings
+        );
         out.aggregate.output_hash ^= result.output_hash;
         out.evaluations.push_back(std::move(result));
     }
