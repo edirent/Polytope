@@ -4,7 +4,10 @@
 #include "engine/execution/adapter/PaperExecutionAdapter.h"
 #include "engine/execution/core/ExecutionGateway.h"
 #include "engine/execution/publish/JsonlExecutionReportWriter.h"
+#include "engine/order_decision/core/OrderDecisionEngine.h"
+#include "engine/paper/core/PaperTradingEngine.h"
 #include "engine/risk/core/RiskEngine.h"
+#include "engine/risk/public/ApprovedIntent.h"
 #include "engine/risk/public/RiskPolicySnapshot.h"
 #include "engine/signal/core/SignalEngine.h"
 #include "engine/signal/edge/LatencyBufferModel.h"
@@ -26,6 +29,7 @@
 #include "state/core/MarketStateEventFilter.h"
 #include "state/core/MarketStateStore.h"
 #include "state/core/StateUniverse.h"
+#include "apps/paper_backend/DashboardApiRoutes.h"
 
 #include <algorithm>
 #include <atomic>
@@ -37,24 +41,30 @@
 #include <iostream>
 #include <mutex>
 #include <set>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace {
 
 namespace decode = trading_engine::decode;
 namespace execution = trading_engine::execution;
+namespace order_decision = trading_engine::order_decision;
 namespace feed = trading_engine::feed;
+namespace paper = trading_engine::paper;
+namespace paper_backend = trading_engine::paper_backend;
 namespace risk = trading_engine::risk;
 namespace signal = trading_engine::signal;
 namespace state = trading_engine::state;
 
 constexpr std::uint64_t kNsPerMs = 1'000'000ULL;
 constexpr std::uint64_t kNsPerSecond = 1'000'000'000ULL;
+constexpr std::int64_t kTickPerDollar = 1'000'000LL;
 constexpr std::uint64_t kFnvOffset = 14695981039346656037ULL;
 constexpr std::uint64_t kFnvPrime = 1099511628211ULL;
 
@@ -72,6 +82,7 @@ struct Config {
     std::string endpoint{
         "wss://ws-subscriptions-clob.polymarket.com/ws/market"
     };
+    std::int64_t starting_cash_tick = 0;
     bool emit_rejections = true;
 };
 
@@ -122,6 +133,8 @@ struct Stats {
     std::atomic<std::uint64_t> reservation_consumed{0};
     std::atomic<std::uint64_t> reservation_released{0};
     std::atomic<std::uint64_t> reservation_expired{0};
+
+    std::atomic<std::uint64_t> paper_dashboard_updates{0};
 };
 
 struct OutputPaths {
@@ -131,6 +144,7 @@ struct OutputPaths {
     std::filesystem::path risk_decisions;
     std::filesystem::path execution_reports;
     std::filesystem::path reservation_dispositions;
+    std::filesystem::path paper_dashboard_latest;
 };
 
 class FileExecutionReportPublisher final
@@ -138,11 +152,15 @@ class FileExecutionReportPublisher final
 public:
     FileExecutionReportPublisher(
         std::ostream* output,
-        Stats* stats
-    ) : writer_(output), stats_(stats) {}
+        Stats* stats,
+        paper::PaperTradingEngine* paper_engine
+    ) : writer_(output), stats_(stats), paper_engine_(paper_engine) {}
 
     void publish(const execution::ExecutionReport& report) override {
         writer_.publish(report);
+        if (paper_engine_ != nullptr) {
+            paper_engine_->on_execution_report(report);
+        }
         if (stats_ != nullptr) {
             stats_->execution_reports_published.fetch_add(1);
         }
@@ -151,6 +169,7 @@ public:
 private:
     execution::JsonlExecutionReportWriter writer_;
     Stats* stats_ = nullptr;
+    paper::PaperTradingEngine* paper_engine_ = nullptr;
 };
 
 class FileReservationDispositionPublisher final
@@ -158,8 +177,9 @@ class FileReservationDispositionPublisher final
 public:
     FileReservationDispositionPublisher(
         std::ostream* output,
-        Stats* stats
-    ) : output_(output), stats_(stats) {}
+        Stats* stats,
+        paper::PaperTradingEngine* paper_engine
+    ) : output_(output), stats_(stats), paper_engine_(paper_engine) {}
 
     void publish(
         const execution::ReservationDisposition& disposition
@@ -189,6 +209,10 @@ public:
                 break;
             case execution::ReservationDispositionType::None:
                 break;
+        }
+
+        if (paper_engine_ != nullptr) {
+            paper_engine_->on_reservation_disposition(disposition);
         }
     }
 
@@ -239,6 +263,7 @@ private:
 
     std::ostream* output_ = nullptr;
     Stats* stats_ = nullptr;
+    paper::PaperTradingEngine* paper_engine_ = nullptr;
 };
 
 [[nodiscard]] std::uint64_t now_ns() {
@@ -339,8 +364,20 @@ void remove_if_exists(const std::filesystem::path& path) {
         .risk_decisions = config.out_dir / "risk_decisions.jsonl",
         .execution_reports = config.out_dir / "execution_reports.jsonl",
         .reservation_dispositions =
-            config.out_dir / "reservation_dispositions.jsonl"
+            config.out_dir / "reservation_dispositions.jsonl",
+        .paper_dashboard_latest =
+            config.out_dir / "paper_dashboard_latest.json"
     };
+}
+
+[[nodiscard]] std::int64_t dollars_to_tick(const std::string& value) {
+    const auto dollars = std::stod(value);
+    if (dollars < 0.0) {
+        throw std::runtime_error("--starting-cash-usd must be non-negative");
+    }
+    return static_cast<std::int64_t>(
+        dollars * static_cast<double>(kTickPerDollar)
+    );
 }
 
 [[nodiscard]] Config parse_args(int argc, char** argv) {
@@ -370,6 +407,13 @@ void remove_if_exists(const std::filesystem::path& path) {
             config.event_id = require_value("--event-id");
         } else if (arg == "--endpoint") {
             config.endpoint = require_value("--endpoint");
+        } else if (arg == "--starting-cash" ||
+                   arg == "--starting-cash-tick") {
+            config.starting_cash_tick =
+                std::stoll(require_value(arg.c_str()));
+        } else if (arg == "--starting-cash-usd") {
+            config.starting_cash_tick =
+                dollars_to_tick(require_value("--starting-cash-usd"));
         } else if (arg == "--emit-rejections") {
             const auto value = require_value("--emit-rejections");
             config.emit_rejections =
@@ -377,7 +421,8 @@ void remove_if_exists(const std::filesystem::path& path) {
         } else if (arg == "--help" || arg == "-h") {
             throw std::runtime_error(
                 "usage: run_worldcup_feed_to_execution "
-                "--oracle-artifact PATH --out-dir DIR --seconds N"
+                "--oracle-artifact PATH --out-dir DIR --seconds N "
+                "[--starting-cash-usd 5000]"
             );
         } else {
             throw std::runtime_error("unknown argument: " + arg);
@@ -392,6 +437,9 @@ void remove_if_exists(const std::filesystem::path& path) {
     }
     if (config.intent_ttl_ms == 0) {
         throw std::runtime_error("--intent-ttl-ms must be greater than zero");
+    }
+    if (config.starting_cash_tick < 0) {
+        throw std::runtime_error("--starting-cash must be non-negative");
     }
     return config;
 }
@@ -426,6 +474,18 @@ void remove_if_exists(const std::filesystem::path& path) {
         }
     }
     return universe;
+}
+
+[[nodiscard]] const trading_engine::oracle::CandidateBundle* find_bundle(
+    const signal::OracleArtifactReader& reader,
+    std::uint64_t bundle_id
+) {
+    for (const auto& bundle : reader.active_bundles()) {
+        if (bundle.bundle_id == bundle_id) {
+            return &bundle;
+        }
+    }
+    return nullptr;
 }
 
 void update_filter_stats(
@@ -531,7 +591,8 @@ void print_summary(
     const Stats& stats,
     std::uint64_t start_ns,
     std::uint64_t end_ns,
-    std::uint64_t output_hash
+    std::uint64_t output_hash,
+    const paper::DashboardSnapshot& paper_snapshot
 ) {
     std::cout << "worldcup_feed_to_execution:\n";
     std::cout << "  event_id: " << config.event_id << '\n';
@@ -618,6 +679,31 @@ void print_summary(
     std::cout << "  reservation_expired: "
               << stats.reservation_expired.load() << "\n\n";
 
+    std::cout << "paper:\n";
+    std::cout << "  starting_cash_tick: "
+              << paper_snapshot.account.starting_cash_tick << '\n';
+    std::cout << "  cash_balance_tick: "
+              << paper_snapshot.account.cash_balance_tick << '\n';
+    std::cout << "  reserved_cash_tick: "
+              << paper_snapshot.account.reserved_cash_tick << '\n';
+    std::cout << "  realized_pnl_tick: "
+              << paper_snapshot.account.realized_pnl_tick << '\n';
+    std::cout << "  unrealized_pnl_tick: "
+              << paper_snapshot.account.unrealized_pnl_tick << '\n';
+    std::cout << "  equity_mid_tick: "
+              << paper_snapshot.account.cash_balance_tick +
+                     paper_snapshot.account.unrealized_pnl_tick
+              << '\n';
+    std::cout << "  intents_observed: "
+              << paper_snapshot.performance.intents_observed << '\n';
+    std::cout << "  approvals_observed: "
+              << paper_snapshot.performance.approvals_observed << '\n';
+    std::cout << "  execution_reports_observed: "
+              << paper_snapshot.performance.execution_reports_observed
+              << '\n';
+    std::cout << "  dashboard_updates: "
+              << stats.paper_dashboard_updates.load() << "\n\n";
+
     std::cout << "outputs:\n";
     std::cout << "  raw_log: " << paths.raw_log.string() << '\n';
     std::cout << "  payload_jsonl: " << paths.payload_jsonl.string() << '\n';
@@ -629,9 +715,30 @@ void print_summary(
               << paths.execution_reports.string() << '\n';
     std::cout << "  reservation_dispositions: "
               << paths.reservation_dispositions.string() << "\n\n";
+    std::cout << "  paper_dashboard_latest: "
+              << paths.paper_dashboard_latest.string() << "\n\n";
 
     std::cout << "hashes:\n";
     std::cout << "  output_hash: " << output_hash << '\n';
+}
+
+void write_paper_dashboard_latest(
+    const OutputPaths& paths,
+    const paper::PaperTradingEngine& paper_engine,
+    Stats* stats
+) {
+    std::ofstream out(paths.paper_dashboard_latest, std::ios::trunc);
+    if (!out) {
+        throw std::runtime_error(
+            "failed to write " + paths.paper_dashboard_latest.string()
+        );
+    }
+    out << paper_backend::dashboard_snapshot_json(
+        paper_engine.latest_dashboard_snapshot()
+    ) << '\n';
+    if (stats != nullptr) {
+        stats->paper_dashboard_updates.fetch_add(1);
+    }
 }
 
 int run(const Config& config) {
@@ -643,7 +750,8 @@ int run(const Config& config) {
              paths.signal_intents,
              paths.risk_decisions,
              paths.execution_reports,
-             paths.reservation_dispositions
+             paths.reservation_dispositions,
+             paths.paper_dashboard_latest
          }) {
         remove_if_exists(path);
     }
@@ -678,6 +786,7 @@ int run(const Config& config) {
     decode::DecodePipeline decode_pipeline;
     state::MarketStateStore market_store;
     state::MarketStateView market_view(market_store);
+    paper::PaperTradingEngine paper_engine(config.starting_cash_tick);
     signal::MarketStateViewSnapshotReader snapshot_reader(market_view);
     signal::SettlementMaskChecker settlement_checker;
     signal::VWAPPrecheck vwap;
@@ -706,6 +815,12 @@ int run(const Config& config) {
         &signal_publisher
     );
     signal::JsonlIntentWriter signal_writer(&signal_out);
+    order_decision::OrderDecisionConfig order_decision_config;
+    order_decision_config.default_ttl_ns =
+        config.intent_ttl_ms * kNsPerMs;
+    order_decision::OrderDecisionEngine order_decision_engine{
+        order_decision_config
+    };
 
     auto risk_policy = risk::with_computed_policy_hash(risk::RiskPolicySnapshot{});
     risk_policy.max_book_age_ns = 30 * static_cast<std::int64_t>(kNsPerSecond);
@@ -714,6 +829,11 @@ int run(const Config& config) {
     risk_policy.max_allowed_cost_drift_tick = 1'000'000'000;
     risk_policy.min_depth_margin_ratio = 1.0;
     risk_policy.min_depth_margin_bps = 10'000;
+    if (config.starting_cash_tick > 0) {
+        risk_policy.max_total_cost_tick = config.starting_cash_tick;
+        risk_policy.max_total_exposure_tick = config.starting_cash_tick;
+    }
+    risk_policy = risk::with_computed_policy_hash(risk_policy);
     risk::RiskRuntimeContext risk_runtime;
     risk_runtime.policy = &risk_policy;
     risk::RiskEngine risk_engine(risk_runtime);
@@ -721,15 +841,25 @@ int run(const Config& config) {
     execution::PaperExecutionAdapter paper_adapter;
     Stats stats;
     stats.assets_subscribed = asset_ids.size();
-    FileExecutionReportPublisher execution_publisher(&execution_out, &stats);
+    FileExecutionReportPublisher execution_publisher(
+        &execution_out,
+        &stats,
+        &paper_engine
+    );
     FileReservationDispositionPublisher disposition_publisher(
         &disposition_out,
-        &stats
+        &stats,
+        &paper_engine
     );
     execution::ExecutionGateway execution_gateway(
         &paper_adapter,
         &execution_publisher,
         &disposition_publisher
+    );
+    execution_gateway.set_plan_observer(
+        [&paper_engine](const execution::OrderPlan& plan) {
+            paper_engine.on_order_plan(plan);
+        }
     );
     execution::ExecutionConfig execution_config;
     execution_config.execution_enabled = true;
@@ -815,6 +945,16 @@ int run(const Config& config) {
                 }
                 if (!result.ok()) {
                     stats.state_errors.fetch_add(1);
+                    continue;
+                }
+
+                if (event.type == state::MarketStateEventType::WsBookSnapshot ||
+                    event.type == state::MarketStateEventType::WsBookDelta) {
+                    const auto snapshot =
+                        market_view.get_snapshot(event.asset_id);
+                    if (snapshot.ok) {
+                        paper_engine.on_mark_snapshot(snapshot.value);
+                    }
                 }
             }
         } catch (const std::exception& error) {
@@ -877,6 +1017,7 @@ int run(const Config& config) {
                 if (!signal_writer.write(intent)) {
                     throw std::runtime_error("failed to write signal intent");
                 }
+                paper_engine.on_opportunity_intent(intent);
 
                 if (intent.status != signal::IntentStatus::PaperOpportunity) {
                     continue;
@@ -887,10 +1028,52 @@ int run(const Config& config) {
                     evidence,
                     now
                 );
-                const auto risk_input = risk::make_risk_input_view(handoff);
+                auto risk_input = risk::make_risk_input_view(handoff);
 
-                const auto risk_result = risk_engine.evaluate(risk_input);
+                if (config.starting_cash_tick > 0) {
+                    const auto paper_snapshot =
+                        paper_engine.latest_dashboard_snapshot();
+                    const auto available_cash = std::max<std::int64_t>(
+                        paper_snapshot.account.cash_balance_tick -
+                            paper_snapshot.account.reserved_cash_tick,
+                        0
+                    );
+                    const auto risk_cash_limit =
+                        std::max<std::int64_t>(available_cash, 1);
+                    risk_policy.max_total_cost_tick = risk_cash_limit;
+                    risk_policy.max_total_exposure_tick = risk_cash_limit;
+                    risk_policy = risk::with_computed_policy_hash(risk_policy);
+                }
+                risk_input.policy = &risk_policy;
+
+                const auto* bundle = find_bundle(
+                    artifact_reader,
+                    intent.bundle_id
+                );
+                if (bundle == nullptr || evidence.depth_views == nullptr) {
+                    continue;
+                }
+                const auto decision_result = order_decision_engine.decide(
+                    intent,
+                    *bundle,
+                    std::span<const state::MarketDepthView>{
+                        evidence.depth_views,
+                        evidence.depth_view_count
+                    },
+                    risk_policy,
+                    now
+                );
+                if (!decision_result.ok) {
+                    continue;
+                }
+
+                const auto risk_result = risk_engine.evaluate_decision(
+                    intent,
+                    decision_result.decision,
+                    risk_input
+                );
                 write_risk_decision(risk_out, intent, risk_result);
+                paper_engine.on_risk_decision(risk_result.decision);
                 stats.risk_evaluated.fetch_add(1);
                 mix_u64(&output_hash, risk_result.output_hash);
                 if (!risk_result.decision.approved()) {
@@ -899,20 +1082,23 @@ int run(const Config& config) {
                 }
                 stats.risk_approved.fetch_add(1);
 
-                execution::ApprovedIntentEnvelope envelope;
-                envelope.source_intent = intent;
-                envelope.approval.decision_id =
-                    risk_result.output_hash != 0
-                        ? risk_result.output_hash
-                        : intent.intent_id;
-                envelope.approval.reservation_id =
+                risk::ApprovedIntent approved_intent;
+                approved_intent.intent = intent;
+                approved_intent.decision = risk_result.decision;
+                approved_intent.reservation_id =
+                    std::to_string(risk_result.reservation.reservation_id);
+                approved_intent.reservation_id_hash =
                     risk_result.reservation.reservation_id;
-                envelope.approval.bundle_id = intent.bundle_id;
-                envelope.approval.approved_bundle_qty =
-                    risk_result.cost.risk_bundle_qty > 0
-                        ? risk_result.cost.risk_bundle_qty
-                        : intent.bundle_qty;
-                envelope.approval.idempotency_key = intent.idempotency_key;
+                approved_intent.approved_at_ns = now;
+                approved_intent.expires_at_ns = intent.expires_at_ns;
+                paper_engine.on_approved_intent(approved_intent);
+
+                const auto envelope =
+                    order_decision::make_approved_order_decision_envelope(
+                        approved_intent,
+                        decision_result.decision,
+                        now
+                    );
 
                 execution::ExecutionContext execution_context;
                 execution_context.now_ns = now;
@@ -922,10 +1108,21 @@ int run(const Config& config) {
                         evidence.snapshots + evidence.snapshot_count
                     );
                 }
+                if (execution_context.snapshots.empty()) {
+                    for (std::uint16_t i = 0; i < intent.leg_count; ++i) {
+                        const auto snapshot =
+                            market_view.get_snapshot(intent.legs[i].asset_id);
+                        if (snapshot.ok) {
+                            execution_context.snapshots.push_back(
+                                snapshot.value
+                            );
+                        }
+                    }
+                }
                 execution_context.config = execution_config;
 
                 const auto execution_result =
-                    execution_gateway.submit_approved_intent(
+                    execution_gateway.submit_approved_decision(
                         envelope,
                         execution_context
                     );
@@ -943,6 +1140,7 @@ int run(const Config& config) {
             risk_out.flush();
             execution_out.flush();
             disposition_out.flush();
+            write_paper_dashboard_latest(paths, paper_engine, &stats);
             next_scan_ns = now + config.scan_interval_ms * kNsPerMs;
         }
 
@@ -960,9 +1158,18 @@ int run(const Config& config) {
     risk_out.flush();
     execution_out.flush();
     disposition_out.flush();
+    write_paper_dashboard_latest(paths, paper_engine, &stats);
 
     const auto end_ns = now_ns();
-    print_summary(config, paths, stats, start_ns, end_ns, output_hash);
+    print_summary(
+        config,
+        paths,
+        stats,
+        start_ns,
+        end_ns,
+        output_hash,
+        paper_engine.latest_dashboard_snapshot()
+    );
 
     const bool passed =
         stats.feed_messages.load() > 0 &&

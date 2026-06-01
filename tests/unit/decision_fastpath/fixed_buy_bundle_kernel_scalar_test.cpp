@@ -93,7 +93,10 @@ fast::FixedShapeKernelSpec spec() {
 }
 
 risk::RiskPolicySnapshot policy() {
-    return risk::with_computed_policy_hash(risk::RiskPolicySnapshot{});
+    auto out = risk::RiskPolicySnapshot{};
+    out.min_depth_margin_ratio = 1.0;
+    out.min_depth_margin_bps = 10'000;
+    return risk::with_computed_policy_hash(out);
 }
 
 struct Fixture {
@@ -120,21 +123,21 @@ fast::FastKernelResult run(Fixture& data) {
     );
 }
 
-void FixedBuyBundleKernelScalar_ProducesPlan() {
+void FixedBuyBundleKernelScalar_ProducesOrderDecision() {
     Fixture data;
 
     const auto result = run(data);
 
     expect_true(result.produced_intent, "intent");
-    expect_true(result.produced_plan, "plan");
+    expect_true(result.produced_order_decision, "order decision");
+    expect_false(result.produced_plan, "plan");
     expect_false(result.fallback_required, "fallback");
-    expect_true(result.decision.approved(), "approved");
     expect_equal(result.intent.bundle_qty, 10LL, "bundle qty");
     expect_equal(result.intent.estimated_cost_tick, 8'000'000LL, "total cost");
     expect_equal(result.intent.unit_edge_tick, 200'000LL, "unit edge");
     expect_equal(result.intent.total_edge_tick, 2'000'000LL, "total edge");
-    expect_equal(result.plan.order_count, static_cast<std::uint16_t>(2), "orders");
-    expect_equal(result.plan.orders[0].quantity_lots, 10LL, "order qty");
+    expect_equal(result.order_decision.leg_count, static_cast<std::uint16_t>(2), "legs");
+    expect_equal(result.order_decision.legs[0].quantity_lots, 10LL, "order qty");
     expect_true(result.output_hash != 0, "hash");
 }
 
@@ -187,16 +190,17 @@ void FixedBuyBundleKernelScalar_LowEdgeDoesNotProducePlan() {
     const auto result = run(data);
 
     expect_true(result.produced_intent, "intent");
+    expect_false(result.produced_order_decision, "order decision");
     expect_false(result.produced_plan, "plan");
     expect_false(result.fallback_required, "fallback");
     expect_equal(
-        result.decision.reject_reason,
+        result.risk_reject_reason,
         risk::RiskRejectReason::LowUnitEdge,
         "risk reason"
     );
 }
 
-void FixedBuyBundleKernelScalar_RejectsTotalExposureLimit() {
+void FixedBuyBundleKernelScalar_LeavesExposureToRisk() {
     Fixture data;
     data.risk_policy.max_total_exposure_tick = 10'000'000;
     data.risk_policy = risk::with_computed_policy_hash(data.risk_policy);
@@ -205,15 +209,12 @@ void FixedBuyBundleKernelScalar_RejectsTotalExposureLimit() {
     const auto result = run(data);
 
     expect_true(result.produced_intent, "intent");
+    expect_true(result.produced_order_decision, "order decision");
     expect_false(result.produced_plan, "plan");
-    expect_equal(
-        result.decision.reject_reason,
-        risk::RiskRejectReason::TotalExposureLimit,
-        "risk reason"
-    );
+    expect_equal(result.risk_reject_reason, risk::RiskRejectReason::None, "risk reason");
 }
 
-void FixedBuyBundleKernelScalar_RejectsNumericInventoryLimit() {
+void FixedBuyBundleKernelScalar_LeavesInventoryToRisk() {
     Fixture data;
     data.risk_policy.max_inventory_lots_per_asset = 12;
     data.risk_policy = risk::with_computed_policy_hash(data.risk_policy);
@@ -226,12 +227,9 @@ void FixedBuyBundleKernelScalar_RejectsNumericInventoryLimit() {
     const auto result = run(data);
 
     expect_true(result.produced_intent, "intent");
+    expect_true(result.produced_order_decision, "order decision");
     expect_false(result.produced_plan, "plan");
-    expect_equal(
-        result.decision.reject_reason,
-        risk::RiskRejectReason::InventoryLimit,
-        "risk reason"
-    );
+    expect_equal(result.risk_reject_reason, risk::RiskRejectReason::None, "risk reason");
 }
 
 void FixedBuyBundleKernelScalar_DoesNotMaterializeStrings() {
@@ -239,7 +237,8 @@ void FixedBuyBundleKernelScalar_DoesNotMaterializeStrings() {
 
     const auto result = run(data);
 
-    expect_true(result.produced_plan, "plan");
+    expect_true(result.produced_order_decision, "order decision");
+    expect_false(result.produced_plan, "plan");
     expect_true(result.intent.idempotency_key.empty(), "idempotency key");
     expect_true(result.intent.legs[0].asset_id.empty(), "asset string");
     expect_true(result.plan.idempotency_key.empty(), "plan idem key");
@@ -254,15 +253,19 @@ void FixedBuyBundleKernelScalar_OutputHashDeterministic() {
 
     expect_equal(first.output_hash, second.output_hash, "hash");
     expect_equal(first.intent.intent_id, second.intent.intent_id, "intent");
-    expect_equal(first.plan.plan_id, second.plan.plan_id, "plan");
+    expect_equal(
+        first.order_decision.decision_hash,
+        second.order_decision.decision_hash,
+        "decision"
+    );
 }
 
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
     static const std::unordered_map<std::string, TestFn> test_map{
-        {"FixedBuyBundleKernelScalar_ProducesPlan",
-         &FixedBuyBundleKernelScalar_ProducesPlan},
+        {"FixedBuyBundleKernelScalar_ProducesOrderDecision",
+         &FixedBuyBundleKernelScalar_ProducesOrderDecision},
         {"FixedBuyBundleKernelScalar_RejectsSellLeg",
          &FixedBuyBundleKernelScalar_RejectsSellLeg},
         {"FixedBuyBundleKernelScalar_RejectsMissingDepth",
@@ -271,10 +274,10 @@ const std::unordered_map<std::string, TestFn>& tests() {
          &FixedBuyBundleKernelScalar_RejectsBadDepthFlags},
         {"FixedBuyBundleKernelScalar_LowEdgeDoesNotProducePlan",
          &FixedBuyBundleKernelScalar_LowEdgeDoesNotProducePlan},
-        {"FixedBuyBundleKernelScalar_RejectsTotalExposureLimit",
-         &FixedBuyBundleKernelScalar_RejectsTotalExposureLimit},
-        {"FixedBuyBundleKernelScalar_RejectsNumericInventoryLimit",
-         &FixedBuyBundleKernelScalar_RejectsNumericInventoryLimit},
+        {"FixedBuyBundleKernelScalar_LeavesExposureToRisk",
+         &FixedBuyBundleKernelScalar_LeavesExposureToRisk},
+        {"FixedBuyBundleKernelScalar_LeavesInventoryToRisk",
+         &FixedBuyBundleKernelScalar_LeavesInventoryToRisk},
         {"FixedBuyBundleKernelScalar_DoesNotMaterializeStrings",
          &FixedBuyBundleKernelScalar_DoesNotMaterializeStrings},
         {"FixedBuyBundleKernelScalar_OutputHashDeterministic",

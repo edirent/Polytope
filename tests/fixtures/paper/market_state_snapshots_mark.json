@@ -1,0 +1,36 @@
+{
+  "snapshots": [
+    {
+      "entity_id": "asset_yes",
+      "market_id": "m1",
+      "asset_index": 17,
+      "version": 1,
+      "last_book_update_ns": 1100,
+      "live": true,
+      "usable_for_depth": true,
+      "snapshot_version_hash": 111,
+      "bids": [
+        {"price_tick": 760, "price": 0.00076, "size": 100.0}
+      ],
+      "asks": [
+        {"price_tick": 840, "price": 0.00084, "size": 100.0}
+      ]
+    },
+    {
+      "entity_id": "asset_yes",
+      "market_id": "m1",
+      "asset_index": 17,
+      "version": 2,
+      "last_book_update_ns": 1200,
+      "live": true,
+      "usable_for_depth": true,
+      "snapshot_version_hash": 222,
+      "bids": [
+        {"price_tick": 800, "price": 0.00080, "size": 100.0}
+      ],
+      "asks": [
+        {"price_tick": 1000, "price": 0.00100, "size": 100.0}
+      ]
+    }
+  ]
+}

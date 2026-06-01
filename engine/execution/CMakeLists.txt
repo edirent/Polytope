@@ -26,6 +26,7 @@ target_include_directories(engine_execution PUBLIC
 
 target_link_libraries(engine_execution PUBLIC
     engine_risk
+    engine_order_decision
 )
 
 add_executable(verify_execution_workflow
@@ -99,6 +100,10 @@ foreach(test_case
     ExecutionPlanner_RejectsMismatchedIdempotencyKey
     ExecutionPlanner_RejectsSellLegInV0
     ExecutionPlanner_GeneratesDeterministicClientOrderIds
+    ExecutionPlanner_BuildsPlanFromOrderDecision
+    ExecutionPlanner_UsesDecisionLimitPrices
+    ExecutionPlanner_RejectsDecisionIntentMismatch
+    ExecutionPlanner_RejectsDecisionApprovalMismatch
 )
     add_test(NAME ${test_case} COMMAND execution_planner_tests ${test_case})
 endforeach()
@@ -367,6 +372,7 @@ target_link_libraries(execution_gateway_workflow_tests PRIVATE
 
 foreach(test_case
     ExecutionGateway_FillsPaperAtomicPlan
+    ExecutionGateway_FillsApprovedOrderDecisionPlan
     ExecutionGateway_FailsWhenOneLegInsufficient
     ExecutionGateway_GeneratesReleaseDispositionOnFailure
     ExecutionGateway_GeneratesConsumeDispositionOnFill

@@ -802,6 +802,30 @@ publish/CapturingRiskPublisher.cpp.s:
 	cd /home/edirent/Polytope/build-release-native && $(MAKE) $(MAKESILENT) -f engine/risk/CMakeFiles/engine_risk.dir/build.make engine/risk/CMakeFiles/engine_risk.dir/publish/CapturingRiskPublisher.cpp.s
 .PHONY : publish/CapturingRiskPublisher.cpp.s
 
+publish/HashOnlyRiskPublisher.o: publish/HashOnlyRiskPublisher.cpp.o
+.PHONY : publish/HashOnlyRiskPublisher.o
+
+# target to build an object file
+publish/HashOnlyRiskPublisher.cpp.o:
+	cd /home/edirent/Polytope/build-release-native && $(MAKE) $(MAKESILENT) -f engine/risk/CMakeFiles/engine_risk.dir/build.make engine/risk/CMakeFiles/engine_risk.dir/publish/HashOnlyRiskPublisher.cpp.o
+.PHONY : publish/HashOnlyRiskPublisher.cpp.o
+
+publish/HashOnlyRiskPublisher.i: publish/HashOnlyRiskPublisher.cpp.i
+.PHONY : publish/HashOnlyRiskPublisher.i
+
+# target to preprocess a source file
+publish/HashOnlyRiskPublisher.cpp.i:
+	cd /home/edirent/Polytope/build-release-native && $(MAKE) $(MAKESILENT) -f engine/risk/CMakeFiles/engine_risk.dir/build.make engine/risk/CMakeFiles/engine_risk.dir/publish/HashOnlyRiskPublisher.cpp.i
+.PHONY : publish/HashOnlyRiskPublisher.cpp.i
+
+publish/HashOnlyRiskPublisher.s: publish/HashOnlyRiskPublisher.cpp.s
+.PHONY : publish/HashOnlyRiskPublisher.s
+
+# target to generate assembly for a file
+publish/HashOnlyRiskPublisher.cpp.s:
+	cd /home/edirent/Polytope/build-release-native && $(MAKE) $(MAKESILENT) -f engine/risk/CMakeFiles/engine_risk.dir/build.make engine/risk/CMakeFiles/engine_risk.dir/publish/HashOnlyRiskPublisher.cpp.s
+.PHONY : publish/HashOnlyRiskPublisher.cpp.s
+
 publish/JsonlRiskDecisionWriter.o: publish/JsonlRiskDecisionWriter.cpp.o
 .PHONY : publish/JsonlRiskDecisionWriter.o
 
@@ -825,6 +849,30 @@ publish/JsonlRiskDecisionWriter.s: publish/JsonlRiskDecisionWriter.cpp.s
 publish/JsonlRiskDecisionWriter.cpp.s:
 	cd /home/edirent/Polytope/build-release-native && $(MAKE) $(MAKESILENT) -f engine/risk/CMakeFiles/engine_risk.dir/build.make engine/risk/CMakeFiles/engine_risk.dir/publish/JsonlRiskDecisionWriter.cpp.s
 .PHONY : publish/JsonlRiskDecisionWriter.cpp.s
+
+publish/RiskDecisionPublisher.o: publish/RiskDecisionPublisher.cpp.o
+.PHONY : publish/RiskDecisionPublisher.o
+
+# target to build an object file
+publish/RiskDecisionPublisher.cpp.o:
+	cd /home/edirent/Polytope/build-release-native && $(MAKE) $(MAKESILENT) -f engine/risk/CMakeFiles/engine_risk.dir/build.make engine/risk/CMakeFiles/engine_risk.dir/publish/RiskDecisionPublisher.cpp.o
+.PHONY : publish/RiskDecisionPublisher.cpp.o
+
+publish/RiskDecisionPublisher.i: publish/RiskDecisionPublisher.cpp.i
+.PHONY : publish/RiskDecisionPublisher.i
+
+# target to preprocess a source file
+publish/RiskDecisionPublisher.cpp.i:
+	cd /home/edirent/Polytope/build-release-native && $(MAKE) $(MAKESILENT) -f engine/risk/CMakeFiles/engine_risk.dir/build.make engine/risk/CMakeFiles/engine_risk.dir/publish/RiskDecisionPublisher.cpp.i
+.PHONY : publish/RiskDecisionPublisher.cpp.i
+
+publish/RiskDecisionPublisher.s: publish/RiskDecisionPublisher.cpp.s
+.PHONY : publish/RiskDecisionPublisher.s
+
+# target to generate assembly for a file
+publish/RiskDecisionPublisher.cpp.s:
+	cd /home/edirent/Polytope/build-release-native && $(MAKE) $(MAKESILENT) -f engine/risk/CMakeFiles/engine_risk.dir/build.make engine/risk/CMakeFiles/engine_risk.dir/publish/RiskDecisionPublisher.cpp.s
+.PHONY : publish/RiskDecisionPublisher.cpp.s
 
 reprice/CostRevalidator.o: reprice/CostRevalidator.cpp.o
 .PHONY : reprice/CostRevalidator.o
@@ -1110,9 +1158,15 @@ help:
 	@echo "... publish/CapturingRiskPublisher.o"
 	@echo "... publish/CapturingRiskPublisher.i"
 	@echo "... publish/CapturingRiskPublisher.s"
+	@echo "... publish/HashOnlyRiskPublisher.o"
+	@echo "... publish/HashOnlyRiskPublisher.i"
+	@echo "... publish/HashOnlyRiskPublisher.s"
 	@echo "... publish/JsonlRiskDecisionWriter.o"
 	@echo "... publish/JsonlRiskDecisionWriter.i"
 	@echo "... publish/JsonlRiskDecisionWriter.s"
+	@echo "... publish/RiskDecisionPublisher.o"
+	@echo "... publish/RiskDecisionPublisher.i"
+	@echo "... publish/RiskDecisionPublisher.s"
 	@echo "... reprice/CostRevalidator.o"
 	@echo "... reprice/CostRevalidator.i"
 	@echo "... reprice/CostRevalidator.s"

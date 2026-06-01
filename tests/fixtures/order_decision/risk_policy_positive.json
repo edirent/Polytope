@@ -1,0 +1,36 @@
+{
+  "now_ns": 1500,
+  "policy": {
+    "policy_version": 1,
+    "risk_enabled": true,
+    "kill_switch_enabled": false,
+    "min_post_risk_total_edge_tick": 0,
+    "min_post_risk_unit_edge_tick": 0,
+    "min_edge_bps": 0,
+    "max_total_cost_tick": 0,
+    "max_single_market_exposure_tick": 0,
+    "max_total_exposure_tick": 0,
+    "max_inventory_lots_per_asset": 0,
+    "max_book_age_ns": 1000000000,
+    "max_intent_age_ns": 1000000000,
+    "max_snapshot_skew_ns": 0,
+    "max_allowed_cost_drift_tick": 0,
+    "max_slippage_tick": 0,
+    "max_unhedged_loss_tick": 0,
+    "min_depth_margin_ratio": 1.0,
+    "min_depth_margin_bps": 10000,
+    "max_pending_intents_per_bundle": 100,
+    "max_pending_intents_total": 1000,
+    "max_approvals_per_second": 100
+  },
+  "order_decision": {
+    "min_bundle_qty": 1,
+    "max_bundle_qty": 0,
+    "fee_per_bundle_tick": 0,
+    "latency_buffer_per_bundle_tick": 0,
+    "slippage_buffer_per_bundle_tick": 0,
+    "price_protection_buffer_tick": 0,
+    "max_allowed_price_tick": 500000,
+    "default_ttl_ns": 1000000000
+  }
+}

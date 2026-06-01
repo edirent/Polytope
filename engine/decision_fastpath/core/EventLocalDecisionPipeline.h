@@ -3,6 +3,7 @@
 #include "engine/decision_fastpath/core/FastPathGate.h"
 #include "engine/decision_fastpath/kernel/FixedShapeKernelSpec.h"
 #include "engine/execution/public/OrderPlan.h"
+#include "engine/order_decision/public/OrderDecision.h"
 #include "engine/risk/ledger/RiskLedger.h"
 #include "engine/risk/public/ApprovedIntent.h"
 #include "engine/risk/public/RiskDecision.h"
@@ -105,6 +106,7 @@ struct FastPathResult {
     std::string mismatch_reason;
 
     trading_engine::signal::OpportunityIntent intent;
+    trading_engine::order_decision::OrderDecisionLite order_decision;
     trading_engine::risk::RiskDecision decision;
     trading_engine::risk::ApprovedIntent approved;
     trading_engine::execution::OrderPlan plan;

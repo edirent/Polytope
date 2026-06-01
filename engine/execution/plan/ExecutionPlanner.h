@@ -3,6 +3,8 @@
 #include "engine/execution/core/ExecutionContext.h"
 #include "engine/execution/public/ExecutionConfig.h"
 #include "engine/execution/public/OrderPlan.h"
+#include "engine/order_decision/public/ApprovedOrderDecisionEnvelope.h"
+#include "engine/order_decision/public/OrderDecision.h"
 #include "engine/risk/public/ApprovedIntent.h"
 #include "engine/signal/public/OpportunityIntent.h"
 
@@ -26,6 +28,9 @@ struct ApprovedIntentEnvelope {
     ExecutionApproval approval;
 };
 
+using ApprovedOrderDecisionEnvelope =
+    order_decision::ApprovedOrderDecisionEnvelope;
+
 struct PlanResult {
     bool ok = false;
     OrderPlan plan;
@@ -36,6 +41,12 @@ class ExecutionPlanner {
 public:
     [[nodiscard]] PlanResult build_plan(
         const ApprovedIntentEnvelope& envelope,
+        std::uint64_t now_ns,
+        const ExecutionConfig& config
+    ) const;
+
+    [[nodiscard]] PlanResult build_plan(
+        const ApprovedOrderDecisionEnvelope& envelope,
         std::uint64_t now_ns,
         const ExecutionConfig& config
     ) const;

@@ -3,8 +3,8 @@
 #include "engine/common/math/VwapMath.h"
 #include "engine/decision_fastpath/core/FastPathGate.h"
 #include "engine/decision_fastpath/kernel/FixedShapeKernelSpec.h"
-#include "engine/execution/public/ChildOrder.h"
 #include "engine/execution/public/OrderPlan.h"
+#include "engine/order_decision/public/OrderDecision.h"
 #include "engine/risk/ledger/RiskLedger.h"
 #include "engine/risk/public/ApprovedIntent.h"
 #include "engine/risk/public/RiskDecision.h"
@@ -28,20 +28,17 @@ struct FastPathScratch {
         trading_engine::signal::IntentLeg,
         kMaxFixedShapeKernelLegs
     > intent_legs{};
-    std::array<
-        trading_engine::execution::ChildOrder,
-        kMaxFixedShapeKernelLegs
-    > child_orders{};
-
     void reset() noexcept;
 };
 
 struct FastKernelResult {
     bool produced_intent = false;
+    bool produced_order_decision = false;
     bool produced_plan = false;
     bool fallback_required = false;
 
     trading_engine::signal::OpportunityIntent intent;
+    trading_engine::order_decision::OrderDecisionLite order_decision;
     trading_engine::risk::RiskDecision decision;
     trading_engine::risk::ApprovedIntent approved;
     trading_engine::execution::OrderPlan plan;

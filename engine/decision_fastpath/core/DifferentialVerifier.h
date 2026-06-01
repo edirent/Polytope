@@ -34,6 +34,8 @@ struct DecisionPathSnapshot {
     std::int64_t edge_bps = 0;
 
     std::uint16_t order_count = 0;
+    std::uint64_t decision_hash = 0;
+    std::uint64_t plan_id = 0;
 
     std::uint64_t opportunity_hash = 0;
     std::uint64_t risk_hash = 0;

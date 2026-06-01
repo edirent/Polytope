@@ -389,68 +389,6 @@ void mix_u8(std::uint64_t* hash, std::uint8_t value) noexcept {
     return trading_engine::risk::RiskDecisionType::Approve;
 }
 
-[[nodiscard]] std::uint64_t make_decision_id(
-    const trading_engine::signal::OpportunityIntent& intent,
-    const trading_engine::risk::RiskPolicySnapshot& policy,
-    trading_engine::risk::RiskDecisionStatus status,
-    trading_engine::risk::RiskRejectReason reason
-) noexcept {
-    auto hash = kFnvOffset;
-    mix_u64(&hash, intent.intent_id);
-    mix_u64(&hash, intent.bundle_id);
-    mix_u64(&hash, policy.policy_version);
-    mix_u64(&hash, policy.policy_hash);
-    mix_u8(&hash, static_cast<std::uint8_t>(status));
-    mix_u8(&hash, static_cast<std::uint8_t>(reason));
-    return nonzero_hash(hash);
-}
-
-void fill_decision(
-    const trading_engine::signal::OpportunityIntent& intent,
-    const trading_engine::risk::RiskPolicySnapshot& policy,
-    trading_engine::risk::RiskRejectReason reason,
-    trading_engine::risk::RiskDecision* out
-) noexcept {
-    out->status = reason == trading_engine::risk::RiskRejectReason::None
-        ? trading_engine::risk::RiskDecisionStatus::Approved
-        : trading_engine::risk::RiskDecisionStatus::Rejected;
-    out->reject_reason = reason;
-    out->decision_id = make_decision_id(intent, policy, out->status, reason);
-    out->intent_id = intent.intent_id;
-    out->bundle_id = intent.bundle_id;
-    out->idempotency_hash = intent.idempotency_hash;
-    out->oracle_artifact_hash = intent.oracle_artifact_hash;
-    out->constraint_hash = intent.constraint_hash;
-    out->bundle_hash = intent.bundle_hash;
-    out->snapshot_version_hash = intent.snapshot_version_hash;
-    out->policy_version = policy.policy_version;
-    out->policy_hash = policy.policy_hash;
-}
-
-[[nodiscard]] std::uint64_t make_reservation_id(
-    const trading_engine::signal::OpportunityIntent& intent,
-    const trading_engine::risk::RiskDecision& decision
-) noexcept {
-    auto hash = kFnvOffset;
-    mix_u64(&hash, intent.intent_id);
-    mix_u64(&hash, decision.decision_id);
-    mix_u64(&hash, intent.idempotency_hash);
-    return nonzero_hash(hash);
-}
-
-[[nodiscard]] std::uint64_t make_plan_id(
-    const trading_engine::signal::OpportunityIntent& intent,
-    const trading_engine::risk::RiskDecision& decision,
-    std::uint64_t reservation_id
-) noexcept {
-    auto hash = kFnvOffset;
-    mix_u64(&hash, intent.intent_id);
-    mix_u64(&hash, decision.decision_id);
-    mix_u64(&hash, reservation_id);
-    mix_u64(&hash, intent.bundle_hash);
-    return nonzero_hash(hash);
-}
-
 void fill_intent(
     const FixedShapeKernelSpec& spec,
     const std::array<LegWork, kMaxFixedShapeKernelLegs>& legs,
@@ -532,36 +470,51 @@ void fill_intent(
     (void)avg_cost_tick;
 }
 
-void fill_plan(
+void fill_order_decision(
+    const FixedShapeKernelSpec& spec,
     const trading_engine::signal::OpportunityIntent& intent,
-    const trading_engine::risk::RiskDecision& decision,
-    std::uint64_t reservation_id,
-    trading_engine::execution::OrderPlan* out
+    const std::array<LegWork, kMaxFixedShapeKernelLegs>& legs,
+    const FastPathScratch& scratch,
+    std::uint64_t policy_hash,
+    trading_engine::order_decision::OrderDecisionLite* out
 ) noexcept {
-    out->plan_id = make_plan_id(intent, decision, reservation_id);
     out->source_intent_id = intent.intent_id;
-    out->approved_intent_id = decision.decision_id;
-    out->reservation_id = reservation_id;
     out->bundle_id = intent.bundle_id;
-    out->order_count = intent.leg_count;
-    out->max_total_cost_tick = intent.estimated_cost_tick;
-    out->min_expected_edge_tick = intent.total_edge_tick;
-    out->max_slippage_tick = intent.slippage_buffer_tick;
+    out->type = trading_engine::order_decision::OrderDecisionType::
+        PaperOrderDecision;
+    out->chosen_bundle_qty = intent.bundle_qty;
+    out->guaranteed_payout_tick = intent.guaranteed_payout_tick;
+    out->estimated_total_cost_tick = intent.estimated_cost_tick;
+    out->estimated_fee_tick = intent.estimated_fee_tick;
+    out->latency_buffer_tick = intent.latency_buffer_tick;
+    out->slippage_buffer_tick = intent.slippage_buffer_tick;
+    out->unit_edge_tick = intent.unit_edge_tick;
+    out->total_edge_tick = intent.total_edge_tick;
+    out->edge_bps = intent.edge_bps;
+    out->snapshot_version_hash = intent.snapshot_version_hash;
+    out->oracle_artifact_hash = intent.oracle_artifact_hash;
+    out->bundle_hash = intent.bundle_hash;
+    out->policy_hash = policy_hash;
     out->created_ts_ns = intent.created_ts_ns;
-    out->expire_after_ns = intent.expires_at_ns;
+    out->expires_at_ns = intent.expires_at_ns;
+    out->leg_count = intent.leg_count;
 
     for (std::uint16_t i = 0; i < intent.leg_count; ++i) {
-        const auto& leg = intent.legs[i];
-        auto& order = out->orders[i];
-        order.order_id =
-            static_cast<trading_engine::execution::ChildOrderId>(i + 1U);
-        order.plan_id = out->plan_id;
-        order.side = trading_engine::execution::OrderSide::Buy;
-        order.quantity_lots = leg.requested_qty_lots;
-        order.limit_price_tick = leg.worst_price_tick;
-        order.estimated_vwap_tick = leg.estimated_vwap_tick;
-        order.worst_allowed_price_tick = leg.worst_price_tick;
+        auto& decision_leg = out->legs[i];
+        decision_leg.asset_index = spec.asset_indices[i];
+        decision_leg.market_index = spec.market_indices[i];
+        decision_leg.side = spec.sides[i];
+        decision_leg.quantity_lots = legs[i].planned_qty_lots;
+        decision_leg.estimated_vwap_tick = scratch.leg_costs[i].vwap_tick;
+        decision_leg.limit_price_tick = scratch.leg_costs[i].worst_price_tick;
+        decision_leg.worst_price_tick = scratch.leg_costs[i].worst_price_tick;
+        decision_leg.estimated_cost_tick =
+            scratch.leg_costs[i].total_cost_tick;
     }
+
+    out->decision_hash =
+        trading_engine::order_decision::compute_order_decision_hash(*out);
+    out->decision_id = out->decision_hash;
 }
 
 [[nodiscard]] std::uint64_t make_output_hash(
@@ -569,6 +522,7 @@ void fill_plan(
 ) noexcept {
     auto hash = kFnvOffset;
     mix_u8(&hash, result.produced_intent ? 1U : 0U);
+    mix_u8(&hash, result.produced_order_decision ? 1U : 0U);
     mix_u8(&hash, result.produced_plan ? 1U : 0U);
     mix_u8(&hash, result.fallback_required ? 1U : 0U);
     mix_u8(&hash, static_cast<std::uint8_t>(result.reject_reason));
@@ -581,9 +535,7 @@ void fill_plan(
     mix_i64(&hash, result.unit_edge_tick);
     mix_i64(&hash, result.total_edge_tick);
     mix_i64(&hash, result.edge_bps);
-    mix_u64(&hash, result.decision.decision_id);
-    mix_u64(&hash, result.plan.plan_id);
-    mix_u64(&hash, result.plan.reservation_id);
+    mix_u64(&hash, result.order_decision.decision_hash);
     return nonzero_hash(hash);
 }
 
@@ -593,7 +545,6 @@ void FastPathScratch::reset() noexcept {
     leg_count = 0;
     leg_costs = {};
     intent_legs = {};
-    child_orders = {};
 }
 
 FastKernelResult FixedBuyBundleKernelScalar::run(
@@ -642,6 +593,7 @@ FastKernelResult FixedBuyBundleKernelScalar::run(
 
     std::array<LegWork, kMaxFixedShapeKernelLegs> legs{};
     std::int64_t bundle_qty = std::numeric_limits<std::int64_t>::max();
+    std::int64_t first_leg_bundle_qty = 0;
     std::uint64_t snapshot_version = 0;
 
     for (std::uint8_t i = 0; i < spec.leg_count; ++i) {
@@ -660,6 +612,9 @@ FastKernelResult FixedBuyBundleKernelScalar::run(
         if (!depth_is_usable(*leg.depth, policy, now_ns)) {
             return fallback(FastPathRejectReason::BadDepthView);
         }
+        if (leg.depth->ask_count != 1 || leg.depth->prefix.ask_count != 1) {
+            return fallback(FastPathRejectReason::DynamicRuntimeOracleRequired);
+        }
 
         leg.executable_qty_lots = executable_ask_qty(*leg.depth);
         leg.best_price_tick = best_ask_tick(*leg.depth);
@@ -667,10 +622,14 @@ FastKernelResult FixedBuyBundleKernelScalar::run(
             leg.best_price_tick <= 0) {
             return fallback(FastPathRejectReason::BadDepthView);
         }
-        bundle_qty = std::min(
-            bundle_qty,
-            leg.executable_qty_lots / leg.ratio_qty_lots
-        );
+        const auto leg_bundle_qty =
+            leg.executable_qty_lots / leg.ratio_qty_lots;
+        if (i == 0) {
+            first_leg_bundle_qty = leg_bundle_qty;
+        } else if (leg_bundle_qty != first_leg_bundle_qty) {
+            return fallback(FastPathRejectReason::DynamicRuntimeOracleRequired);
+        }
+        bundle_qty = std::min(bundle_qty, leg_bundle_qty);
         snapshot_version = std::max(snapshot_version, leg.depth->book_version);
     }
 
@@ -681,6 +640,7 @@ FastKernelResult FixedBuyBundleKernelScalar::run(
 
     std::int64_t total_cost_tick = 0;
     std::int64_t max_leg_slippage_tick = 0;
+    bool partial_fill_reject = false;
     for (std::uint8_t i = 0; i < spec.leg_count; ++i) {
         auto& leg = legs[i];
         if (!checked_mul(leg.ratio_qty_lots, bundle_qty, &leg.planned_qty_lots)) {
@@ -694,6 +654,10 @@ FastKernelResult FixedBuyBundleKernelScalar::run(
             leg.executable_qty_lots,
             leg.planned_qty_lots
         );
+        if (policy.min_depth_margin_bps > 0 &&
+            leg.depth_margin_bps < policy.min_depth_margin_bps) {
+            partial_fill_reject = true;
+        }
         max_leg_slippage_tick = std::max(
             max_leg_slippage_tick,
             scratch->leg_costs[i].worst_price_tick - leg.best_price_tick
@@ -727,23 +691,20 @@ FastKernelResult FixedBuyBundleKernelScalar::run(
     result.total_edge_tick = edge.total_edge_tick;
     result.edge_bps = edge.edge_bps;
 
-    auto rejection = edge_rejection(spec, edge, bundle_qty, policy);
-    if (rejection == trading_engine::risk::RiskDecisionType::Approve) {
-        rejection = risk_limit_rejection(
-            spec,
-            legs,
-            *scratch,
-            total_cost_tick,
-            policy,
-            ledger
-        );
+    auto rejection = trading_engine::risk::RiskDecisionType::Approve;
+    if (partial_fill_reject) {
+        rejection = trading_engine::risk::RiskDecisionType::RejectInsufficientDepth;
+    } else if (policy.max_total_cost_tick > 0 &&
+        total_cost_tick > policy.max_total_cost_tick) {
+        rejection = trading_engine::risk::RiskDecisionType::RejectCostLimit;
+    } else {
+        rejection = edge_rejection(spec, edge, bundle_qty, policy);
     }
-
-    const auto risk_reason = rejection ==
+    const auto decision_reason = rejection ==
             trading_engine::risk::RiskDecisionType::Approve
         ? trading_engine::risk::RiskRejectReason::None
         : risk_reject_reason(rejection);
-    result.risk_reject_reason = risk_reason;
+    result.risk_reject_reason = decision_reason;
 
     fill_intent(
         spec,
@@ -757,21 +718,24 @@ FastKernelResult FixedBuyBundleKernelScalar::run(
         snapshot_version,
         snapshot_hash(spec, legs),
         now_ns,
-        risk_reason == trading_engine::risk::RiskRejectReason::None,
+        decision_reason == trading_engine::risk::RiskRejectReason::None,
         &result.intent
     );
-    fill_decision(result.intent, policy, risk_reason, &result.decision);
 
-    if (risk_reason == trading_engine::risk::RiskRejectReason::None) {
-        const auto reservation_id =
-            make_reservation_id(result.intent, result.decision);
-        fill_plan(result.intent, result.decision, reservation_id, &result.plan);
-        result.approved.intent = result.intent;
-        result.approved.decision = result.decision;
-        result.produced_plan = true;
+    if (decision_reason == trading_engine::risk::RiskRejectReason::None) {
+        fill_order_decision(
+            spec,
+            result.intent,
+            legs,
+            *scratch,
+            policy.policy_hash,
+            &result.order_decision
+        );
+        result.produced_order_decision = true;
     }
 
     result.output_hash = make_output_hash(result);
+    (void)ledger;
     return result;
 }
 

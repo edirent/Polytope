@@ -2,6 +2,7 @@
 #include "decode/json/JsonDecodeResult.h"
 #include "decode/public/NormalizedEventBatch.h"
 #include "engine/execution/plan/ExecutionPlanner.h"
+#include "engine/order_decision/core/OrderDecisionEngine.h"
 #include "engine/risk/core/RiskEngine.h"
 #include "engine/risk/publish/CapturingRiskPublisher.h"
 #include "engine/risk/public/RiskPolicySnapshot.h"
@@ -43,6 +44,8 @@ namespace decode = trading_engine::decode;
 namespace execution = trading_engine::execution;
 namespace feed = trading_engine::feed;
 namespace json = boost::json;
+namespace order_decision = trading_engine::order_decision;
+namespace oracle = trading_engine::oracle;
 namespace risk = trading_engine::risk;
 namespace signal = trading_engine::signal;
 namespace state = trading_engine::state;
@@ -380,6 +383,18 @@ void mix_string(std::uint64_t* hash, const std::string& value) noexcept {
     return universe;
 }
 
+[[nodiscard]] const oracle::CandidateBundle* find_bundle(
+    const signal::OracleArtifactReader& reader,
+    std::uint64_t bundle_id
+) {
+    for (const auto& bundle : reader.active_bundles()) {
+        if (bundle.bundle_id == bundle_id) {
+            return &bundle;
+        }
+    }
+    return nullptr;
+}
+
 void mix_intent(
     std::uint64_t* hash,
     const signal::OpportunityIntent& intent
@@ -540,6 +555,8 @@ CanonicalSummary run_canonical(
     risk_runtime.publisher = &risk_publisher;
     risk::RiskEngine risk_engine(risk_runtime);
 
+    order_decision::OrderDecisionEngine order_decision_engine;
+
     execution::ExecutionPlanner planner;
     execution::ExecutionConfig execution_config;
     execution_config.execution_enabled = true;
@@ -606,7 +623,33 @@ CanonicalSummary run_canonical(
                     scan_context.now_monotonic_ns
                 );
                 const auto risk_input = risk::make_risk_input_view(handoff);
-                const auto risk_result = risk_engine.evaluate(risk_input);
+
+                const auto* bundle = find_bundle(
+                    artifact_reader,
+                    intent.bundle_id
+                );
+                if (bundle == nullptr || evidence.depth_views == nullptr) {
+                    continue;
+                }
+                const auto decision_result = order_decision_engine.decide(
+                    intent,
+                    *bundle,
+                    std::span<const state::MarketDepthView>{
+                        evidence.depth_views,
+                        evidence.depth_view_count
+                    },
+                    policy,
+                    scan_context.now_monotonic_ns
+                );
+                if (!decision_result.ok) {
+                    continue;
+                }
+
+                const auto risk_result = risk_engine.evaluate_decision(
+                    intent,
+                    decision_result.decision,
+                    risk_input
+                );
                 mix_risk_result(&summary.risk_hash, risk_result);
                 if (!risk_result.decision.approved()) {
                     continue;
@@ -620,21 +663,22 @@ CanonicalSummary run_canonical(
                         std::to_string(execution_intent.idempotency_hash);
                 }
 
-                execution::ApprovedIntentEnvelope envelope;
-                envelope.source_intent = execution_intent;
-                envelope.approval.decision_id =
-                    risk_result.output_hash != 0
-                        ? risk_result.output_hash
-                        : intent.intent_id;
-                envelope.approval.reservation_id =
+                risk::ApprovedIntent approved_intent;
+                approved_intent.intent = execution_intent;
+                approved_intent.decision = risk_result.decision;
+                approved_intent.reservation_id =
+                    std::to_string(risk_result.reservation.reservation_id);
+                approved_intent.reservation_id_hash =
                     risk_result.reservation.reservation_id;
-                envelope.approval.bundle_id = intent.bundle_id;
-                envelope.approval.approved_bundle_qty =
-                    risk_result.cost.risk_bundle_qty > 0
-                        ? risk_result.cost.risk_bundle_qty
-                        : intent.bundle_qty;
-                envelope.approval.idempotency_key =
-                    execution_intent.idempotency_key;
+                approved_intent.approved_at_ns = scan_context.now_monotonic_ns;
+                approved_intent.expires_at_ns = execution_intent.expires_at_ns;
+
+                const auto envelope =
+                    order_decision::make_approved_order_decision_envelope(
+                        approved_intent,
+                        decision_result.decision,
+                        scan_context.now_monotonic_ns
+                    );
 
                 const auto plan_result = planner.build_plan(
                     envelope,

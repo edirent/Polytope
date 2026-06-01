@@ -15,6 +15,7 @@ namespace {
 
 using trading_engine::execution::AdapterResultCode;
 using trading_engine::execution::ApprovedIntentEnvelope;
+using trading_engine::execution::ApprovedOrderDecisionEnvelope;
 using trading_engine::execution::CapturingExecutionPublisher;
 using trading_engine::execution::ChildOrderStatus;
 using trading_engine::execution::ExecutionApproval;
@@ -27,6 +28,11 @@ using trading_engine::execution::PlanStatus;
 using trading_engine::execution::ReservationDisposition;
 using trading_engine::execution::ReservationDispositionPublisher;
 using trading_engine::execution::ReservationDispositionType;
+using trading_engine::order_decision::compute_order_decision_hash;
+using trading_engine::order_decision::make_approved_order_decision_envelope;
+using trading_engine::order_decision::OrderDecision;
+using trading_engine::order_decision::OrderDecisionType;
+using trading_engine::risk::make_approved_decision;
 using trading_engine::signal::IntentStatus;
 using trading_engine::signal::OpportunityIntent;
 using trading_engine::signal::Side;
@@ -128,6 +134,51 @@ ApprovedIntentEnvelope envelope() {
     return envelope;
 }
 
+ApprovedOrderDecisionEnvelope decision_envelope() {
+    const auto source = envelope().source_intent;
+
+    OrderDecision decision;
+    decision.source_intent_id = source.intent_id;
+    decision.bundle_id = source.bundle_id;
+    decision.type = OrderDecisionType::PaperOrderDecision;
+    decision.chosen_bundle_qty = 1;
+    decision.estimated_total_cost_tick = source.estimated_cost_tick;
+    decision.total_edge_tick = source.total_edge_tick;
+    decision.expires_at_ns = source.expires_at_ns;
+    decision.leg_count = source.leg_count;
+    for (std::uint16_t i = 0; i < source.leg_count; ++i) {
+        decision.legs[i].market_id = source.legs[i].market_id;
+        decision.legs[i].asset_id = source.legs[i].asset_id;
+        decision.legs[i].side = source.legs[i].side;
+        decision.legs[i].quantity_lots = source.legs[i].quantity_lots;
+        decision.legs[i].estimated_vwap_tick =
+            source.legs[i].estimated_vwap_tick;
+        decision.legs[i].worst_price_tick = source.legs[i].worst_price_tick;
+        decision.legs[i].limit_price_tick = source.legs[i].worst_price_tick;
+        decision.legs[i].estimated_cost_tick =
+            source.legs[i].estimated_cost_tick;
+    }
+    decision.decision_hash = compute_order_decision_hash(decision);
+    decision.decision_id = decision.decision_hash;
+
+    trading_engine::risk::ApprovedIntent approved;
+    approved.intent = source;
+    approved.decision = make_approved_decision(1, 2);
+    approved.decision.decision_id = 303;
+    approved.decision.intent_id = source.intent_id;
+    approved.decision.bundle_id = source.bundle_id;
+    approved.reservation_id = "404";
+    approved.reservation_id_hash = 404;
+    approved.approved_at_ns = 1000;
+    approved.expires_at_ns = source.expires_at_ns;
+
+    return make_approved_order_decision_envelope(
+        approved,
+        decision,
+        1000
+    );
+}
+
 ExecutionContext context_with_depth(bool enough_second_leg = true) {
     ExecutionContext context;
     context.now_ns = 1000;
@@ -160,6 +211,29 @@ void ExecutionGateway_FillsPaperAtomicPlan() {
     expect_equal(reports[0].status, ChildOrderStatus::Filled, "first filled");
     expect_equal(reports[1].status, ChildOrderStatus::Filled, "second filled");
     expect_equal(report_publisher.reports().size(), reports.size(), "published");
+}
+
+void ExecutionGateway_FillsApprovedOrderDecisionPlan() {
+    PaperExecutionAdapter adapter;
+    CapturingExecutionPublisher report_publisher;
+    CapturingReservationPublisher reservation_publisher;
+    ExecutionGateway gateway(&adapter, &report_publisher, &reservation_publisher);
+
+    const auto result = gateway.submit_approved_decision(
+        decision_envelope(),
+        context_with_depth()
+    );
+    const auto reports = gateway.poll();
+
+    expect_true(result.ok, "result ok");
+    expect_equal(result.status, PlanStatus::Filled, "plan filled");
+    expect_equal(result.child_orders_submitted, 2ULL, "submitted");
+    expect_equal(reports.size(), static_cast<std::size_t>(2), "report count");
+    expect_equal(
+        reservation_publisher.dispositions()[0].type,
+        ReservationDispositionType::Consume,
+        "consume disposition"
+    );
 }
 
 void ExecutionGateway_FailsWhenOneLegInsufficient() {
@@ -328,6 +402,10 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "ExecutionGateway_FillsPaperAtomicPlan",
             &ExecutionGateway_FillsPaperAtomicPlan
+        },
+        {
+            "ExecutionGateway_FillsApprovedOrderDecisionPlan",
+            &ExecutionGateway_FillsApprovedOrderDecisionPlan
         },
         {
             "ExecutionGateway_FailsWhenOneLegInsufficient",

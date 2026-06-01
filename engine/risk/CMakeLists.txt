@@ -47,6 +47,7 @@ target_include_directories(engine_risk PUBLIC
 
 target_link_libraries(engine_risk PUBLIC
     engine_signal
+    engine_order_decision
 )
 
 add_executable(verify_risk_workflow

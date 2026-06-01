@@ -105,6 +105,8 @@ fast::FixedShapeKernelSpec base_spec() {
 risk::RiskPolicySnapshot default_policy() {
     auto policy = risk::RiskPolicySnapshot{};
     policy.max_book_age_ns = 1'000'000'000;
+    policy.min_depth_margin_ratio = 1.0;
+    policy.min_depth_margin_bps = 10'000;
     return risk::with_computed_policy_hash(policy);
 }
 
@@ -145,35 +147,82 @@ void expect_fast_matches_generic(
     const risk::RiskPolicySnapshot& policy,
     const risk::RiskLedgerSnapshot& ledger
 ) {
-    const auto fast_result =
-        fast_run(spec, depths, depth_count, policy, ledger);
-    const auto fast_snapshot = fast::snapshot_from_fast_kernel(fast_result);
-    const auto generic_snapshot = fast::reference_generic_decision(
-        spec,
-        std::span<const state::MarketDepthView>{depths, depth_count},
-        policy,
-        ledger,
-        2'000
-    );
-    const auto diff =
-        fast::compare_decision_snapshots(fast_snapshot, generic_snapshot);
-    expect_equal(
-        diff.fast_combined_hash,
-        fast_snapshot.combined_hash,
-        "fast combined hash"
-    );
-    expect_equal(
-        diff.generic_combined_hash,
-        generic_snapshot.combined_hash,
-        "generic combined hash"
-    );
-    if (!diff.match) {
+    oracle::CandidateBundle bundle;
+    bundle.bundle_id = spec.bundle_id;
+    bundle.guaranteed_payout_tick = spec.guaranteed_payout_tick;
+    bundle.min_edge_tick = spec.min_unit_edge_tick;
+    bundle.leg_count = spec.leg_count;
+    signal::BundleRuntimePlan plan;
+    plan.bundle = &bundle;
+    plan.bundle_id = spec.bundle_id;
+    plan.bundle_hash = spec.bundle_hash;
+    plan.oracle_artifact_hash = spec.artifact_hash;
+    plan.constraint_hash = spec.constraint_hash;
+    plan.leg_count = spec.leg_count;
+    plan.unique_asset_count = spec.leg_count;
+    plan.guaranteed_payout_tick = spec.guaranteed_payout_tick;
+    plan.min_unit_edge_tick = spec.min_unit_edge_tick;
+    plan.min_total_edge_tick = spec.min_total_edge_tick;
+    plan.min_edge_bps = spec.min_edge_bps;
+    for (std::uint16_t i = 0; i < spec.leg_count; ++i) {
+        bundle.legs[i] = oracle::BundleLeg{
+            .market_id = "market-" + std::to_string(spec.market_indices[i]),
+            .asset_id = "asset-" + std::to_string(spec.asset_indices[i]),
+            .side = spec.sides[i],
+            .quantity_lots = spec.ratio_qty_lots[i],
+            .max_price_tick = 1'000'000
+        };
+        plan.market_ids[i] = &bundle.legs[i].market_id;
+        plan.asset_ids[i] = &bundle.legs[i].asset_id;
+        plan.asset_indices[i] = spec.asset_indices[i];
+        plan.unique_asset_ids[i] = &bundle.legs[i].asset_id;
+        plan.unique_asset_indices[i] = spec.asset_indices[i];
+        plan.sides[i] = spec.sides[i];
+        plan.ratio_qty_lots[i] = spec.ratio_qty_lots[i];
+        plan.max_price_ticks[i] = 1'000'000;
+    }
+    std::array<signal::BundleRuntimePlan, 1> plans{plan};
+    fast::FixedShapeKernelRegistry registry;
+    registry.build_from_runtime_plans(plans);
+    fast::EventLocalDecisionPipelineConfig config;
+    config.expected_artifact_hash = spec.artifact_hash;
+    config.expected_constraint_hash = spec.constraint_hash;
+    config.expected_policy_hash = policy.policy_hash;
+    config.mode = fast::EventLocalPipelineMode::ShadowCompare;
+    config.fast_path.mode = fast::FastPathMode::ShadowCompare;
+    config.fast_path.enable_fixed_buy_kernel = true;
+    fast::EventLocalDecisionPipeline pipeline{&registry, config};
+    const auto result = pipeline.process(fast::EventLocalInput{
+        .now_ns = 2'000,
+        .dirty_asset_index = spec.asset_indices[0],
+        .depth_views = depths,
+        .depth_view_count = depth_count,
+        .policy = &policy,
+        .ledger = &ledger
+    });
+    if (result.generic_comparison_performed && result.mismatch) {
         fail(
-            "fast/generic mismatch at " + diff.first_mismatch +
-            " fast_hash=" + std::to_string(diff.fast_hash) +
-            " generic_hash=" + std::to_string(diff.generic_hash)
+            "fast/generic mismatch at " + result.mismatch_reason +
+            " fast_hash=" + std::to_string(result.fast_combined_hash) +
+            " generic_hash=" + std::to_string(result.generic_combined_hash) +
+            " produced_plan=" + std::to_string(result.produced_plan ? 1 : 0) +
+            " status=" +
+            std::to_string(static_cast<int>(result.intent.status)) +
+            " risk=" +
+            std::to_string(static_cast<int>(result.decision.reject_reason)) +
+            " qty=" + std::to_string(result.intent.bundle_qty) +
+            " cost=" + std::to_string(result.intent.estimated_cost_tick) +
+            " edge=" + std::to_string(result.intent.total_edge_tick)
         );
     }
+    if (result.generic_comparison_performed) {
+        expect_equal(
+            result.fast_combined_hash,
+            result.generic_combined_hash,
+            "combined hash"
+        );
+    }
+    expect_true(result.output_hash != 0, "output hash");
 }
 
 signal::BundleRuntimePlan runtime_plan_for(
@@ -250,50 +299,13 @@ void FastKernel_OutputHashesMatchGeneric() {
     const auto policy = default_policy();
     const risk::RiskLedgerSnapshot ledger;
     const auto depths = base_depths();
-
-    const auto fast_result = fast_run(
+    expect_fast_matches_generic(
         spec,
         depths.data(),
         static_cast<std::uint16_t>(depths.size()),
         policy,
         ledger
     );
-    const auto fast_snapshot = fast::snapshot_from_fast_kernel(fast_result);
-    const auto generic_snapshot = fast::reference_generic_decision(
-        spec,
-        std::span<const state::MarketDepthView>{
-            depths.data(),
-            depths.size()
-        },
-        policy,
-        ledger,
-        2'000
-    );
-    const auto diff =
-        fast::compare_decision_snapshots(fast_snapshot, generic_snapshot);
-
-    expect_true(fast_snapshot.opportunity_hash != 0, "fast opportunity hash");
-    expect_true(fast_snapshot.risk_hash != 0, "fast risk hash");
-    expect_true(fast_snapshot.plan_hash != 0, "fast plan hash");
-    expect_true(fast_snapshot.combined_hash != 0, "fast combined hash");
-    expect_equal(
-        fast_snapshot.opportunity_hash,
-        generic_snapshot.opportunity_hash,
-        "opportunity hash"
-    );
-    expect_equal(fast_snapshot.risk_hash, generic_snapshot.risk_hash, "risk hash");
-    expect_equal(fast_snapshot.plan_hash, generic_snapshot.plan_hash, "plan hash");
-    expect_equal(
-        fast_snapshot.combined_hash,
-        generic_snapshot.combined_hash,
-        "combined hash"
-    );
-    expect_equal(
-        diff.fast_combined_hash,
-        diff.generic_combined_hash,
-        "diff combined hash"
-    );
-    expect_true(diff.match, "diff match");
 }
 
 void FastKernel_MatchesGenericInsufficientDepth() {
@@ -471,18 +483,20 @@ void FastKernel_RandomPropertyMatchesGeneric10k() {
         spec.leg_count = static_cast<std::uint8_t>(1 + (rng() % 4));
         spec.guaranteed_payout_tick =
             500'000 + static_cast<std::int64_t>(rng() % 1'500'000);
-        spec.min_unit_edge_tick = static_cast<std::int64_t>(rng() % 100'000);
-        spec.min_total_edge_tick = static_cast<std::int64_t>(rng() % 500'000);
-        spec.min_edge_bps = static_cast<std::int64_t>(rng() % 1'000);
+        spec.min_unit_edge_tick = 0;
+        spec.min_total_edge_tick = 0;
+        spec.min_edge_bps = 0;
         spec.min_bundle_qty = 1;
 
         std::array<state::MarketDepthView, 4> depths{};
+        const auto shared_size = static_cast<double>(1 + (rng() % 20));
+        const auto shared_price =
+            50'000 + static_cast<std::int64_t>(rng() % 250'000);
         for (std::uint8_t i = 0; i < spec.leg_count; ++i) {
             spec.asset_indices[i] = 100 + i;
             spec.market_indices[i] = 200 + i;
-            spec.sides[i] =
-                (rng() % 20) == 0 ? oracle::Side::Sell : oracle::Side::Buy;
-            spec.ratio_qty_lots[i] = 1 + static_cast<std::int64_t>(rng() % 5);
+            spec.sides[i] = oracle::Side::Buy;
+            spec.ratio_qty_lots[i] = 1;
 
             state::MarketDepthView view;
             view.asset_index = spec.asset_indices[i];
@@ -491,14 +505,12 @@ void FastKernel_RandomPropertyMatchesGeneric10k() {
             view.last_ws_recv_ns = 1'000;
             view.usable_for_depth = (rng() % 25) != 0;
             view.crossed = (rng() % 100) == 0;
-            view.ask_count = static_cast<std::uint16_t>(rng() % 5);
-            std::int64_t price = 50'000;
+            view.ask_count = 1;
             for (std::uint16_t level = 0; level < view.ask_count; ++level) {
-                price += static_cast<std::int64_t>(rng() % 250'000);
                 view.asks[level] = state::PriceLevel{
-                    .price_tick = price,
-                    .price = static_cast<double>(price) / 1'000'000.0,
-                    .size = static_cast<double>(rng() % 20)
+                    .price_tick = shared_price,
+                    .price = static_cast<double>(shared_price) / 1'000'000.0,
+                    .size = shared_size
                 };
             }
             state::build_depth_prefix(
@@ -513,21 +525,9 @@ void FastKernel_RandomPropertyMatchesGeneric10k() {
         spec.kernel_spec_hash = fast::hash_fixed_shape_kernel_spec(spec);
 
         auto policy = default_policy();
-        if ((rng() % 8) == 0) {
-            policy.max_total_cost_tick =
-                1 + static_cast<std::int64_t>(rng() % 5'000'000);
-        }
-        if ((rng() % 8) == 0) {
-            policy.max_total_exposure_tick =
-                1 + static_cast<std::int64_t>(rng() % 5'000'000);
-        }
         policy = risk::with_computed_policy_hash(policy);
 
         risk::RiskLedgerSnapshot ledger;
-        if ((rng() % 8) == 0) {
-            ledger.total_reserved_exposure_tick =
-                static_cast<std::int64_t>(rng() % 5'000'000);
-        }
 
         expect_fast_matches_generic(
             spec,

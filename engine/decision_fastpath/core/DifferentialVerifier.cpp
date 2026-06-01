@@ -403,7 +403,11 @@ DecisionPathSnapshot snapshot_from_fast_kernel(
     snapshot.unit_edge_tick = result.unit_edge_tick;
     snapshot.total_edge_tick = result.total_edge_tick;
     snapshot.edge_bps = result.edge_bps;
-    snapshot.order_count = result.plan.order_count;
+    snapshot.order_count = result.produced_plan
+        ? result.plan.order_count
+        : result.order_decision.leg_count;
+    snapshot.decision_hash = result.order_decision.decision_hash;
+    snapshot.plan_id = result.plan.plan_id;
     finalize(&snapshot);
     return snapshot;
 }
@@ -428,6 +432,8 @@ DecisionPathSnapshot snapshot_from_fast_result(
     snapshot.total_edge_tick = result.intent.total_edge_tick;
     snapshot.edge_bps = result.intent.edge_bps;
     snapshot.order_count = result.plan.order_count;
+    snapshot.decision_hash = result.order_decision.decision_hash;
+    snapshot.plan_id = result.plan.plan_id;
     finalize(&snapshot);
     return snapshot;
 }
@@ -587,8 +593,17 @@ DecisionPathSnapshot reference_generic_decision(
         snapshot.risk_reject_reason =
             trading_engine::risk::RiskRejectReason::None;
     } else {
-        snapshot.intent_status =
-            trading_engine::signal::IntentStatus::RejectedLowEdge;
+        if (rejection ==
+                trading_engine::risk::RiskDecisionType::RejectLowUnitEdge ||
+            rejection ==
+                trading_engine::risk::RiskDecisionType::RejectLowTotalEdge ||
+            rejection ==
+                trading_engine::risk::RiskDecisionType::RejectLowEdgeBps ||
+            rejection ==
+                trading_engine::risk::RiskDecisionType::RejectInsufficientDepth) {
+            snapshot.intent_status =
+                trading_engine::signal::IntentStatus::RejectedLowEdge;
+        }
         snapshot.risk_reject_reason = risk_reject_reason(rejection);
     }
 
@@ -645,6 +660,17 @@ DifferentialCompareResult compare_decision_snapshots(
     compare_field("total_edge_tick", fast.total_edge_tick, generic.total_edge_tick, &result);
     compare_field("edge_bps", fast.edge_bps, generic.edge_bps, &result);
     compare_field("order_count", fast.order_count, generic.order_count, &result);
+    if (fast.decision_hash != 0 && generic.decision_hash != 0) {
+        compare_field(
+            "decision_hash",
+            fast.decision_hash,
+            generic.decision_hash,
+            &result
+        );
+    }
+    if (fast.plan_id != 0 && generic.plan_id != 0) {
+        compare_field("plan_id", fast.plan_id, generic.plan_id, &result);
+    }
     compare_field("semantic_hash", fast.semantic_hash, generic.semantic_hash, &result);
     return result;
 }

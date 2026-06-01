@@ -3,6 +3,7 @@
 #include "engine/risk/core/RiskContext.h"
 #include "engine/risk/core/RiskPipeline.h"
 #include "engine/risk/ledger/ReservationBook.h"
+#include "engine/order_decision/public/OrderDecision.h"
 #include "engine/risk/public/RiskInputView.h"
 
 namespace trading_engine::risk {
@@ -22,6 +23,36 @@ public:
     );
 
     [[nodiscard]] RiskPipelineResult evaluate_view(
+        const RiskInputView& input,
+        IRiskDecisionPublisher* decision_publisher = nullptr,
+        bool enable_full_audit_trace = false
+    );
+
+    [[nodiscard]] RiskPipelineResult evaluate_decision(
+        const signal::OpportunityIntent& intent,
+        const order_decision::OrderDecisionLite& decision,
+        const RiskInputView& input,
+        IRiskDecisionPublisher* decision_publisher = nullptr,
+        bool enable_full_audit_trace = false
+    );
+
+    [[nodiscard]] RiskPipelineResult evaluate_decision(
+        const signal::OpportunityIntent& intent,
+        const order_decision::OrderDecision& decision,
+        const RiskInputView& input,
+        IRiskDecisionPublisher* decision_publisher = nullptr,
+        bool enable_full_audit_trace = false
+    );
+
+    [[nodiscard]] RiskPipelineResult evaluate_decision(
+        const order_decision::OrderDecisionLite& decision,
+        const RiskInputView& input,
+        IRiskDecisionPublisher* decision_publisher = nullptr,
+        bool enable_full_audit_trace = false
+    );
+
+    [[nodiscard]] RiskPipelineResult evaluate_decision(
+        const order_decision::OrderDecision& decision,
         const RiskInputView& input,
         IRiskDecisionPublisher* decision_publisher = nullptr,
         bool enable_full_audit_trace = false

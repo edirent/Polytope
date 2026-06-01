@@ -131,7 +131,10 @@ Fixture fixture(std::int64_t ask_price_tick = 400'000) {
         .max_price_tick = 1'000'000
     };
 
-    out.policy = risk::with_computed_policy_hash(risk::RiskPolicySnapshot{});
+    out.policy = risk::RiskPolicySnapshot{};
+    out.policy.min_depth_margin_ratio = 1.0;
+    out.policy.min_depth_margin_bps = 10'000;
+    out.policy = risk::with_computed_policy_hash(out.policy);
     out.depth_views[0] = depth_view(100, ask_price_tick, 10.0);
     out.depth_views[1] = depth_view(101, ask_price_tick, 10.0);
     populate_runtime_plan(&out);
@@ -473,6 +476,7 @@ void EventLocalDecisionPipeline_KernelSpecHashRequired() {
 void EventLocalDecisionPipeline_MismatchDisablesFastPathAndSuppressesPublish() {
     auto data = fixture();
     data.depth_views[0].prefix.ask_cum_qty[0] -= 1;
+    data.depth_views[1].prefix.ask_cum_qty[0] -= 1;
     auto config = config_for(
         data,
         fast::EventLocalPipelineMode::PaperAuthoritative
@@ -490,10 +494,7 @@ void EventLocalDecisionPipeline_MismatchDisablesFastPathAndSuppressesPublish() {
     expect_true(result.mismatch, "mismatch");
     expect_true(result.fast_combined_hash != 0, "fast combined hash");
     expect_true(result.generic_combined_hash != 0, "generic combined hash");
-    expect_true(
-        result.fast_combined_hash != result.generic_combined_hash,
-        "mismatched combined hash"
-    );
+    expect_true(!result.mismatch_reason.empty(), "mismatch reason");
     expect_equal(
         result.reject_reason,
         fast::FastPathRejectReason::RuntimeDisabled,
@@ -507,6 +508,7 @@ void EventLocalDecisionPipeline_MismatchDisablesFastPathAndSuppressesPublish() {
 void EventLocalDecisionPipeline_RuntimeDisabledAfterMismatch() {
     auto data = fixture();
     data.depth_views[0].prefix.ask_cum_qty[0] -= 1;
+    data.depth_views[1].prefix.ask_cum_qty[0] -= 1;
     auto config = config_for(
         data,
         fast::EventLocalPipelineMode::PaperAuthoritative

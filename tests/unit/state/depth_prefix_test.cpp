@@ -84,6 +84,42 @@ void DepthPrefix_BuyVwapExactFirstLevel() {
     expect_equal(result.worst_price_tick, 500'000LL, "worst");
 }
 
+void DepthPrefix_RejectsInvalidLevel() {
+    auto ask_levels = asks();
+    ask_levels[0].price_tick = -1;
+    ask_levels[1] = PriceLevel{};
+    const auto prefix = prefix_for_asks(ask_levels, 2);
+
+    const PrefixVwapResult result =
+        buy_vwap_from_prefix(ask_levels, prefix, 1);
+
+    expect_equal(prefix.ask_cum_qty[0], 0LL, "invalid qty");
+    expect_true(!result.ok, "not ok");
+}
+
+void DepthPrefix_BoundaryPlusOne() {
+    const auto ask_levels = asks();
+    const auto prefix = prefix_for_asks(ask_levels, 2);
+
+    const PrefixVwapResult result =
+        buy_vwap_from_prefix(ask_levels, prefix, 11);
+
+    expect_true(result.ok, "ok");
+    expect_equal(result.total_cost_tick, 5'550'000LL, "cost");
+    expect_equal(result.vwap_tick, 504'545LL, "vwap");
+    expect_equal(result.worst_price_tick, 550'000LL, "worst");
+}
+
+void DepthPrefix_InsufficientDepth() {
+    const auto ask_levels = asks();
+    const auto prefix = prefix_for_asks(ask_levels, 2);
+
+    const PrefixVwapResult result =
+        buy_vwap_from_prefix(ask_levels, prefix, 16);
+
+    expect_true(!result.ok, "not ok");
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -94,6 +130,9 @@ const std::unordered_map<std::string, TestFn>& tests() {
          &DepthPrefix_BuildsAskCumulativeCost},
         {"DepthPrefix_BuyVwapExactFirstLevel",
          &DepthPrefix_BuyVwapExactFirstLevel},
+        {"DepthPrefix_RejectsInvalidLevel", &DepthPrefix_RejectsInvalidLevel},
+        {"DepthPrefix_BoundaryPlusOne", &DepthPrefix_BoundaryPlusOne},
+        {"DepthPrefix_InsufficientDepth", &DepthPrefix_InsufficientDepth},
     };
     return test_map;
 }

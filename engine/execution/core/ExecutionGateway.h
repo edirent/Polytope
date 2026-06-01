@@ -16,6 +16,7 @@
 #include "engine/execution/state/PartialFillPolicy.h"
 #include "engine/execution/state/PlanStateMachine.h"
 
+#include <functional>
 #include <unordered_map>
 #include <vector>
 
@@ -34,6 +35,11 @@ public:
         const ExecutionContext& context
     );
 
+    [[nodiscard]] ExecutionResult submit_approved_decision(
+        const ApprovedOrderDecisionEnvelope& envelope,
+        const ExecutionContext& context
+    );
+
     [[nodiscard]] ExecutionResult submit(
         const OrderPlan& plan,
         const ExecutionContext& context
@@ -42,6 +48,10 @@ public:
     [[nodiscard]] std::vector<ExecutionReport> poll();
 
     [[nodiscard]] CancelResult cancel_plan(std::uint64_t plan_id);
+
+    [[nodiscard]] const OrderPlan* find_plan(PlanId plan_id) const;
+
+    void set_plan_observer(std::function<void(const OrderPlan&)> observer);
 
 private:
     struct PlanRuntimeState {
@@ -63,6 +73,12 @@ private:
         ReservationDispositionType type,
         const std::string& reason
     );
+    void publish_reservation_disposition(
+        const ApprovedOrderDecisionEnvelope& envelope,
+        PlanId plan_id,
+        ReservationDispositionType type,
+        const std::string& reason
+    );
 
     IExecutionAdapter* adapter_ = nullptr;
     ExecutionReportPublisher* report_publisher_ = nullptr;
@@ -79,6 +95,7 @@ private:
 
     std::unordered_map<PlanId, PlanRuntimeState> runtime_;
     std::vector<ExecutionReport> pending_reports_;
+    std::function<void(const OrderPlan&)> plan_observer_;
 };
 
 }  // namespace trading_engine::execution

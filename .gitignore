@@ -5,6 +5,7 @@
 
 logs/
 *.log
+runs/
 
 build/
 cmake-build-*/
@@ -21,6 +22,9 @@ Testing/
 *.dll
 *.exe
 *.out
+
+node_modules/
+frontend/**/dist/
 
 *.profraw
 *.profdata

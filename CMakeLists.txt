@@ -46,9 +46,12 @@ add_subdirectory(engine/chain_confirm)
 add_subdirectory(engine/state)
 add_subdirectory(oracle)
 add_subdirectory(engine/signal)
+add_subdirectory(engine/order_decision)
 add_subdirectory(engine/risk)
 add_subdirectory(engine/execution)
+add_subdirectory(engine/paper)
 add_subdirectory(engine/decision_fastpath)
+add_subdirectory(apps/paper_backend)
 
 # Until a smaller engine_decode_public target exists, downstream targets may
 # link engine_decode. State code may include only decode/public headers.
@@ -310,13 +313,13 @@ target_link_libraries(decision_fastpath_fixed_buy_kernel_scalar_tests PRIVATE
 )
 
 foreach(test_case
-    FixedBuyBundleKernelScalar_ProducesPlan
+    FixedBuyBundleKernelScalar_ProducesOrderDecision
     FixedBuyBundleKernelScalar_RejectsSellLeg
     FixedBuyBundleKernelScalar_RejectsMissingDepth
     FixedBuyBundleKernelScalar_RejectsBadDepthFlags
     FixedBuyBundleKernelScalar_LowEdgeDoesNotProducePlan
-    FixedBuyBundleKernelScalar_RejectsTotalExposureLimit
-    FixedBuyBundleKernelScalar_RejectsNumericInventoryLimit
+    FixedBuyBundleKernelScalar_LeavesExposureToRisk
+    FixedBuyBundleKernelScalar_LeavesInventoryToRisk
     FixedBuyBundleKernelScalar_DoesNotMaterializeStrings
     FixedBuyBundleKernelScalar_OutputHashDeterministic
 )
@@ -638,6 +641,9 @@ foreach(test_case
     DepthPrefix_BuildsAskCumulativeQty
     DepthPrefix_BuildsAskCumulativeCost
     DepthPrefix_BuyVwapExactFirstLevel
+    DepthPrefix_RejectsInvalidLevel
+    DepthPrefix_BoundaryPlusOne
+    DepthPrefix_InsufficientDepth
 )
     add_test(NAME ${test_case} COMMAND depth_prefix_tests ${test_case})
 endforeach()
@@ -961,6 +967,12 @@ foreach(test_case
     RiskEngine_EvaluateViewRejectsStaleSnapshots
     RiskEngine_EvaluateViewFastPathNoSnapshotRequery
     RiskEngine_EvaluateViewFallbackRequeryOnHashMismatch
+    Risk_ApprovesValidOrderDecision
+    Risk_RejectsDecisionHashMismatch
+    Risk_RejectsDecisionOverBudget
+    Risk_RejectsDecisionSnapshotHashMismatch
+    Risk_RejectsDecisionPolicyHashMismatch
+    Risk_DoesNotShrinkQtyInV1
 )
     add_test(NAME ${test_case} COMMAND risk_engine_view_evaluate_tests ${test_case})
 endforeach()
@@ -3130,6 +3142,8 @@ target_link_libraries(run_worldcup_feed_to_execution PRIVATE
     engine_signal
     engine_risk
     engine_execution
+    engine_paper
+    paper_backend_lib
     Boost::system
     OpenSSL::SSL
     OpenSSL::Crypto
@@ -3153,6 +3167,7 @@ target_link_libraries(probe_market_event_to_execution_plan_latency PRIVATE
     engine_signal
     engine_risk
     engine_execution
+    engine_decision_fastpath
 )
 
 add_executable(verify_canonical_decision_workflow

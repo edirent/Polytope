@@ -1,6 +1,7 @@
 #include "engine/execution/adapter/PaperExecutionAdapter.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -36,6 +37,21 @@ const state::MarketStateSnapshot* find_snapshot(
     return it == snapshots.end() ? nullptr : &*it;
 }
 
+const state::MarketDepthView* find_depth_view(
+    const ExecutionContext& context,
+    std::uint32_t asset_index
+) {
+    if (context.depth_views == nullptr || context.depth_view_count == 0) {
+        return nullptr;
+    }
+    for (std::uint16_t i = 0; i < context.depth_view_count; ++i) {
+        if (context.depth_views[i].asset_index == asset_index) {
+            return &context.depth_views[i];
+        }
+    }
+    return nullptr;
+}
+
 std::int64_t size_to_lots(double size) {
     if (size <= 0.0) {
         return 0;
@@ -43,14 +59,67 @@ std::int64_t size_to_lots(double size) {
     return static_cast<std::int64_t>(std::floor(size));
 }
 
+FillSimulation simulate_buy_depth_view(
+    const ChildOrder& order,
+    const state::MarketDepthView& view
+) {
+    FillSimulation result;
+    result.snapshot_found = true;
+    result.remaining_lots = order.quantity_lots;
+
+    if (!view.usable_for_depth || view.ask_count == 0) {
+        result.reject_reason = "InsufficientDepth";
+        return result;
+    }
+
+    std::int64_t remaining = order.quantity_lots;
+    std::int64_t filled = 0;
+    std::int64_t notional = 0;
+
+    for (std::uint32_t i = 0; i < view.ask_count && remaining > 0; ++i) {
+        const auto& level = view.asks[i];
+        if (level.price_tick <= 0 ||
+            level.price_tick > order.limit_price_tick) {
+            continue;
+        }
+
+        const auto available = size_to_lots(level.size);
+        if (available <= 0) {
+            continue;
+        }
+
+        const auto take = std::min(remaining, available);
+        filled += take;
+        remaining -= take;
+        notional += take * level.price_tick;
+    }
+
+    result.filled_lots = filled;
+    result.remaining_lots = remaining;
+    result.full = filled == order.quantity_lots;
+    result.partial = filled > 0 && !result.full;
+    if (filled > 0) {
+        result.avg_fill_price_tick = notional / filled;
+    }
+    if (!result.full) {
+        result.reject_reason = "InsufficientDepth";
+    }
+    return result;
+}
+
 FillSimulation simulate_buy(
     const ChildOrder& order,
-    const std::vector<state::MarketStateSnapshot>& snapshots
+    const ExecutionContext& context
 ) {
+    if (const auto* view = find_depth_view(context, order.asset_index);
+        view != nullptr) {
+        return simulate_buy_depth_view(order, *view);
+    }
+
     FillSimulation result;
     result.remaining_lots = order.quantity_lots;
 
-    const auto* snapshot = find_snapshot(snapshots, order.asset_id);
+    const auto* snapshot = find_snapshot(context.snapshots, order.asset_id);
     if (snapshot == nullptr) {
         result.reject_reason = "MissingSnapshot";
         return result;
@@ -150,25 +219,23 @@ AdapterSubmitResult PaperExecutionAdapter::submit_plan(
     }
 
     if (context.config.paper_mode == PaperExecutionMode::PaperAtomic) {
-        std::vector<FillSimulation> fills;
-        fills.reserve(plan.order_count);
+        std::array<FillSimulation, kMaxChildOrdersPerPlan> fills{};
         for (std::uint16_t i = 0; i < plan.order_count; ++i) {
             const auto& order = plan.orders[i];
             if (order.side != OrderSide::Buy) {
                 FillSimulation fill;
                 fill.remaining_lots = order.quantity_lots;
                 fill.reject_reason = "UnsupportedSide";
-                fills.push_back(std::move(fill));
+                fills[i] = std::move(fill);
                 continue;
             }
-            fills.push_back(simulate_buy(order, context.snapshots));
+            fills[i] = simulate_buy(order, context);
         }
 
-        const auto all_filled = std::all_of(
-            fills.begin(),
-            fills.end(),
-            [](const FillSimulation& fill) { return fill.full; }
-        );
+        bool all_filled = true;
+        for (std::uint16_t i = 0; i < plan.order_count; ++i) {
+            all_filled = all_filled && fills[i].full;
+        }
         if (!all_filled) {
             for (std::uint16_t i = 0; i < plan.order_count; ++i) {
                 FillSimulation no_fill = fills[i];
@@ -217,7 +284,7 @@ AdapterSubmitResult PaperExecutionAdapter::submit_plan(
     for (std::uint16_t i = 0; i < plan.order_count; ++i) {
         const auto& order = plan.orders[i];
         auto fill = order.side == OrderSide::Buy
-            ? simulate_buy(order, context.snapshots)
+            ? simulate_buy(order, context)
             : FillSimulation{
                   .remaining_lots = order.quantity_lots,
                   .reject_reason = "UnsupportedSide"

@@ -16,6 +16,9 @@ struct ChildOrder {
     std::string market_id;
     std::string asset_id;
 
+    std::uint32_t market_index = 0;
+    std::uint32_t asset_index = 0;
+
     OrderSide side = OrderSide::Buy;
 
     std::int64_t quantity_lots = 0;

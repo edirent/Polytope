@@ -1,0 +1,2 @@
+{"plan_id":77,"child_order_id":11,"status":"Filled","filled_lots":10,"remaining_lots":0,"avg_fill_price_tick":700,"event_ts_ns":1000,"market_id":"m1","asset_id":"asset_yes","asset_index":17,"side":"Buy","fee_tick":50}
+{"plan_id":77,"child_order_id":11,"status":"Filled","filled_lots":10,"remaining_lots":0,"avg_fill_price_tick":700,"event_ts_ns":1000,"market_id":"m1","asset_id":"asset_yes","asset_index":17,"side":"Buy","fee_tick":50}
