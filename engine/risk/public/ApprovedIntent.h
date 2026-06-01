@@ -13,12 +13,13 @@ struct ApprovedIntent {
     RiskDecision decision;
 
     std::string reservation_id;
+    std::uint64_t reservation_id_hash = 0;
 
     std::uint64_t approved_at_ns = 0;
     std::uint64_t expires_at_ns = 0;
 
     [[nodiscard]] bool has_reservation() const noexcept {
-        return !reservation_id.empty();
+        return reservation_id_hash != 0 || !reservation_id.empty();
     }
 
     [[nodiscard]] bool valid() const noexcept {

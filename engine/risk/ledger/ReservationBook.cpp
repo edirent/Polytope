@@ -255,6 +255,48 @@ RiskLedgerSnapshot ReservationBook::snapshot() const {
                 ++out.consumed_reservations;
                 break;
         }
+
+        if (reservation.status != ReservationStatus::Active) {
+            continue;
+        }
+
+        for (std::uint8_t i = 0; i < reservation.asset_count; ++i) {
+            const auto& asset = reservation.assets[i];
+            bool found = false;
+            for (std::uint8_t j = 0; j < out.numeric_asset_count; ++j) {
+                auto& current = out.numeric_reserved_asset_lots[j];
+                if (current.asset_index == asset.asset_index) {
+                    current.lots += asset.lots;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found && out.numeric_asset_count < kMaxReservedLegs) {
+                auto& current =
+                    out.numeric_reserved_asset_lots[out.numeric_asset_count++];
+                current.asset_index = asset.asset_index;
+                current.lots = asset.lots;
+            }
+        }
+
+        for (std::uint8_t i = 0; i < reservation.market_count; ++i) {
+            const auto& market = reservation.markets[i];
+            bool found = false;
+            for (std::uint8_t j = 0; j < out.numeric_market_count; ++j) {
+                auto& current = out.numeric_reserved_market_exposure[j];
+                if (current.market_index == market.market_index) {
+                    current.exposure_tick += market.exposure_tick;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found && out.numeric_market_count < kMaxReservedLegs) {
+                auto& current = out.numeric_reserved_market_exposure
+                    [out.numeric_market_count++];
+                current.market_index = market.market_index;
+                current.exposure_tick = market.exposure_tick;
+            }
+        }
     }
 
     return out;

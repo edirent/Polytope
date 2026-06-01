@@ -48,6 +48,7 @@ add_subdirectory(oracle)
 add_subdirectory(engine/signal)
 add_subdirectory(engine/risk)
 add_subdirectory(engine/execution)
+add_subdirectory(engine/decision_fastpath)
 
 # Until a smaller engine_decode_public target exists, downstream targets may
 # link engine_decode. State code may include only decode/public headers.
@@ -106,6 +107,301 @@ target_link_libraries(trading_engine PRIVATE
     OpenSSL::Crypto
     Threads::Threads
 )
+
+add_executable(common_vwap_math_tests
+    tests/unit/common/vwap_math_test.cpp
+)
+
+target_include_directories(common_vwap_math_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+foreach(test_case
+    VwapMath_BuyLinearSingleLevel
+    VwapMath_BuyLinearMultiLevel
+    VwapMath_BuyLinearInsufficientDepthKeepsExecutableQty
+    VwapMath_BuyPrefixMatchesLinear
+    VwapMath_BuyPrefixInsufficientDepth
+)
+    add_test(NAME ${test_case} COMMAND common_vwap_math_tests ${test_case})
+endforeach()
+
+add_executable(common_edge_math_tests
+    tests/unit/common/edge_math_test.cpp
+)
+
+target_include_directories(common_edge_math_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+foreach(test_case
+    EdgeMath_ComputesUnitTotalAndBps
+    EdgeMath_GenericEqualsFastInput
+    EdgeMath_HandlesZeroCostPositiveEdge
+    EdgeMath_RejectsOverflow
+)
+    add_test(NAME ${test_case} COMMAND common_edge_math_tests ${test_case})
+endforeach()
+
+add_executable(common_risk_math_tests
+    tests/unit/common/risk_math_test.cpp
+)
+
+target_include_directories(common_risk_math_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+foreach(test_case
+    RiskMath_ComputesPostRiskEdge
+    RiskMath_PassesEdgeThresholds
+    RiskMath_RejectsLowUnitEdge
+    RiskMath_RejectsLowTotalEdge
+    RiskMath_RejectsLowBps
+)
+    add_test(NAME ${test_case} COMMAND common_risk_math_tests ${test_case})
+endforeach()
+
+add_executable(decision_fastpath_gate_tests
+    tests/unit/decision_fastpath/fast_path_gate_test.cpp
+)
+
+target_link_libraries(decision_fastpath_gate_tests PRIVATE
+    engine_decision_fastpath
+)
+
+foreach(test_case
+    FastPathGate_AcceptsBuyOnlyFixedShape
+    FastPathGate_RejectsSellLeg
+    FastPathGate_RejectsDynamicOracleBundle
+    FastPathGate_RejectsMissingDepthView
+    FastPathGate_RejectsPolicyIncompatible
+    FastPathGate_RejectsMismatchedArtifactHash
+    FastPathGate_RejectsMissingSettlementMaskDependency
+    FastPathGate_RejectsBadDepthView
+)
+    add_test(NAME ${test_case} COMMAND decision_fastpath_gate_tests ${test_case})
+endforeach()
+
+add_executable(decision_fastpath_kernel_registry_tests
+    tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp
+)
+
+target_compile_definitions(decision_fastpath_kernel_registry_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+target_link_libraries(decision_fastpath_kernel_registry_tests PRIVATE
+    engine_decision_fastpath
+)
+
+foreach(test_case
+    FixedShapeKernelRegistry_BuildsFromOracleArtifactDeterministic
+    FixedShapeKernelRegistry_PreservesRuntimePlanFields
+    FixedShapeKernelRegistry_FindByBundleId
+    FixedShapeKernelRegistry_SpecsForAssetIndex
+    FixedShapeKernelSpec_HashStable
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decision_fastpath_kernel_registry_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decision_fastpath_kernel_spec_tests
+    tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp
+)
+
+target_link_libraries(decision_fastpath_kernel_spec_tests PRIVATE
+    engine_decision_fastpath
+)
+
+foreach(test_case
+    FixedShapeKernelSpec_StandaloneHashStable
+    FixedShapeKernelSpec_HashChangesWhenLegChanges
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decision_fastpath_kernel_spec_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decision_fastpath_event_local_pipeline_tests
+    tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp
+)
+
+target_link_libraries(decision_fastpath_event_local_pipeline_tests PRIVATE
+    engine_decision_fastpath
+)
+
+foreach(test_case
+    EventLocalDecisionPipeline_ProducesPlanForEligibleSpec
+    EventLocalDecisionPipeline_ShadowCompareDoesNotPublishOrReserve
+    EventLocalDecisionPipeline_ExposesFastOutputHashes
+    EventLocalDecisionPipeline_VerifiedPaperRequiresGenericVerification
+    EventLocalDecisionPipeline_PaperAuthoritativeSampleVerificationCanBeForced
+    EventLocalDecisionPipeline_FallbacksWhenSpecUnsupported
+    EventLocalDecisionPipeline_NoPlanForLowEdgeButNoFallback
+    EventLocalDecisionPipeline_UsesDirtyAssetIndex
+    EventLocalDecisionPipeline_OutputHashDeterministic
+    EventLocalDecisionPipeline_KillSwitchDisablesFastPath
+    FastPathConfig_DefaultsDisabled
+    EventLocalDecisionPipeline_DisabledModeFallsBack
+    EventLocalDecisionPipeline_ArtifactHashRequired
+    EventLocalDecisionPipeline_PolicyHashRequired
+    EventLocalDecisionPipeline_KernelSpecHashRequired
+    EventLocalDecisionPipeline_MismatchDisablesFastPathAndSuppressesPublish
+    EventLocalDecisionPipeline_RuntimeDisabledAfterMismatch
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decision_fastpath_event_local_pipeline_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decision_fastpath_differential_verifier_tests
+    tests/unit/decision_fastpath/differential_verifier_test.cpp
+)
+
+target_link_libraries(decision_fastpath_differential_verifier_tests PRIVATE
+    engine_decision_fastpath
+)
+
+foreach(test_case
+    FastKernel_MatchesGenericPositiveOpportunity
+    FastKernel_OutputHashesMatchGeneric
+    FastKernel_MatchesGenericInsufficientDepth
+    FastKernel_MatchesGenericLowEdge
+    FastKernel_MatchesGenericRiskReject
+    FastKernel_FallbackOnSellLeg
+    FastKernel_FallbackOnDynamicOracleBundle
+    FastKernel_NoReservationInShadowMode
+    FastKernel_DeterministicOutputHash
+    FastKernel_RandomPropertyMatchesGeneric10k
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decision_fastpath_differential_verifier_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decision_fastpath_simd_kernel_parity_tests
+    tests/unit/decision_fastpath/simd_kernel_parity_test.cpp
+)
+
+foreach(test_case
+    SimdKernelParity_DisabledUnlessSimdEnabled
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decision_fastpath_simd_kernel_parity_tests ${test_case}
+    )
+    set_tests_properties(${test_case} PROPERTIES DISABLED TRUE)
+endforeach()
+
+add_executable(decision_fastpath_fixed_buy_kernel_scalar_tests
+    tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp
+)
+
+target_link_libraries(decision_fastpath_fixed_buy_kernel_scalar_tests PRIVATE
+    engine_decision_fastpath
+)
+
+foreach(test_case
+    FixedBuyBundleKernelScalar_ProducesPlan
+    FixedBuyBundleKernelScalar_RejectsSellLeg
+    FixedBuyBundleKernelScalar_RejectsMissingDepth
+    FixedBuyBundleKernelScalar_RejectsBadDepthFlags
+    FixedBuyBundleKernelScalar_LowEdgeDoesNotProducePlan
+    FixedBuyBundleKernelScalar_RejectsTotalExposureLimit
+    FixedBuyBundleKernelScalar_RejectsNumericInventoryLimit
+    FixedBuyBundleKernelScalar_DoesNotMaterializeStrings
+    FixedBuyBundleKernelScalar_OutputHashDeterministic
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decision_fastpath_fixed_buy_kernel_scalar_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decision_fastpath_shadow_worldcup_30m_tests
+    tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp
+)
+
+target_link_libraries(decision_fastpath_shadow_worldcup_30m_tests PRIVATE
+    engine_decision_fastpath
+)
+
+target_compile_definitions(decision_fastpath_shadow_worldcup_30m_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+foreach(test_case
+    FastPathShadowWorldcup30m_MismatchZero
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decision_fastpath_shadow_worldcup_30m_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decision_fastpath_shadow_market39_tests
+    tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp
+)
+
+target_link_libraries(decision_fastpath_shadow_market39_tests PRIVATE
+    engine_decision_fastpath
+)
+
+foreach(test_case
+    FastPathShadowMarket39_MismatchZero
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decision_fastpath_shadow_market39_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decision_fastpath_fallback_tests
+    tests/integration/decision_fastpath/fastpath_fallback_test.cpp
+)
+
+target_link_libraries(decision_fastpath_fallback_tests PRIVATE
+    engine_decision_fastpath
+)
+
+foreach(test_case
+    FastPathFallback_SellLegFallsBackToGeneric
+    FastPathFallback_KillSwitchDisablesFastPath
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decision_fastpath_fallback_tests ${test_case}
+    )
+endforeach()
+
+add_executable(decision_fastpath_determinism_tests
+    tests/integration/decision_fastpath/fastpath_determinism_test.cpp
+)
+
+target_link_libraries(decision_fastpath_determinism_tests PRIVATE
+    engine_decision_fastpath
+)
+
+target_compile_definitions(decision_fastpath_determinism_tests PRIVATE
+    POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+foreach(test_case
+    FastPathDeterminism_OutputHashStable
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND decision_fastpath_determinism_tests ${test_case}
+    )
+endforeach()
 
 add_executable(raw_ingest_tests
     tests/unit/raw_ingest_tests.cpp
@@ -2857,6 +3153,38 @@ target_link_libraries(probe_market_event_to_execution_plan_latency PRIVATE
     engine_signal
     engine_risk
     engine_execution
+)
+
+add_executable(verify_canonical_decision_workflow
+    tools/verify_canonical_decision_workflow.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/raw_ingest/RawLogReader.cpp
+)
+
+target_include_directories(verify_canonical_decision_workflow PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(verify_canonical_decision_workflow PRIVATE
+    engine_decode
+    engine_state
+    engine_signal
+    engine_risk
+    engine_execution
+)
+
+add_executable(probe_fastpath_latency
+    tools/probe_fastpath_latency.cpp
+)
+
+target_include_directories(probe_fastpath_latency PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(probe_fastpath_latency PRIVATE
+    engine_decision_fastpath
 )
 
 add_executable(chain_ws_http_parity_smoke

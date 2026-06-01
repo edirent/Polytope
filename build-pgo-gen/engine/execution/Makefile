@@ -337,6 +337,34 @@ execution_report_publisher_tests/fast:
 .PHONY : execution_report_publisher_tests/fast
 
 # Convenience name for target.
+engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/rule:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/rule
+.PHONY : engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/rule
+
+# Convenience name for target.
+execution_hash_only_publisher_tests: engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/rule
+.PHONY : execution_hash_only_publisher_tests
+
+# fast build rule for target.
+execution_hash_only_publisher_tests/fast:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/build.make engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/build
+.PHONY : execution_hash_only_publisher_tests/fast
+
+# Convenience name for target.
+engine/execution/CMakeFiles/execution_scratch_tests.dir/rule:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 engine/execution/CMakeFiles/execution_scratch_tests.dir/rule
+.PHONY : engine/execution/CMakeFiles/execution_scratch_tests.dir/rule
+
+# Convenience name for target.
+execution_scratch_tests: engine/execution/CMakeFiles/execution_scratch_tests.dir/rule
+.PHONY : execution_scratch_tests
+
+# fast build rule for target.
+execution_scratch_tests/fast:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_scratch_tests.dir/build.make engine/execution/CMakeFiles/execution_scratch_tests.dir/build
+.PHONY : execution_scratch_tests/fast
+
+# Convenience name for target.
 engine/execution/CMakeFiles/execution_metrics_tests.dir/rule:
 	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 engine/execution/CMakeFiles/execution_metrics_tests.dir/rule
 .PHONY : engine/execution/CMakeFiles/execution_metrics_tests.dir/rule
@@ -546,6 +574,30 @@ __/__/tests/unit/execution/execution_report_publisher_test.cpp.s:
 	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_report_publisher_tests.dir/build.make engine/execution/CMakeFiles/execution_report_publisher_tests.dir/__/__/tests/unit/execution/execution_report_publisher_test.cpp.s
 .PHONY : __/__/tests/unit/execution/execution_report_publisher_test.cpp.s
 
+__/__/tests/unit/execution/execution_scratch_test.o: __/__/tests/unit/execution/execution_scratch_test.cpp.o
+.PHONY : __/__/tests/unit/execution/execution_scratch_test.o
+
+# target to build an object file
+__/__/tests/unit/execution/execution_scratch_test.cpp.o:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_scratch_tests.dir/build.make engine/execution/CMakeFiles/execution_scratch_tests.dir/__/__/tests/unit/execution/execution_scratch_test.cpp.o
+.PHONY : __/__/tests/unit/execution/execution_scratch_test.cpp.o
+
+__/__/tests/unit/execution/execution_scratch_test.i: __/__/tests/unit/execution/execution_scratch_test.cpp.i
+.PHONY : __/__/tests/unit/execution/execution_scratch_test.i
+
+# target to preprocess a source file
+__/__/tests/unit/execution/execution_scratch_test.cpp.i:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_scratch_tests.dir/build.make engine/execution/CMakeFiles/execution_scratch_tests.dir/__/__/tests/unit/execution/execution_scratch_test.cpp.i
+.PHONY : __/__/tests/unit/execution/execution_scratch_test.cpp.i
+
+__/__/tests/unit/execution/execution_scratch_test.s: __/__/tests/unit/execution/execution_scratch_test.cpp.s
+.PHONY : __/__/tests/unit/execution/execution_scratch_test.s
+
+# target to generate assembly for a file
+__/__/tests/unit/execution/execution_scratch_test.cpp.s:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_scratch_tests.dir/build.make engine/execution/CMakeFiles/execution_scratch_tests.dir/__/__/tests/unit/execution/execution_scratch_test.cpp.s
+.PHONY : __/__/tests/unit/execution/execution_scratch_test.cpp.s
+
 __/__/tests/unit/execution/fill_tracker_test.o: __/__/tests/unit/execution/fill_tracker_test.cpp.o
 .PHONY : __/__/tests/unit/execution/fill_tracker_test.o
 
@@ -569,6 +621,30 @@ __/__/tests/unit/execution/fill_tracker_test.s: __/__/tests/unit/execution/fill_
 __/__/tests/unit/execution/fill_tracker_test.cpp.s:
 	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_fill_tracker_tests.dir/build.make engine/execution/CMakeFiles/execution_fill_tracker_tests.dir/__/__/tests/unit/execution/fill_tracker_test.cpp.s
 .PHONY : __/__/tests/unit/execution/fill_tracker_test.cpp.s
+
+__/__/tests/unit/execution/hash_only_execution_publisher_test.o: __/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.o
+.PHONY : __/__/tests/unit/execution/hash_only_execution_publisher_test.o
+
+# target to build an object file
+__/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.o:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/build.make engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/__/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.o
+.PHONY : __/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.o
+
+__/__/tests/unit/execution/hash_only_execution_publisher_test.i: __/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.i
+.PHONY : __/__/tests/unit/execution/hash_only_execution_publisher_test.i
+
+# target to preprocess a source file
+__/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.i:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/build.make engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/__/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.i
+.PHONY : __/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.i
+
+__/__/tests/unit/execution/hash_only_execution_publisher_test.s: __/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.s
+.PHONY : __/__/tests/unit/execution/hash_only_execution_publisher_test.s
+
+# target to generate assembly for a file
+__/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.s:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/build.make engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/__/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.s
+.PHONY : __/__/tests/unit/execution/hash_only_execution_publisher_test.cpp.s
 
 __/__/tests/unit/execution/live_execution_adapter_test.o: __/__/tests/unit/execution/live_execution_adapter_test.cpp.o
 .PHONY : __/__/tests/unit/execution/live_execution_adapter_test.o
@@ -1026,6 +1102,30 @@ public/ExecutionTypes.cpp.s:
 	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/engine_execution.dir/build.make engine/execution/CMakeFiles/engine_execution.dir/public/ExecutionTypes.cpp.s
 .PHONY : public/ExecutionTypes.cpp.s
 
+publish/HashOnlyExecutionPublisher.o: publish/HashOnlyExecutionPublisher.cpp.o
+.PHONY : publish/HashOnlyExecutionPublisher.o
+
+# target to build an object file
+publish/HashOnlyExecutionPublisher.cpp.o:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/engine_execution.dir/build.make engine/execution/CMakeFiles/engine_execution.dir/publish/HashOnlyExecutionPublisher.cpp.o
+.PHONY : publish/HashOnlyExecutionPublisher.cpp.o
+
+publish/HashOnlyExecutionPublisher.i: publish/HashOnlyExecutionPublisher.cpp.i
+.PHONY : publish/HashOnlyExecutionPublisher.i
+
+# target to preprocess a source file
+publish/HashOnlyExecutionPublisher.cpp.i:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/engine_execution.dir/build.make engine/execution/CMakeFiles/engine_execution.dir/publish/HashOnlyExecutionPublisher.cpp.i
+.PHONY : publish/HashOnlyExecutionPublisher.cpp.i
+
+publish/HashOnlyExecutionPublisher.s: publish/HashOnlyExecutionPublisher.cpp.s
+.PHONY : publish/HashOnlyExecutionPublisher.s
+
+# target to generate assembly for a file
+publish/HashOnlyExecutionPublisher.cpp.s:
+	cd /home/edirent/Polytope/build-pgo-gen && $(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/engine_execution.dir/build.make engine/execution/CMakeFiles/engine_execution.dir/publish/HashOnlyExecutionPublisher.cpp.s
+.PHONY : publish/HashOnlyExecutionPublisher.cpp.s
+
 state/FillTracker.o: state/FillTracker.cpp.o
 .PHONY : state/FillTracker.o
 
@@ -1160,6 +1260,7 @@ help:
 	@echo "... execution_child_order_tests"
 	@echo "... execution_fill_tracker_tests"
 	@echo "... execution_gateway_workflow_tests"
+	@echo "... execution_hash_only_publisher_tests"
 	@echo "... execution_live_adapter_tests"
 	@echo "... execution_metrics_tests"
 	@echo "... execution_order_builder_tests"
@@ -1171,6 +1272,7 @@ help:
 	@echo "... execution_plan_validator_tests"
 	@echo "... execution_planner_tests"
 	@echo "... execution_report_publisher_tests"
+	@echo "... execution_scratch_tests"
 	@echo "... verify_execution_workflow"
 	@echo "... verify_execution_workflow_tests"
 	@echo "... __/__/tests/integration/execution/execution_gateway_workflow_test.o"
@@ -1194,9 +1296,15 @@ help:
 	@echo "... __/__/tests/unit/execution/execution_report_publisher_test.o"
 	@echo "... __/__/tests/unit/execution/execution_report_publisher_test.i"
 	@echo "... __/__/tests/unit/execution/execution_report_publisher_test.s"
+	@echo "... __/__/tests/unit/execution/execution_scratch_test.o"
+	@echo "... __/__/tests/unit/execution/execution_scratch_test.i"
+	@echo "... __/__/tests/unit/execution/execution_scratch_test.s"
 	@echo "... __/__/tests/unit/execution/fill_tracker_test.o"
 	@echo "... __/__/tests/unit/execution/fill_tracker_test.i"
 	@echo "... __/__/tests/unit/execution/fill_tracker_test.s"
+	@echo "... __/__/tests/unit/execution/hash_only_execution_publisher_test.o"
+	@echo "... __/__/tests/unit/execution/hash_only_execution_publisher_test.i"
+	@echo "... __/__/tests/unit/execution/hash_only_execution_publisher_test.s"
 	@echo "... __/__/tests/unit/execution/live_execution_adapter_test.o"
 	@echo "... __/__/tests/unit/execution/live_execution_adapter_test.i"
 	@echo "... __/__/tests/unit/execution/live_execution_adapter_test.s"
@@ -1254,6 +1362,9 @@ help:
 	@echo "... public/ExecutionTypes.o"
 	@echo "... public/ExecutionTypes.i"
 	@echo "... public/ExecutionTypes.s"
+	@echo "... publish/HashOnlyExecutionPublisher.o"
+	@echo "... publish/HashOnlyExecutionPublisher.i"
+	@echo "... publish/HashOnlyExecutionPublisher.s"
 	@echo "... state/FillTracker.o"
 	@echo "... state/FillTracker.i"
 	@echo "... state/FillTracker.s"

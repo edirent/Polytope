@@ -43,7 +43,17 @@ namespace {
         kMaxIntentLegs
     );
     for (std::uint16_t i = 0; i < evidence.depth_view_count; ++i) {
-        evidence.depth_views[i] = depth.depth_views[i];
+        const auto& source = depth.depth_views[i];
+        auto& target = evidence.depth_views[i];
+        target.asset_index = source.asset_index;
+        target.book_version = source.book_version;
+        target.snapshot_version_hash = source.snapshot_version_hash;
+        target.last_ws_recv_ns = source.last_ws_recv_ns;
+        target.usable_for_depth = source.usable_for_depth;
+        target.recovering = source.recovering;
+        target.crossed = source.crossed;
+        target.closed = source.closed;
+        target.resolved = source.resolved;
     }
     evidence.snapshot_version_hash = depth.snapshot_version.combined_hash;
     evidence.read_ts_ns = read_ts_ns;

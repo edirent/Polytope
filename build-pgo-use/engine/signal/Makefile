@@ -528,6 +528,30 @@ publish/CapturingIntentPublisher.cpp.s:
 	cd /home/edirent/Polytope/build-pgo-use && $(MAKE) $(MAKESILENT) -f engine/signal/CMakeFiles/engine_signal.dir/build.make engine/signal/CMakeFiles/engine_signal.dir/publish/CapturingIntentPublisher.cpp.s
 .PHONY : publish/CapturingIntentPublisher.cpp.s
 
+publish/HashOnlySignalPublisher.o: publish/HashOnlySignalPublisher.cpp.o
+.PHONY : publish/HashOnlySignalPublisher.o
+
+# target to build an object file
+publish/HashOnlySignalPublisher.cpp.o:
+	cd /home/edirent/Polytope/build-pgo-use && $(MAKE) $(MAKESILENT) -f engine/signal/CMakeFiles/engine_signal.dir/build.make engine/signal/CMakeFiles/engine_signal.dir/publish/HashOnlySignalPublisher.cpp.o
+.PHONY : publish/HashOnlySignalPublisher.cpp.o
+
+publish/HashOnlySignalPublisher.i: publish/HashOnlySignalPublisher.cpp.i
+.PHONY : publish/HashOnlySignalPublisher.i
+
+# target to preprocess a source file
+publish/HashOnlySignalPublisher.cpp.i:
+	cd /home/edirent/Polytope/build-pgo-use && $(MAKE) $(MAKESILENT) -f engine/signal/CMakeFiles/engine_signal.dir/build.make engine/signal/CMakeFiles/engine_signal.dir/publish/HashOnlySignalPublisher.cpp.i
+.PHONY : publish/HashOnlySignalPublisher.cpp.i
+
+publish/HashOnlySignalPublisher.s: publish/HashOnlySignalPublisher.cpp.s
+.PHONY : publish/HashOnlySignalPublisher.s
+
+# target to generate assembly for a file
+publish/HashOnlySignalPublisher.cpp.s:
+	cd /home/edirent/Polytope/build-pgo-use && $(MAKE) $(MAKESILENT) -f engine/signal/CMakeFiles/engine_signal.dir/build.make engine/signal/CMakeFiles/engine_signal.dir/publish/HashOnlySignalPublisher.cpp.s
+.PHONY : publish/HashOnlySignalPublisher.cpp.s
+
 publish/IntentBuilder.o: publish/IntentBuilder.cpp.o
 .PHONY : publish/IntentBuilder.o
 
@@ -993,6 +1017,9 @@ help:
 	@echo "... publish/CapturingIntentPublisher.o"
 	@echo "... publish/CapturingIntentPublisher.i"
 	@echo "... publish/CapturingIntentPublisher.s"
+	@echo "... publish/HashOnlySignalPublisher.o"
+	@echo "... publish/HashOnlySignalPublisher.i"
+	@echo "... publish/HashOnlySignalPublisher.s"
 	@echo "... publish/IntentBuilder.o"
 	@echo "... publish/IntentBuilder.i"
 	@echo "... publish/IntentBuilder.s"

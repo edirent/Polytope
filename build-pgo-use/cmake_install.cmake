@@ -77,6 +77,11 @@ if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   include("/home/edirent/Polytope/build-pgo-use/engine/execution/cmake_install.cmake")
 endif()
 
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("/home/edirent/Polytope/build-pgo-use/engine/decision_fastpath/cmake_install.cmake")
+endif()
+
 if(CMAKE_INSTALL_COMPONENT)
   set(CMAKE_INSTALL_MANIFEST "install_manifest_${CMAKE_INSTALL_COMPONENT}.txt")
 else()

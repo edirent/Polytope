@@ -140,6 +140,188 @@ trading_engine/fast:
 .PHONY : trading_engine/fast
 
 #=============================================================================
+# Target rules for targets named common_vwap_math_tests
+
+# Build rule for target.
+common_vwap_math_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 common_vwap_math_tests
+.PHONY : common_vwap_math_tests
+
+# fast build rule for target.
+common_vwap_math_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_vwap_math_tests.dir/build.make CMakeFiles/common_vwap_math_tests.dir/build
+.PHONY : common_vwap_math_tests/fast
+
+#=============================================================================
+# Target rules for targets named common_edge_math_tests
+
+# Build rule for target.
+common_edge_math_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 common_edge_math_tests
+.PHONY : common_edge_math_tests
+
+# fast build rule for target.
+common_edge_math_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_edge_math_tests.dir/build.make CMakeFiles/common_edge_math_tests.dir/build
+.PHONY : common_edge_math_tests/fast
+
+#=============================================================================
+# Target rules for targets named common_risk_math_tests
+
+# Build rule for target.
+common_risk_math_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 common_risk_math_tests
+.PHONY : common_risk_math_tests
+
+# fast build rule for target.
+common_risk_math_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_risk_math_tests.dir/build.make CMakeFiles/common_risk_math_tests.dir/build
+.PHONY : common_risk_math_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_gate_tests
+
+# Build rule for target.
+decision_fastpath_gate_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_gate_tests
+.PHONY : decision_fastpath_gate_tests
+
+# fast build rule for target.
+decision_fastpath_gate_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_gate_tests.dir/build.make CMakeFiles/decision_fastpath_gate_tests.dir/build
+.PHONY : decision_fastpath_gate_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_kernel_registry_tests
+
+# Build rule for target.
+decision_fastpath_kernel_registry_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_kernel_registry_tests
+.PHONY : decision_fastpath_kernel_registry_tests
+
+# fast build rule for target.
+decision_fastpath_kernel_registry_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_kernel_registry_tests.dir/build.make CMakeFiles/decision_fastpath_kernel_registry_tests.dir/build
+.PHONY : decision_fastpath_kernel_registry_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_kernel_spec_tests
+
+# Build rule for target.
+decision_fastpath_kernel_spec_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_kernel_spec_tests
+.PHONY : decision_fastpath_kernel_spec_tests
+
+# fast build rule for target.
+decision_fastpath_kernel_spec_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_kernel_spec_tests.dir/build.make CMakeFiles/decision_fastpath_kernel_spec_tests.dir/build
+.PHONY : decision_fastpath_kernel_spec_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_event_local_pipeline_tests
+
+# Build rule for target.
+decision_fastpath_event_local_pipeline_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_event_local_pipeline_tests
+.PHONY : decision_fastpath_event_local_pipeline_tests
+
+# fast build rule for target.
+decision_fastpath_event_local_pipeline_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_event_local_pipeline_tests.dir/build.make CMakeFiles/decision_fastpath_event_local_pipeline_tests.dir/build
+.PHONY : decision_fastpath_event_local_pipeline_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_differential_verifier_tests
+
+# Build rule for target.
+decision_fastpath_differential_verifier_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_differential_verifier_tests
+.PHONY : decision_fastpath_differential_verifier_tests
+
+# fast build rule for target.
+decision_fastpath_differential_verifier_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_differential_verifier_tests.dir/build.make CMakeFiles/decision_fastpath_differential_verifier_tests.dir/build
+.PHONY : decision_fastpath_differential_verifier_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_simd_kernel_parity_tests
+
+# Build rule for target.
+decision_fastpath_simd_kernel_parity_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_simd_kernel_parity_tests
+.PHONY : decision_fastpath_simd_kernel_parity_tests
+
+# fast build rule for target.
+decision_fastpath_simd_kernel_parity_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_simd_kernel_parity_tests.dir/build.make CMakeFiles/decision_fastpath_simd_kernel_parity_tests.dir/build
+.PHONY : decision_fastpath_simd_kernel_parity_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_fixed_buy_kernel_scalar_tests
+
+# Build rule for target.
+decision_fastpath_fixed_buy_kernel_scalar_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_fixed_buy_kernel_scalar_tests
+.PHONY : decision_fastpath_fixed_buy_kernel_scalar_tests
+
+# fast build rule for target.
+decision_fastpath_fixed_buy_kernel_scalar_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_fixed_buy_kernel_scalar_tests.dir/build.make CMakeFiles/decision_fastpath_fixed_buy_kernel_scalar_tests.dir/build
+.PHONY : decision_fastpath_fixed_buy_kernel_scalar_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_shadow_worldcup_30m_tests
+
+# Build rule for target.
+decision_fastpath_shadow_worldcup_30m_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_shadow_worldcup_30m_tests
+.PHONY : decision_fastpath_shadow_worldcup_30m_tests
+
+# fast build rule for target.
+decision_fastpath_shadow_worldcup_30m_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_shadow_worldcup_30m_tests.dir/build.make CMakeFiles/decision_fastpath_shadow_worldcup_30m_tests.dir/build
+.PHONY : decision_fastpath_shadow_worldcup_30m_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_shadow_market39_tests
+
+# Build rule for target.
+decision_fastpath_shadow_market39_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_shadow_market39_tests
+.PHONY : decision_fastpath_shadow_market39_tests
+
+# fast build rule for target.
+decision_fastpath_shadow_market39_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_shadow_market39_tests.dir/build.make CMakeFiles/decision_fastpath_shadow_market39_tests.dir/build
+.PHONY : decision_fastpath_shadow_market39_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_fallback_tests
+
+# Build rule for target.
+decision_fastpath_fallback_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_fallback_tests
+.PHONY : decision_fastpath_fallback_tests
+
+# fast build rule for target.
+decision_fastpath_fallback_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_fallback_tests.dir/build.make CMakeFiles/decision_fastpath_fallback_tests.dir/build
+.PHONY : decision_fastpath_fallback_tests/fast
+
+#=============================================================================
+# Target rules for targets named decision_fastpath_determinism_tests
+
+# Build rule for target.
+decision_fastpath_determinism_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 decision_fastpath_determinism_tests
+.PHONY : decision_fastpath_determinism_tests
+
+# fast build rule for target.
+decision_fastpath_determinism_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_determinism_tests.dir/build.make CMakeFiles/decision_fastpath_determinism_tests.dir/build
+.PHONY : decision_fastpath_determinism_tests/fast
+
+#=============================================================================
 # Target rules for targets named raw_ingest_tests
 
 # Build rule for target.
@@ -242,6 +424,45 @@ market_state_view_tests: cmake_check_build_system
 market_state_view_tests/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/market_state_view_tests.dir/build.make CMakeFiles/market_state_view_tests.dir/build
 .PHONY : market_state_view_tests/fast
+
+#=============================================================================
+# Target rules for targets named market_depth_view_tests
+
+# Build rule for target.
+market_depth_view_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 market_depth_view_tests
+.PHONY : market_depth_view_tests
+
+# fast build rule for target.
+market_depth_view_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/market_depth_view_tests.dir/build.make CMakeFiles/market_depth_view_tests.dir/build
+.PHONY : market_depth_view_tests/fast
+
+#=============================================================================
+# Target rules for targets named depth_prefix_tests
+
+# Build rule for target.
+depth_prefix_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 depth_prefix_tests
+.PHONY : depth_prefix_tests
+
+# fast build rule for target.
+depth_prefix_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/depth_prefix_tests.dir/build.make CMakeFiles/depth_prefix_tests.dir/build
+.PHONY : depth_prefix_tests/fast
+
+#=============================================================================
+# Target rules for targets named market_state_view_depth_batch_tests
+
+# Build rule for target.
+market_state_view_depth_batch_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 market_state_view_depth_batch_tests
+.PHONY : market_state_view_depth_batch_tests
+
+# fast build rule for target.
+market_state_view_depth_batch_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/market_state_view_depth_batch_tests.dir/build.make CMakeFiles/market_state_view_depth_batch_tests.dir/build
+.PHONY : market_state_view_depth_batch_tests/fast
 
 #=============================================================================
 # Target rules for targets named signal_types_tests
@@ -361,6 +582,32 @@ risk_cost_revalidator_tests/fast:
 .PHONY : risk_cost_revalidator_tests/fast
 
 #=============================================================================
+# Target rules for targets named risk_depth_view_fast_path_tests
+
+# Build rule for target.
+risk_depth_view_fast_path_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 risk_depth_view_fast_path_tests
+.PHONY : risk_depth_view_fast_path_tests
+
+# fast build rule for target.
+risk_depth_view_fast_path_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_depth_view_fast_path_tests.dir/build.make CMakeFiles/risk_depth_view_fast_path_tests.dir/build
+.PHONY : risk_depth_view_fast_path_tests/fast
+
+#=============================================================================
+# Target rules for targets named risk_vwap_revalidator_prefix_tests
+
+# Build rule for target.
+risk_vwap_revalidator_prefix_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 risk_vwap_revalidator_prefix_tests
+.PHONY : risk_vwap_revalidator_prefix_tests
+
+# fast build rule for target.
+risk_vwap_revalidator_prefix_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_vwap_revalidator_prefix_tests.dir/build.make CMakeFiles/risk_vwap_revalidator_prefix_tests.dir/build
+.PHONY : risk_vwap_revalidator_prefix_tests/fast
+
+#=============================================================================
 # Target rules for targets named risk_edge_guard_tests
 
 # Build rule for target.
@@ -437,6 +684,32 @@ risk_publisher_tests: cmake_check_build_system
 risk_publisher_tests/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_publisher_tests.dir/build.make CMakeFiles/risk_publisher_tests.dir/build
 .PHONY : risk_publisher_tests/fast
+
+#=============================================================================
+# Target rules for targets named risk_hash_only_publisher_tests
+
+# Build rule for target.
+risk_hash_only_publisher_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 risk_hash_only_publisher_tests
+.PHONY : risk_hash_only_publisher_tests
+
+# fast build rule for target.
+risk_hash_only_publisher_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_hash_only_publisher_tests.dir/build.make CMakeFiles/risk_hash_only_publisher_tests.dir/build
+.PHONY : risk_hash_only_publisher_tests/fast
+
+#=============================================================================
+# Target rules for targets named risk_scratch_tests
+
+# Build rule for target.
+risk_scratch_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 risk_scratch_tests
+.PHONY : risk_scratch_tests
+
+# fast build rule for target.
+risk_scratch_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_scratch_tests.dir/build.make CMakeFiles/risk_scratch_tests.dir/build
+.PHONY : risk_scratch_tests/fast
 
 #=============================================================================
 # Target rules for targets named signal_opportunity_intent_tests
@@ -556,6 +829,19 @@ signal_snapshot_consistency_guard_tests/fast:
 .PHONY : signal_snapshot_consistency_guard_tests/fast
 
 #=============================================================================
+# Target rules for targets named signal_snapshot_batch_reader_depth_view_tests
+
+# Build rule for target.
+signal_snapshot_batch_reader_depth_view_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 signal_snapshot_batch_reader_depth_view_tests
+.PHONY : signal_snapshot_batch_reader_depth_view_tests
+
+# fast build rule for target.
+signal_snapshot_batch_reader_depth_view_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_snapshot_batch_reader_depth_view_tests.dir/build.make CMakeFiles/signal_snapshot_batch_reader_depth_view_tests.dir/build
+.PHONY : signal_snapshot_batch_reader_depth_view_tests/fast
+
+#=============================================================================
 # Target rules for targets named signal_vwap_precheck_tests
 
 # Build rule for target.
@@ -567,6 +853,19 @@ signal_vwap_precheck_tests: cmake_check_build_system
 signal_vwap_precheck_tests/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_vwap_precheck_tests.dir/build.make CMakeFiles/signal_vwap_precheck_tests.dir/build
 .PHONY : signal_vwap_precheck_tests/fast
+
+#=============================================================================
+# Target rules for targets named signal_vwap_prefix_tests
+
+# Build rule for target.
+signal_vwap_prefix_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 signal_vwap_prefix_tests
+.PHONY : signal_vwap_prefix_tests
+
+# fast build rule for target.
+signal_vwap_prefix_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_vwap_prefix_tests.dir/build.make CMakeFiles/signal_vwap_prefix_tests.dir/build
+.PHONY : signal_vwap_prefix_tests/fast
 
 #=============================================================================
 # Target rules for targets named signal_price_vector_builder_tests
@@ -645,6 +944,32 @@ signal_paper_intent_publisher_tests: cmake_check_build_system
 signal_paper_intent_publisher_tests/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_paper_intent_publisher_tests.dir/build.make CMakeFiles/signal_paper_intent_publisher_tests.dir/build
 .PHONY : signal_paper_intent_publisher_tests/fast
+
+#=============================================================================
+# Target rules for targets named signal_hash_only_publisher_tests
+
+# Build rule for target.
+signal_hash_only_publisher_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 signal_hash_only_publisher_tests
+.PHONY : signal_hash_only_publisher_tests
+
+# fast build rule for target.
+signal_hash_only_publisher_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_hash_only_publisher_tests.dir/build.make CMakeFiles/signal_hash_only_publisher_tests.dir/build
+.PHONY : signal_hash_only_publisher_tests/fast
+
+#=============================================================================
+# Target rules for targets named signal_scratch_tests
+
+# Build rule for target.
+signal_scratch_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 signal_scratch_tests
+.PHONY : signal_scratch_tests
+
+# fast build rule for target.
+signal_scratch_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_scratch_tests.dir/build.make CMakeFiles/signal_scratch_tests.dir/build
+.PHONY : signal_scratch_tests/fast
 
 #=============================================================================
 # Target rules for targets named signal_workflow_small_fixture_tests
@@ -1726,6 +2051,32 @@ probe_market_event_to_execution_plan_latency/fast:
 .PHONY : probe_market_event_to_execution_plan_latency/fast
 
 #=============================================================================
+# Target rules for targets named verify_canonical_decision_workflow
+
+# Build rule for target.
+verify_canonical_decision_workflow: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 verify_canonical_decision_workflow
+.PHONY : verify_canonical_decision_workflow
+
+# fast build rule for target.
+verify_canonical_decision_workflow/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_canonical_decision_workflow.dir/build.make CMakeFiles/verify_canonical_decision_workflow.dir/build
+.PHONY : verify_canonical_decision_workflow/fast
+
+#=============================================================================
+# Target rules for targets named probe_fastpath_latency
+
+# Build rule for target.
+probe_fastpath_latency: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 probe_fastpath_latency
+.PHONY : probe_fastpath_latency
+
+# fast build rule for target.
+probe_fastpath_latency/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/probe_fastpath_latency.dir/build.make CMakeFiles/probe_fastpath_latency.dir/build
+.PHONY : probe_fastpath_latency/fast
+
+#=============================================================================
 # Target rules for targets named chain_ws_http_parity_smoke
 
 # Build rule for target.
@@ -2233,6 +2584,32 @@ execution_report_publisher_tests/fast:
 .PHONY : execution_report_publisher_tests/fast
 
 #=============================================================================
+# Target rules for targets named execution_hash_only_publisher_tests
+
+# Build rule for target.
+execution_hash_only_publisher_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 execution_hash_only_publisher_tests
+.PHONY : execution_hash_only_publisher_tests
+
+# fast build rule for target.
+execution_hash_only_publisher_tests/fast:
+	$(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/build.make engine/execution/CMakeFiles/execution_hash_only_publisher_tests.dir/build
+.PHONY : execution_hash_only_publisher_tests/fast
+
+#=============================================================================
+# Target rules for targets named execution_scratch_tests
+
+# Build rule for target.
+execution_scratch_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 execution_scratch_tests
+.PHONY : execution_scratch_tests
+
+# fast build rule for target.
+execution_scratch_tests/fast:
+	$(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/execution_scratch_tests.dir/build.make engine/execution/CMakeFiles/execution_scratch_tests.dir/build
+.PHONY : execution_scratch_tests/fast
+
+#=============================================================================
 # Target rules for targets named execution_metrics_tests
 
 # Build rule for target.
@@ -2270,6 +2647,19 @@ verify_execution_workflow_tests: cmake_check_build_system
 verify_execution_workflow_tests/fast:
 	$(MAKE) $(MAKESILENT) -f engine/execution/CMakeFiles/verify_execution_workflow_tests.dir/build.make engine/execution/CMakeFiles/verify_execution_workflow_tests.dir/build
 .PHONY : verify_execution_workflow_tests/fast
+
+#=============================================================================
+# Target rules for targets named engine_decision_fastpath
+
+# Build rule for target.
+engine_decision_fastpath: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 engine_decision_fastpath
+.PHONY : engine_decision_fastpath
+
+# fast build rule for target.
+engine_decision_fastpath/fast:
+	$(MAKE) $(MAKESILENT) -f engine/decision_fastpath/CMakeFiles/engine_decision_fastpath.dir/build.make engine/decision_fastpath/CMakeFiles/engine_decision_fastpath.dir/build
+.PHONY : engine_decision_fastpath/fast
 
 engine/execution/FillTracker.o: engine/execution/FillTracker.cpp.o
 .PHONY : engine/execution/FillTracker.o
@@ -2606,6 +2996,7 @@ engine/feed/raw_ingest/RawLogReader.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/inspect_state_errors.dir/build.make CMakeFiles/inspect_state_errors.dir/engine/feed/raw_ingest/RawLogReader.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_market_state_workflow.dir/build.make CMakeFiles/verify_market_state_workflow.dir/engine/feed/raw_ingest/RawLogReader.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/probe_market_event_to_execution_plan_latency.dir/build.make CMakeFiles/probe_market_event_to_execution_plan_latency.dir/engine/feed/raw_ingest/RawLogReader.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_canonical_decision_workflow.dir/build.make CMakeFiles/verify_canonical_decision_workflow.dir/engine/feed/raw_ingest/RawLogReader.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_live_feed_smoke.dir/build.make CMakeFiles/run_live_feed_smoke.dir/engine/feed/raw_ingest/RawLogReader.cpp.o
 .PHONY : engine/feed/raw_ingest/RawLogReader.cpp.o
 
@@ -2635,6 +3026,7 @@ engine/feed/raw_ingest/RawLogReader.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/inspect_state_errors.dir/build.make CMakeFiles/inspect_state_errors.dir/engine/feed/raw_ingest/RawLogReader.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_market_state_workflow.dir/build.make CMakeFiles/verify_market_state_workflow.dir/engine/feed/raw_ingest/RawLogReader.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/probe_market_event_to_execution_plan_latency.dir/build.make CMakeFiles/probe_market_event_to_execution_plan_latency.dir/engine/feed/raw_ingest/RawLogReader.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_canonical_decision_workflow.dir/build.make CMakeFiles/verify_canonical_decision_workflow.dir/engine/feed/raw_ingest/RawLogReader.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_live_feed_smoke.dir/build.make CMakeFiles/run_live_feed_smoke.dir/engine/feed/raw_ingest/RawLogReader.cpp.i
 .PHONY : engine/feed/raw_ingest/RawLogReader.cpp.i
 
@@ -2664,6 +3056,7 @@ engine/feed/raw_ingest/RawLogReader.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/inspect_state_errors.dir/build.make CMakeFiles/inspect_state_errors.dir/engine/feed/raw_ingest/RawLogReader.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_market_state_workflow.dir/build.make CMakeFiles/verify_market_state_workflow.dir/engine/feed/raw_ingest/RawLogReader.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/probe_market_event_to_execution_plan_latency.dir/build.make CMakeFiles/probe_market_event_to_execution_plan_latency.dir/engine/feed/raw_ingest/RawLogReader.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_canonical_decision_workflow.dir/build.make CMakeFiles/verify_canonical_decision_workflow.dir/engine/feed/raw_ingest/RawLogReader.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_live_feed_smoke.dir/build.make CMakeFiles/run_live_feed_smoke.dir/engine/feed/raw_ingest/RawLogReader.cpp.s
 .PHONY : engine/feed/raw_ingest/RawLogReader.cpp.s
 
@@ -2732,6 +3125,7 @@ engine/feed/raw_ingest/RawPacket.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_market_state_live_smoke.dir/build.make CMakeFiles/run_market_state_live_smoke.dir/engine/feed/raw_ingest/RawPacket.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_worldcup_feed_to_execution.dir/build.make CMakeFiles/run_worldcup_feed_to_execution.dir/engine/feed/raw_ingest/RawPacket.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/probe_market_event_to_execution_plan_latency.dir/build.make CMakeFiles/probe_market_event_to_execution_plan_latency.dir/engine/feed/raw_ingest/RawPacket.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_canonical_decision_workflow.dir/build.make CMakeFiles/verify_canonical_decision_workflow.dir/engine/feed/raw_ingest/RawPacket.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_live_feed_smoke.dir/build.make CMakeFiles/run_live_feed_smoke.dir/engine/feed/raw_ingest/RawPacket.cpp.o
 .PHONY : engine/feed/raw_ingest/RawPacket.cpp.o
 
@@ -2767,6 +3161,7 @@ engine/feed/raw_ingest/RawPacket.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_market_state_live_smoke.dir/build.make CMakeFiles/run_market_state_live_smoke.dir/engine/feed/raw_ingest/RawPacket.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_worldcup_feed_to_execution.dir/build.make CMakeFiles/run_worldcup_feed_to_execution.dir/engine/feed/raw_ingest/RawPacket.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/probe_market_event_to_execution_plan_latency.dir/build.make CMakeFiles/probe_market_event_to_execution_plan_latency.dir/engine/feed/raw_ingest/RawPacket.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_canonical_decision_workflow.dir/build.make CMakeFiles/verify_canonical_decision_workflow.dir/engine/feed/raw_ingest/RawPacket.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_live_feed_smoke.dir/build.make CMakeFiles/run_live_feed_smoke.dir/engine/feed/raw_ingest/RawPacket.cpp.i
 .PHONY : engine/feed/raw_ingest/RawPacket.cpp.i
 
@@ -2802,6 +3197,7 @@ engine/feed/raw_ingest/RawPacket.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_market_state_live_smoke.dir/build.make CMakeFiles/run_market_state_live_smoke.dir/engine/feed/raw_ingest/RawPacket.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_worldcup_feed_to_execution.dir/build.make CMakeFiles/run_worldcup_feed_to_execution.dir/engine/feed/raw_ingest/RawPacket.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/probe_market_event_to_execution_plan_latency.dir/build.make CMakeFiles/probe_market_event_to_execution_plan_latency.dir/engine/feed/raw_ingest/RawPacket.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_canonical_decision_workflow.dir/build.make CMakeFiles/verify_canonical_decision_workflow.dir/engine/feed/raw_ingest/RawPacket.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/run_live_feed_smoke.dir/build.make CMakeFiles/run_live_feed_smoke.dir/engine/feed/raw_ingest/RawPacket.cpp.s
 .PHONY : engine/feed/raw_ingest/RawPacket.cpp.s
 
@@ -3353,6 +3749,102 @@ tests/integration/chain_confirm/synthetic_reconciliation_test.s: tests/integrati
 tests/integration/chain_confirm/synthetic_reconciliation_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/chain_confirm_synthetic_reconciliation_tests.dir/build.make CMakeFiles/chain_confirm_synthetic_reconciliation_tests.dir/tests/integration/chain_confirm/synthetic_reconciliation_test.cpp.s
 .PHONY : tests/integration/chain_confirm/synthetic_reconciliation_test.cpp.s
+
+tests/integration/decision_fastpath/fastpath_determinism_test.o: tests/integration/decision_fastpath/fastpath_determinism_test.cpp.o
+.PHONY : tests/integration/decision_fastpath/fastpath_determinism_test.o
+
+# target to build an object file
+tests/integration/decision_fastpath/fastpath_determinism_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_determinism_tests.dir/build.make CMakeFiles/decision_fastpath_determinism_tests.dir/tests/integration/decision_fastpath/fastpath_determinism_test.cpp.o
+.PHONY : tests/integration/decision_fastpath/fastpath_determinism_test.cpp.o
+
+tests/integration/decision_fastpath/fastpath_determinism_test.i: tests/integration/decision_fastpath/fastpath_determinism_test.cpp.i
+.PHONY : tests/integration/decision_fastpath/fastpath_determinism_test.i
+
+# target to preprocess a source file
+tests/integration/decision_fastpath/fastpath_determinism_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_determinism_tests.dir/build.make CMakeFiles/decision_fastpath_determinism_tests.dir/tests/integration/decision_fastpath/fastpath_determinism_test.cpp.i
+.PHONY : tests/integration/decision_fastpath/fastpath_determinism_test.cpp.i
+
+tests/integration/decision_fastpath/fastpath_determinism_test.s: tests/integration/decision_fastpath/fastpath_determinism_test.cpp.s
+.PHONY : tests/integration/decision_fastpath/fastpath_determinism_test.s
+
+# target to generate assembly for a file
+tests/integration/decision_fastpath/fastpath_determinism_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_determinism_tests.dir/build.make CMakeFiles/decision_fastpath_determinism_tests.dir/tests/integration/decision_fastpath/fastpath_determinism_test.cpp.s
+.PHONY : tests/integration/decision_fastpath/fastpath_determinism_test.cpp.s
+
+tests/integration/decision_fastpath/fastpath_fallback_test.o: tests/integration/decision_fastpath/fastpath_fallback_test.cpp.o
+.PHONY : tests/integration/decision_fastpath/fastpath_fallback_test.o
+
+# target to build an object file
+tests/integration/decision_fastpath/fastpath_fallback_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_fallback_tests.dir/build.make CMakeFiles/decision_fastpath_fallback_tests.dir/tests/integration/decision_fastpath/fastpath_fallback_test.cpp.o
+.PHONY : tests/integration/decision_fastpath/fastpath_fallback_test.cpp.o
+
+tests/integration/decision_fastpath/fastpath_fallback_test.i: tests/integration/decision_fastpath/fastpath_fallback_test.cpp.i
+.PHONY : tests/integration/decision_fastpath/fastpath_fallback_test.i
+
+# target to preprocess a source file
+tests/integration/decision_fastpath/fastpath_fallback_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_fallback_tests.dir/build.make CMakeFiles/decision_fastpath_fallback_tests.dir/tests/integration/decision_fastpath/fastpath_fallback_test.cpp.i
+.PHONY : tests/integration/decision_fastpath/fastpath_fallback_test.cpp.i
+
+tests/integration/decision_fastpath/fastpath_fallback_test.s: tests/integration/decision_fastpath/fastpath_fallback_test.cpp.s
+.PHONY : tests/integration/decision_fastpath/fastpath_fallback_test.s
+
+# target to generate assembly for a file
+tests/integration/decision_fastpath/fastpath_fallback_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_fallback_tests.dir/build.make CMakeFiles/decision_fastpath_fallback_tests.dir/tests/integration/decision_fastpath/fastpath_fallback_test.cpp.s
+.PHONY : tests/integration/decision_fastpath/fastpath_fallback_test.cpp.s
+
+tests/integration/decision_fastpath/fastpath_shadow_market39_test.o: tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.o
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_market39_test.o
+
+# target to build an object file
+tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_shadow_market39_tests.dir/build.make CMakeFiles/decision_fastpath_shadow_market39_tests.dir/tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.o
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.o
+
+tests/integration/decision_fastpath/fastpath_shadow_market39_test.i: tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.i
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_market39_test.i
+
+# target to preprocess a source file
+tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_shadow_market39_tests.dir/build.make CMakeFiles/decision_fastpath_shadow_market39_tests.dir/tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.i
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.i
+
+tests/integration/decision_fastpath/fastpath_shadow_market39_test.s: tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.s
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_market39_test.s
+
+# target to generate assembly for a file
+tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_shadow_market39_tests.dir/build.make CMakeFiles/decision_fastpath_shadow_market39_tests.dir/tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.s
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_market39_test.cpp.s
+
+tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.o: tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.o
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.o
+
+# target to build an object file
+tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_shadow_worldcup_30m_tests.dir/build.make CMakeFiles/decision_fastpath_shadow_worldcup_30m_tests.dir/tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.o
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.o
+
+tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.i: tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.i
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.i
+
+# target to preprocess a source file
+tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_shadow_worldcup_30m_tests.dir/build.make CMakeFiles/decision_fastpath_shadow_worldcup_30m_tests.dir/tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.i
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.i
+
+tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.s: tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.s
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.s
+
+# target to generate assembly for a file
+tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_shadow_worldcup_30m_tests.dir/build.make CMakeFiles/decision_fastpath_shadow_worldcup_30m_tests.dir/tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.s
+.PHONY : tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.cpp.s
 
 tests/integration/decode/decode_pipeline_test.o: tests/integration/decode/decode_pipeline_test.cpp.o
 .PHONY : tests/integration/decode/decode_pipeline_test.o
@@ -4050,6 +4542,78 @@ tests/unit/chain_confirm/order_filled_decoder_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/order_filled_decoder_tests.dir/build.make CMakeFiles/order_filled_decoder_tests.dir/tests/unit/chain_confirm/order_filled_decoder_test.cpp.s
 .PHONY : tests/unit/chain_confirm/order_filled_decoder_test.cpp.s
 
+tests/unit/common/edge_math_test.o: tests/unit/common/edge_math_test.cpp.o
+.PHONY : tests/unit/common/edge_math_test.o
+
+# target to build an object file
+tests/unit/common/edge_math_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_edge_math_tests.dir/build.make CMakeFiles/common_edge_math_tests.dir/tests/unit/common/edge_math_test.cpp.o
+.PHONY : tests/unit/common/edge_math_test.cpp.o
+
+tests/unit/common/edge_math_test.i: tests/unit/common/edge_math_test.cpp.i
+.PHONY : tests/unit/common/edge_math_test.i
+
+# target to preprocess a source file
+tests/unit/common/edge_math_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_edge_math_tests.dir/build.make CMakeFiles/common_edge_math_tests.dir/tests/unit/common/edge_math_test.cpp.i
+.PHONY : tests/unit/common/edge_math_test.cpp.i
+
+tests/unit/common/edge_math_test.s: tests/unit/common/edge_math_test.cpp.s
+.PHONY : tests/unit/common/edge_math_test.s
+
+# target to generate assembly for a file
+tests/unit/common/edge_math_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_edge_math_tests.dir/build.make CMakeFiles/common_edge_math_tests.dir/tests/unit/common/edge_math_test.cpp.s
+.PHONY : tests/unit/common/edge_math_test.cpp.s
+
+tests/unit/common/risk_math_test.o: tests/unit/common/risk_math_test.cpp.o
+.PHONY : tests/unit/common/risk_math_test.o
+
+# target to build an object file
+tests/unit/common/risk_math_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_risk_math_tests.dir/build.make CMakeFiles/common_risk_math_tests.dir/tests/unit/common/risk_math_test.cpp.o
+.PHONY : tests/unit/common/risk_math_test.cpp.o
+
+tests/unit/common/risk_math_test.i: tests/unit/common/risk_math_test.cpp.i
+.PHONY : tests/unit/common/risk_math_test.i
+
+# target to preprocess a source file
+tests/unit/common/risk_math_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_risk_math_tests.dir/build.make CMakeFiles/common_risk_math_tests.dir/tests/unit/common/risk_math_test.cpp.i
+.PHONY : tests/unit/common/risk_math_test.cpp.i
+
+tests/unit/common/risk_math_test.s: tests/unit/common/risk_math_test.cpp.s
+.PHONY : tests/unit/common/risk_math_test.s
+
+# target to generate assembly for a file
+tests/unit/common/risk_math_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_risk_math_tests.dir/build.make CMakeFiles/common_risk_math_tests.dir/tests/unit/common/risk_math_test.cpp.s
+.PHONY : tests/unit/common/risk_math_test.cpp.s
+
+tests/unit/common/vwap_math_test.o: tests/unit/common/vwap_math_test.cpp.o
+.PHONY : tests/unit/common/vwap_math_test.o
+
+# target to build an object file
+tests/unit/common/vwap_math_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_vwap_math_tests.dir/build.make CMakeFiles/common_vwap_math_tests.dir/tests/unit/common/vwap_math_test.cpp.o
+.PHONY : tests/unit/common/vwap_math_test.cpp.o
+
+tests/unit/common/vwap_math_test.i: tests/unit/common/vwap_math_test.cpp.i
+.PHONY : tests/unit/common/vwap_math_test.i
+
+# target to preprocess a source file
+tests/unit/common/vwap_math_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_vwap_math_tests.dir/build.make CMakeFiles/common_vwap_math_tests.dir/tests/unit/common/vwap_math_test.cpp.i
+.PHONY : tests/unit/common/vwap_math_test.cpp.i
+
+tests/unit/common/vwap_math_test.s: tests/unit/common/vwap_math_test.cpp.s
+.PHONY : tests/unit/common/vwap_math_test.s
+
+# target to generate assembly for a file
+tests/unit/common/vwap_math_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/common_vwap_math_tests.dir/build.make CMakeFiles/common_vwap_math_tests.dir/tests/unit/common/vwap_math_test.cpp.s
+.PHONY : tests/unit/common/vwap_math_test.cpp.s
+
 tests/unit/consistency_checker_tests.o: tests/unit/consistency_checker_tests.cpp.o
 .PHONY : tests/unit/consistency_checker_tests.o
 
@@ -4073,6 +4637,174 @@ tests/unit/consistency_checker_tests.s: tests/unit/consistency_checker_tests.cpp
 tests/unit/consistency_checker_tests.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/consistency_checker_tests.dir/build.make CMakeFiles/consistency_checker_tests.dir/tests/unit/consistency_checker_tests.cpp.s
 .PHONY : tests/unit/consistency_checker_tests.cpp.s
+
+tests/unit/decision_fastpath/differential_verifier_test.o: tests/unit/decision_fastpath/differential_verifier_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/differential_verifier_test.o
+
+# target to build an object file
+tests/unit/decision_fastpath/differential_verifier_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_differential_verifier_tests.dir/build.make CMakeFiles/decision_fastpath_differential_verifier_tests.dir/tests/unit/decision_fastpath/differential_verifier_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/differential_verifier_test.cpp.o
+
+tests/unit/decision_fastpath/differential_verifier_test.i: tests/unit/decision_fastpath/differential_verifier_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/differential_verifier_test.i
+
+# target to preprocess a source file
+tests/unit/decision_fastpath/differential_verifier_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_differential_verifier_tests.dir/build.make CMakeFiles/decision_fastpath_differential_verifier_tests.dir/tests/unit/decision_fastpath/differential_verifier_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/differential_verifier_test.cpp.i
+
+tests/unit/decision_fastpath/differential_verifier_test.s: tests/unit/decision_fastpath/differential_verifier_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/differential_verifier_test.s
+
+# target to generate assembly for a file
+tests/unit/decision_fastpath/differential_verifier_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_differential_verifier_tests.dir/build.make CMakeFiles/decision_fastpath_differential_verifier_tests.dir/tests/unit/decision_fastpath/differential_verifier_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/differential_verifier_test.cpp.s
+
+tests/unit/decision_fastpath/event_local_decision_pipeline_test.o: tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/event_local_decision_pipeline_test.o
+
+# target to build an object file
+tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_event_local_pipeline_tests.dir/build.make CMakeFiles/decision_fastpath_event_local_pipeline_tests.dir/tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.o
+
+tests/unit/decision_fastpath/event_local_decision_pipeline_test.i: tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/event_local_decision_pipeline_test.i
+
+# target to preprocess a source file
+tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_event_local_pipeline_tests.dir/build.make CMakeFiles/decision_fastpath_event_local_pipeline_tests.dir/tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.i
+
+tests/unit/decision_fastpath/event_local_decision_pipeline_test.s: tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/event_local_decision_pipeline_test.s
+
+# target to generate assembly for a file
+tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_event_local_pipeline_tests.dir/build.make CMakeFiles/decision_fastpath_event_local_pipeline_tests.dir/tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/event_local_decision_pipeline_test.cpp.s
+
+tests/unit/decision_fastpath/fast_path_gate_test.o: tests/unit/decision_fastpath/fast_path_gate_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/fast_path_gate_test.o
+
+# target to build an object file
+tests/unit/decision_fastpath/fast_path_gate_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_gate_tests.dir/build.make CMakeFiles/decision_fastpath_gate_tests.dir/tests/unit/decision_fastpath/fast_path_gate_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/fast_path_gate_test.cpp.o
+
+tests/unit/decision_fastpath/fast_path_gate_test.i: tests/unit/decision_fastpath/fast_path_gate_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/fast_path_gate_test.i
+
+# target to preprocess a source file
+tests/unit/decision_fastpath/fast_path_gate_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_gate_tests.dir/build.make CMakeFiles/decision_fastpath_gate_tests.dir/tests/unit/decision_fastpath/fast_path_gate_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/fast_path_gate_test.cpp.i
+
+tests/unit/decision_fastpath/fast_path_gate_test.s: tests/unit/decision_fastpath/fast_path_gate_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/fast_path_gate_test.s
+
+# target to generate assembly for a file
+tests/unit/decision_fastpath/fast_path_gate_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_gate_tests.dir/build.make CMakeFiles/decision_fastpath_gate_tests.dir/tests/unit/decision_fastpath/fast_path_gate_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/fast_path_gate_test.cpp.s
+
+tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.o: tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.o
+
+# target to build an object file
+tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_fixed_buy_kernel_scalar_tests.dir/build.make CMakeFiles/decision_fastpath_fixed_buy_kernel_scalar_tests.dir/tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.o
+
+tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.i: tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.i
+
+# target to preprocess a source file
+tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_fixed_buy_kernel_scalar_tests.dir/build.make CMakeFiles/decision_fastpath_fixed_buy_kernel_scalar_tests.dir/tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.i
+
+tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.s: tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.s
+
+# target to generate assembly for a file
+tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_fixed_buy_kernel_scalar_tests.dir/build.make CMakeFiles/decision_fastpath_fixed_buy_kernel_scalar_tests.dir/tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.cpp.s
+
+tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.o: tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.o
+
+# target to build an object file
+tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_kernel_registry_tests.dir/build.make CMakeFiles/decision_fastpath_kernel_registry_tests.dir/tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.o
+
+tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.i: tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.i
+
+# target to preprocess a source file
+tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_kernel_registry_tests.dir/build.make CMakeFiles/decision_fastpath_kernel_registry_tests.dir/tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.i
+
+tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.s: tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.s
+
+# target to generate assembly for a file
+tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_kernel_registry_tests.dir/build.make CMakeFiles/decision_fastpath_kernel_registry_tests.dir/tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.cpp.s
+
+tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.o: tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.o
+
+# target to build an object file
+tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_kernel_spec_tests.dir/build.make CMakeFiles/decision_fastpath_kernel_spec_tests.dir/tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.o
+
+tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.i: tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.i
+
+# target to preprocess a source file
+tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_kernel_spec_tests.dir/build.make CMakeFiles/decision_fastpath_kernel_spec_tests.dir/tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.i
+
+tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.s: tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.s
+
+# target to generate assembly for a file
+tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_kernel_spec_tests.dir/build.make CMakeFiles/decision_fastpath_kernel_spec_tests.dir/tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.cpp.s
+
+tests/unit/decision_fastpath/simd_kernel_parity_test.o: tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/simd_kernel_parity_test.o
+
+# target to build an object file
+tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_simd_kernel_parity_tests.dir/build.make CMakeFiles/decision_fastpath_simd_kernel_parity_tests.dir/tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.o
+.PHONY : tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.o
+
+tests/unit/decision_fastpath/simd_kernel_parity_test.i: tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/simd_kernel_parity_test.i
+
+# target to preprocess a source file
+tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_simd_kernel_parity_tests.dir/build.make CMakeFiles/decision_fastpath_simd_kernel_parity_tests.dir/tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.i
+.PHONY : tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.i
+
+tests/unit/decision_fastpath/simd_kernel_parity_test.s: tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/simd_kernel_parity_test.s
+
+# target to generate assembly for a file
+tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/decision_fastpath_simd_kernel_parity_tests.dir/build.make CMakeFiles/decision_fastpath_simd_kernel_parity_tests.dir/tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.s
+.PHONY : tests/unit/decision_fastpath/simd_kernel_parity_test.cpp.s
 
 tests/unit/decode/event_normalizer_test.o: tests/unit/decode/event_normalizer_test.cpp.o
 .PHONY : tests/unit/decode/event_normalizer_test.o
@@ -4866,6 +5598,30 @@ tests/unit/risk/exposure_inventory_guard_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_exposure_inventory_guard_tests.dir/build.make CMakeFiles/risk_exposure_inventory_guard_tests.dir/tests/unit/risk/exposure_inventory_guard_test.cpp.s
 .PHONY : tests/unit/risk/exposure_inventory_guard_test.cpp.s
 
+tests/unit/risk/hash_only_risk_publisher_test.o: tests/unit/risk/hash_only_risk_publisher_test.cpp.o
+.PHONY : tests/unit/risk/hash_only_risk_publisher_test.o
+
+# target to build an object file
+tests/unit/risk/hash_only_risk_publisher_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_hash_only_publisher_tests.dir/build.make CMakeFiles/risk_hash_only_publisher_tests.dir/tests/unit/risk/hash_only_risk_publisher_test.cpp.o
+.PHONY : tests/unit/risk/hash_only_risk_publisher_test.cpp.o
+
+tests/unit/risk/hash_only_risk_publisher_test.i: tests/unit/risk/hash_only_risk_publisher_test.cpp.i
+.PHONY : tests/unit/risk/hash_only_risk_publisher_test.i
+
+# target to preprocess a source file
+tests/unit/risk/hash_only_risk_publisher_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_hash_only_publisher_tests.dir/build.make CMakeFiles/risk_hash_only_publisher_tests.dir/tests/unit/risk/hash_only_risk_publisher_test.cpp.i
+.PHONY : tests/unit/risk/hash_only_risk_publisher_test.cpp.i
+
+tests/unit/risk/hash_only_risk_publisher_test.s: tests/unit/risk/hash_only_risk_publisher_test.cpp.s
+.PHONY : tests/unit/risk/hash_only_risk_publisher_test.s
+
+# target to generate assembly for a file
+tests/unit/risk/hash_only_risk_publisher_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_hash_only_publisher_tests.dir/build.make CMakeFiles/risk_hash_only_publisher_tests.dir/tests/unit/risk/hash_only_risk_publisher_test.cpp.s
+.PHONY : tests/unit/risk/hash_only_risk_publisher_test.cpp.s
+
 tests/unit/risk/intent_validator_test.o: tests/unit/risk/intent_validator_test.cpp.o
 .PHONY : tests/unit/risk/intent_validator_test.o
 
@@ -4985,6 +5741,30 @@ tests/unit/risk/risk_contract_test.s: tests/unit/risk/risk_contract_test.cpp.s
 tests/unit/risk/risk_contract_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_contract_tests.dir/build.make CMakeFiles/risk_contract_tests.dir/tests/unit/risk/risk_contract_test.cpp.s
 .PHONY : tests/unit/risk/risk_contract_test.cpp.s
+
+tests/unit/risk/risk_depth_view_fast_path_test.o: tests/unit/risk/risk_depth_view_fast_path_test.cpp.o
+.PHONY : tests/unit/risk/risk_depth_view_fast_path_test.o
+
+# target to build an object file
+tests/unit/risk/risk_depth_view_fast_path_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_depth_view_fast_path_tests.dir/build.make CMakeFiles/risk_depth_view_fast_path_tests.dir/tests/unit/risk/risk_depth_view_fast_path_test.cpp.o
+.PHONY : tests/unit/risk/risk_depth_view_fast_path_test.cpp.o
+
+tests/unit/risk/risk_depth_view_fast_path_test.i: tests/unit/risk/risk_depth_view_fast_path_test.cpp.i
+.PHONY : tests/unit/risk/risk_depth_view_fast_path_test.i
+
+# target to preprocess a source file
+tests/unit/risk/risk_depth_view_fast_path_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_depth_view_fast_path_tests.dir/build.make CMakeFiles/risk_depth_view_fast_path_tests.dir/tests/unit/risk/risk_depth_view_fast_path_test.cpp.i
+.PHONY : tests/unit/risk/risk_depth_view_fast_path_test.cpp.i
+
+tests/unit/risk/risk_depth_view_fast_path_test.s: tests/unit/risk/risk_depth_view_fast_path_test.cpp.s
+.PHONY : tests/unit/risk/risk_depth_view_fast_path_test.s
+
+# target to generate assembly for a file
+tests/unit/risk/risk_depth_view_fast_path_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_depth_view_fast_path_tests.dir/build.make CMakeFiles/risk_depth_view_fast_path_tests.dir/tests/unit/risk/risk_depth_view_fast_path_test.cpp.s
+.PHONY : tests/unit/risk/risk_depth_view_fast_path_test.cpp.s
 
 tests/unit/risk/risk_engine_core_test.o: tests/unit/risk/risk_engine_core_test.cpp.o
 .PHONY : tests/unit/risk/risk_engine_core_test.o
@@ -5106,6 +5886,54 @@ tests/unit/risk/risk_publisher_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_publisher_tests.dir/build.make CMakeFiles/risk_publisher_tests.dir/tests/unit/risk/risk_publisher_test.cpp.s
 .PHONY : tests/unit/risk/risk_publisher_test.cpp.s
 
+tests/unit/risk/risk_scratch_test.o: tests/unit/risk/risk_scratch_test.cpp.o
+.PHONY : tests/unit/risk/risk_scratch_test.o
+
+# target to build an object file
+tests/unit/risk/risk_scratch_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_scratch_tests.dir/build.make CMakeFiles/risk_scratch_tests.dir/tests/unit/risk/risk_scratch_test.cpp.o
+.PHONY : tests/unit/risk/risk_scratch_test.cpp.o
+
+tests/unit/risk/risk_scratch_test.i: tests/unit/risk/risk_scratch_test.cpp.i
+.PHONY : tests/unit/risk/risk_scratch_test.i
+
+# target to preprocess a source file
+tests/unit/risk/risk_scratch_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_scratch_tests.dir/build.make CMakeFiles/risk_scratch_tests.dir/tests/unit/risk/risk_scratch_test.cpp.i
+.PHONY : tests/unit/risk/risk_scratch_test.cpp.i
+
+tests/unit/risk/risk_scratch_test.s: tests/unit/risk/risk_scratch_test.cpp.s
+.PHONY : tests/unit/risk/risk_scratch_test.s
+
+# target to generate assembly for a file
+tests/unit/risk/risk_scratch_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_scratch_tests.dir/build.make CMakeFiles/risk_scratch_tests.dir/tests/unit/risk/risk_scratch_test.cpp.s
+.PHONY : tests/unit/risk/risk_scratch_test.cpp.s
+
+tests/unit/risk/vwap_revalidator_prefix_test.o: tests/unit/risk/vwap_revalidator_prefix_test.cpp.o
+.PHONY : tests/unit/risk/vwap_revalidator_prefix_test.o
+
+# target to build an object file
+tests/unit/risk/vwap_revalidator_prefix_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_vwap_revalidator_prefix_tests.dir/build.make CMakeFiles/risk_vwap_revalidator_prefix_tests.dir/tests/unit/risk/vwap_revalidator_prefix_test.cpp.o
+.PHONY : tests/unit/risk/vwap_revalidator_prefix_test.cpp.o
+
+tests/unit/risk/vwap_revalidator_prefix_test.i: tests/unit/risk/vwap_revalidator_prefix_test.cpp.i
+.PHONY : tests/unit/risk/vwap_revalidator_prefix_test.i
+
+# target to preprocess a source file
+tests/unit/risk/vwap_revalidator_prefix_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_vwap_revalidator_prefix_tests.dir/build.make CMakeFiles/risk_vwap_revalidator_prefix_tests.dir/tests/unit/risk/vwap_revalidator_prefix_test.cpp.i
+.PHONY : tests/unit/risk/vwap_revalidator_prefix_test.cpp.i
+
+tests/unit/risk/vwap_revalidator_prefix_test.s: tests/unit/risk/vwap_revalidator_prefix_test.cpp.s
+.PHONY : tests/unit/risk/vwap_revalidator_prefix_test.s
+
+# target to generate assembly for a file
+tests/unit/risk/vwap_revalidator_prefix_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/risk_vwap_revalidator_prefix_tests.dir/build.make CMakeFiles/risk_vwap_revalidator_prefix_tests.dir/tests/unit/risk/vwap_revalidator_prefix_test.cpp.s
+.PHONY : tests/unit/risk/vwap_revalidator_prefix_test.cpp.s
+
 tests/unit/signal/bundle_registry_test.o: tests/unit/signal/bundle_registry_test.cpp.o
 .PHONY : tests/unit/signal/bundle_registry_test.o
 
@@ -5201,6 +6029,30 @@ tests/unit/signal/fee_model_test.s: tests/unit/signal/fee_model_test.cpp.s
 tests/unit/signal/fee_model_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_fee_model_tests.dir/build.make CMakeFiles/signal_fee_model_tests.dir/tests/unit/signal/fee_model_test.cpp.s
 .PHONY : tests/unit/signal/fee_model_test.cpp.s
+
+tests/unit/signal/hash_only_signal_publisher_test.o: tests/unit/signal/hash_only_signal_publisher_test.cpp.o
+.PHONY : tests/unit/signal/hash_only_signal_publisher_test.o
+
+# target to build an object file
+tests/unit/signal/hash_only_signal_publisher_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_hash_only_publisher_tests.dir/build.make CMakeFiles/signal_hash_only_publisher_tests.dir/tests/unit/signal/hash_only_signal_publisher_test.cpp.o
+.PHONY : tests/unit/signal/hash_only_signal_publisher_test.cpp.o
+
+tests/unit/signal/hash_only_signal_publisher_test.i: tests/unit/signal/hash_only_signal_publisher_test.cpp.i
+.PHONY : tests/unit/signal/hash_only_signal_publisher_test.i
+
+# target to preprocess a source file
+tests/unit/signal/hash_only_signal_publisher_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_hash_only_publisher_tests.dir/build.make CMakeFiles/signal_hash_only_publisher_tests.dir/tests/unit/signal/hash_only_signal_publisher_test.cpp.i
+.PHONY : tests/unit/signal/hash_only_signal_publisher_test.cpp.i
+
+tests/unit/signal/hash_only_signal_publisher_test.s: tests/unit/signal/hash_only_signal_publisher_test.cpp.s
+.PHONY : tests/unit/signal/hash_only_signal_publisher_test.s
+
+# target to generate assembly for a file
+tests/unit/signal/hash_only_signal_publisher_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_hash_only_publisher_tests.dir/build.make CMakeFiles/signal_hash_only_publisher_tests.dir/tests/unit/signal/hash_only_signal_publisher_test.cpp.s
+.PHONY : tests/unit/signal/hash_only_signal_publisher_test.cpp.s
 
 tests/unit/signal/intent_builder_test.o: tests/unit/signal/intent_builder_test.cpp.o
 .PHONY : tests/unit/signal/intent_builder_test.o
@@ -5442,6 +6294,30 @@ tests/unit/signal/price_vector_builder_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_price_vector_builder_tests.dir/build.make CMakeFiles/signal_price_vector_builder_tests.dir/tests/unit/signal/price_vector_builder_test.cpp.s
 .PHONY : tests/unit/signal/price_vector_builder_test.cpp.s
 
+tests/unit/signal/signal_scratch_test.o: tests/unit/signal/signal_scratch_test.cpp.o
+.PHONY : tests/unit/signal/signal_scratch_test.o
+
+# target to build an object file
+tests/unit/signal/signal_scratch_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_scratch_tests.dir/build.make CMakeFiles/signal_scratch_tests.dir/tests/unit/signal/signal_scratch_test.cpp.o
+.PHONY : tests/unit/signal/signal_scratch_test.cpp.o
+
+tests/unit/signal/signal_scratch_test.i: tests/unit/signal/signal_scratch_test.cpp.i
+.PHONY : tests/unit/signal/signal_scratch_test.i
+
+# target to preprocess a source file
+tests/unit/signal/signal_scratch_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_scratch_tests.dir/build.make CMakeFiles/signal_scratch_tests.dir/tests/unit/signal/signal_scratch_test.cpp.i
+.PHONY : tests/unit/signal/signal_scratch_test.cpp.i
+
+tests/unit/signal/signal_scratch_test.s: tests/unit/signal/signal_scratch_test.cpp.s
+.PHONY : tests/unit/signal/signal_scratch_test.s
+
+# target to generate assembly for a file
+tests/unit/signal/signal_scratch_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_scratch_tests.dir/build.make CMakeFiles/signal_scratch_tests.dir/tests/unit/signal/signal_scratch_test.cpp.s
+.PHONY : tests/unit/signal/signal_scratch_test.cpp.s
+
 tests/unit/signal/signal_types_test.o: tests/unit/signal/signal_types_test.cpp.o
 .PHONY : tests/unit/signal/signal_types_test.o
 
@@ -5465,6 +6341,30 @@ tests/unit/signal/signal_types_test.s: tests/unit/signal/signal_types_test.cpp.s
 tests/unit/signal/signal_types_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_types_tests.dir/build.make CMakeFiles/signal_types_tests.dir/tests/unit/signal/signal_types_test.cpp.s
 .PHONY : tests/unit/signal/signal_types_test.cpp.s
+
+tests/unit/signal/snapshot_batch_reader_depth_view_test.o: tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.o
+.PHONY : tests/unit/signal/snapshot_batch_reader_depth_view_test.o
+
+# target to build an object file
+tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_snapshot_batch_reader_depth_view_tests.dir/build.make CMakeFiles/signal_snapshot_batch_reader_depth_view_tests.dir/tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.o
+.PHONY : tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.o
+
+tests/unit/signal/snapshot_batch_reader_depth_view_test.i: tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.i
+.PHONY : tests/unit/signal/snapshot_batch_reader_depth_view_test.i
+
+# target to preprocess a source file
+tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_snapshot_batch_reader_depth_view_tests.dir/build.make CMakeFiles/signal_snapshot_batch_reader_depth_view_tests.dir/tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.i
+.PHONY : tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.i
+
+tests/unit/signal/snapshot_batch_reader_depth_view_test.s: tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.s
+.PHONY : tests/unit/signal/snapshot_batch_reader_depth_view_test.s
+
+# target to generate assembly for a file
+tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_snapshot_batch_reader_depth_view_tests.dir/build.make CMakeFiles/signal_snapshot_batch_reader_depth_view_tests.dir/tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.s
+.PHONY : tests/unit/signal/snapshot_batch_reader_depth_view_test.cpp.s
 
 tests/unit/signal/snapshot_consistency_guard_test.o: tests/unit/signal/snapshot_consistency_guard_test.cpp.o
 .PHONY : tests/unit/signal/snapshot_consistency_guard_test.o
@@ -5513,6 +6413,30 @@ tests/unit/signal/vwap_precheck_test.s: tests/unit/signal/vwap_precheck_test.cpp
 tests/unit/signal/vwap_precheck_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_vwap_precheck_tests.dir/build.make CMakeFiles/signal_vwap_precheck_tests.dir/tests/unit/signal/vwap_precheck_test.cpp.s
 .PHONY : tests/unit/signal/vwap_precheck_test.cpp.s
+
+tests/unit/signal/vwap_prefix_test.o: tests/unit/signal/vwap_prefix_test.cpp.o
+.PHONY : tests/unit/signal/vwap_prefix_test.o
+
+# target to build an object file
+tests/unit/signal/vwap_prefix_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_vwap_prefix_tests.dir/build.make CMakeFiles/signal_vwap_prefix_tests.dir/tests/unit/signal/vwap_prefix_test.cpp.o
+.PHONY : tests/unit/signal/vwap_prefix_test.cpp.o
+
+tests/unit/signal/vwap_prefix_test.i: tests/unit/signal/vwap_prefix_test.cpp.i
+.PHONY : tests/unit/signal/vwap_prefix_test.i
+
+# target to preprocess a source file
+tests/unit/signal/vwap_prefix_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_vwap_prefix_tests.dir/build.make CMakeFiles/signal_vwap_prefix_tests.dir/tests/unit/signal/vwap_prefix_test.cpp.i
+.PHONY : tests/unit/signal/vwap_prefix_test.cpp.i
+
+tests/unit/signal/vwap_prefix_test.s: tests/unit/signal/vwap_prefix_test.cpp.s
+.PHONY : tests/unit/signal/vwap_prefix_test.s
+
+# target to generate assembly for a file
+tests/unit/signal/vwap_prefix_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/signal_vwap_prefix_tests.dir/build.make CMakeFiles/signal_vwap_prefix_tests.dir/tests/unit/signal/vwap_prefix_test.cpp.s
+.PHONY : tests/unit/signal/vwap_prefix_test.cpp.s
 
 tests/unit/source_runtime_tests.o: tests/unit/source_runtime_tests.cpp.o
 .PHONY : tests/unit/source_runtime_tests.o
@@ -5610,6 +6534,30 @@ tests/unit/state/confirmed_trade_state_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/confirmed_trade_state_tests.dir/build.make CMakeFiles/confirmed_trade_state_tests.dir/tests/unit/state/confirmed_trade_state_test.cpp.s
 .PHONY : tests/unit/state/confirmed_trade_state_test.cpp.s
 
+tests/unit/state/depth_prefix_test.o: tests/unit/state/depth_prefix_test.cpp.o
+.PHONY : tests/unit/state/depth_prefix_test.o
+
+# target to build an object file
+tests/unit/state/depth_prefix_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/depth_prefix_tests.dir/build.make CMakeFiles/depth_prefix_tests.dir/tests/unit/state/depth_prefix_test.cpp.o
+.PHONY : tests/unit/state/depth_prefix_test.cpp.o
+
+tests/unit/state/depth_prefix_test.i: tests/unit/state/depth_prefix_test.cpp.i
+.PHONY : tests/unit/state/depth_prefix_test.i
+
+# target to preprocess a source file
+tests/unit/state/depth_prefix_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/depth_prefix_tests.dir/build.make CMakeFiles/depth_prefix_tests.dir/tests/unit/state/depth_prefix_test.cpp.i
+.PHONY : tests/unit/state/depth_prefix_test.cpp.i
+
+tests/unit/state/depth_prefix_test.s: tests/unit/state/depth_prefix_test.cpp.s
+.PHONY : tests/unit/state/depth_prefix_test.s
+
+# target to generate assembly for a file
+tests/unit/state/depth_prefix_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/depth_prefix_tests.dir/build.make CMakeFiles/depth_prefix_tests.dir/tests/unit/state/depth_prefix_test.cpp.s
+.PHONY : tests/unit/state/depth_prefix_test.cpp.s
+
 tests/unit/state/lob_shard_test.o: tests/unit/state/lob_shard_test.cpp.o
 .PHONY : tests/unit/state/lob_shard_test.o
 
@@ -5658,6 +6606,30 @@ tests/unit/state/lob_writer_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/lob_writer_tests.dir/build.make CMakeFiles/lob_writer_tests.dir/tests/unit/state/lob_writer_test.cpp.s
 .PHONY : tests/unit/state/lob_writer_test.cpp.s
 
+tests/unit/state/market_depth_view_test.o: tests/unit/state/market_depth_view_test.cpp.o
+.PHONY : tests/unit/state/market_depth_view_test.o
+
+# target to build an object file
+tests/unit/state/market_depth_view_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/market_depth_view_tests.dir/build.make CMakeFiles/market_depth_view_tests.dir/tests/unit/state/market_depth_view_test.cpp.o
+.PHONY : tests/unit/state/market_depth_view_test.cpp.o
+
+tests/unit/state/market_depth_view_test.i: tests/unit/state/market_depth_view_test.cpp.i
+.PHONY : tests/unit/state/market_depth_view_test.i
+
+# target to preprocess a source file
+tests/unit/state/market_depth_view_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/market_depth_view_tests.dir/build.make CMakeFiles/market_depth_view_tests.dir/tests/unit/state/market_depth_view_test.cpp.i
+.PHONY : tests/unit/state/market_depth_view_test.cpp.i
+
+tests/unit/state/market_depth_view_test.s: tests/unit/state/market_depth_view_test.cpp.s
+.PHONY : tests/unit/state/market_depth_view_test.s
+
+# target to generate assembly for a file
+tests/unit/state/market_depth_view_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/market_depth_view_tests.dir/build.make CMakeFiles/market_depth_view_tests.dir/tests/unit/state/market_depth_view_test.cpp.s
+.PHONY : tests/unit/state/market_depth_view_test.cpp.s
+
 tests/unit/state/market_state_event_filter_test.o: tests/unit/state/market_state_event_filter_test.cpp.o
 .PHONY : tests/unit/state/market_state_event_filter_test.o
 
@@ -5705,6 +6677,30 @@ tests/unit/state/market_state_event_test.s: tests/unit/state/market_state_event_
 tests/unit/state/market_state_event_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/market_state_event_tests.dir/build.make CMakeFiles/market_state_event_tests.dir/tests/unit/state/market_state_event_test.cpp.s
 .PHONY : tests/unit/state/market_state_event_test.cpp.s
+
+tests/unit/state/market_state_view_depth_batch_test.o: tests/unit/state/market_state_view_depth_batch_test.cpp.o
+.PHONY : tests/unit/state/market_state_view_depth_batch_test.o
+
+# target to build an object file
+tests/unit/state/market_state_view_depth_batch_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/market_state_view_depth_batch_tests.dir/build.make CMakeFiles/market_state_view_depth_batch_tests.dir/tests/unit/state/market_state_view_depth_batch_test.cpp.o
+.PHONY : tests/unit/state/market_state_view_depth_batch_test.cpp.o
+
+tests/unit/state/market_state_view_depth_batch_test.i: tests/unit/state/market_state_view_depth_batch_test.cpp.i
+.PHONY : tests/unit/state/market_state_view_depth_batch_test.i
+
+# target to preprocess a source file
+tests/unit/state/market_state_view_depth_batch_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/market_state_view_depth_batch_tests.dir/build.make CMakeFiles/market_state_view_depth_batch_tests.dir/tests/unit/state/market_state_view_depth_batch_test.cpp.i
+.PHONY : tests/unit/state/market_state_view_depth_batch_test.cpp.i
+
+tests/unit/state/market_state_view_depth_batch_test.s: tests/unit/state/market_state_view_depth_batch_test.cpp.s
+.PHONY : tests/unit/state/market_state_view_depth_batch_test.s
+
+# target to generate assembly for a file
+tests/unit/state/market_state_view_depth_batch_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/market_state_view_depth_batch_tests.dir/build.make CMakeFiles/market_state_view_depth_batch_tests.dir/tests/unit/state/market_state_view_depth_batch_test.cpp.s
+.PHONY : tests/unit/state/market_state_view_depth_batch_test.cpp.s
 
 tests/unit/state/market_state_view_test.o: tests/unit/state/market_state_view_test.cpp.o
 .PHONY : tests/unit/state/market_state_view_test.o
@@ -6090,6 +7086,30 @@ tools/multi_asset_synthetic_workflow.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/multi_asset_synthetic_workflow.dir/build.make CMakeFiles/multi_asset_synthetic_workflow.dir/tools/multi_asset_synthetic_workflow.cpp.s
 .PHONY : tools/multi_asset_synthetic_workflow.cpp.s
 
+tools/probe_fastpath_latency.o: tools/probe_fastpath_latency.cpp.o
+.PHONY : tools/probe_fastpath_latency.o
+
+# target to build an object file
+tools/probe_fastpath_latency.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/probe_fastpath_latency.dir/build.make CMakeFiles/probe_fastpath_latency.dir/tools/probe_fastpath_latency.cpp.o
+.PHONY : tools/probe_fastpath_latency.cpp.o
+
+tools/probe_fastpath_latency.i: tools/probe_fastpath_latency.cpp.i
+.PHONY : tools/probe_fastpath_latency.i
+
+# target to preprocess a source file
+tools/probe_fastpath_latency.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/probe_fastpath_latency.dir/build.make CMakeFiles/probe_fastpath_latency.dir/tools/probe_fastpath_latency.cpp.i
+.PHONY : tools/probe_fastpath_latency.cpp.i
+
+tools/probe_fastpath_latency.s: tools/probe_fastpath_latency.cpp.s
+.PHONY : tools/probe_fastpath_latency.s
+
+# target to generate assembly for a file
+tools/probe_fastpath_latency.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/probe_fastpath_latency.dir/build.make CMakeFiles/probe_fastpath_latency.dir/tools/probe_fastpath_latency.cpp.s
+.PHONY : tools/probe_fastpath_latency.cpp.s
+
 tools/probe_market_event_to_execution_plan_latency.o: tools/probe_market_event_to_execution_plan_latency.cpp.o
 .PHONY : tools/probe_market_event_to_execution_plan_latency.o
 
@@ -6258,6 +7278,30 @@ tools/validate_raw_log.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/validate_raw_log.dir/build.make CMakeFiles/validate_raw_log.dir/tools/validate_raw_log.cpp.s
 .PHONY : tools/validate_raw_log.cpp.s
 
+tools/verify_canonical_decision_workflow.o: tools/verify_canonical_decision_workflow.cpp.o
+.PHONY : tools/verify_canonical_decision_workflow.o
+
+# target to build an object file
+tools/verify_canonical_decision_workflow.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_canonical_decision_workflow.dir/build.make CMakeFiles/verify_canonical_decision_workflow.dir/tools/verify_canonical_decision_workflow.cpp.o
+.PHONY : tools/verify_canonical_decision_workflow.cpp.o
+
+tools/verify_canonical_decision_workflow.i: tools/verify_canonical_decision_workflow.cpp.i
+.PHONY : tools/verify_canonical_decision_workflow.i
+
+# target to preprocess a source file
+tools/verify_canonical_decision_workflow.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_canonical_decision_workflow.dir/build.make CMakeFiles/verify_canonical_decision_workflow.dir/tools/verify_canonical_decision_workflow.cpp.i
+.PHONY : tools/verify_canonical_decision_workflow.cpp.i
+
+tools/verify_canonical_decision_workflow.s: tools/verify_canonical_decision_workflow.cpp.s
+.PHONY : tools/verify_canonical_decision_workflow.s
+
+# target to generate assembly for a file
+tools/verify_canonical_decision_workflow.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/verify_canonical_decision_workflow.dir/build.make CMakeFiles/verify_canonical_decision_workflow.dir/tools/verify_canonical_decision_workflow.cpp.s
+.PHONY : tools/verify_canonical_decision_workflow.cpp.s
+
 tools/verify_market_state_workflow.o: tools/verify_market_state_workflow.cpp.o
 .PHONY : tools/verify_market_state_workflow.o
 
@@ -6346,16 +7390,32 @@ help:
 	@echo "... chain_fill_to_snapshot_workflow_tests"
 	@echo "... chain_ws_http_parity_smoke"
 	@echo "... combined_market_state_workflow_tests"
+	@echo "... common_edge_math_tests"
+	@echo "... common_risk_math_tests"
+	@echo "... common_vwap_math_tests"
 	@echo "... confirmed_fill_store_tests"
 	@echo "... confirmed_trade_state_tests"
 	@echo "... consistency_checker_tests"
+	@echo "... decision_fastpath_determinism_tests"
+	@echo "... decision_fastpath_differential_verifier_tests"
+	@echo "... decision_fastpath_event_local_pipeline_tests"
+	@echo "... decision_fastpath_fallback_tests"
+	@echo "... decision_fastpath_fixed_buy_kernel_scalar_tests"
+	@echo "... decision_fastpath_gate_tests"
+	@echo "... decision_fastpath_kernel_registry_tests"
+	@echo "... decision_fastpath_kernel_spec_tests"
+	@echo "... decision_fastpath_shadow_market39_tests"
+	@echo "... decision_fastpath_shadow_worldcup_30m_tests"
+	@echo "... decision_fastpath_simd_kernel_parity_tests"
 	@echo "... decode_event_normalizer_tests"
 	@echo "... decode_json_decoder_tests"
 	@echo "... decode_normalized_event_compatibility_tests"
 	@echo "... decode_normalized_event_contract_tests"
 	@echo "... decode_pipeline_tests"
 	@echo "... decode_state_view_replay_tests"
+	@echo "... depth_prefix_tests"
 	@echo "... engine_chain_confirm"
+	@echo "... engine_decision_fastpath"
 	@echo "... engine_decode"
 	@echo "... engine_execution"
 	@echo "... engine_risk"
@@ -6366,6 +7426,7 @@ help:
 	@echo "... execution_child_order_tests"
 	@echo "... execution_fill_tracker_tests"
 	@echo "... execution_gateway_workflow_tests"
+	@echo "... execution_hash_only_publisher_tests"
 	@echo "... execution_live_adapter_tests"
 	@echo "... execution_metrics_tests"
 	@echo "... execution_order_builder_tests"
@@ -6377,6 +7438,7 @@ help:
 	@echo "... execution_plan_validator_tests"
 	@echo "... execution_planner_tests"
 	@echo "... execution_report_publisher_tests"
+	@echo "... execution_scratch_tests"
 	@echo "... extract_oracle_rules"
 	@echo "... feed_decode_adapter_tests"
 	@echo "... feed_decode_determinism_tests"
@@ -6392,8 +7454,10 @@ help:
 	@echo "... inspect_state_errors"
 	@echo "... lob_shard_tests"
 	@echo "... lob_writer_tests"
+	@echo "... market_depth_view_tests"
 	@echo "... market_state_event_filter_tests"
 	@echo "... market_state_event_tests"
+	@echo "... market_state_view_depth_batch_tests"
 	@echo "... market_state_view_tests"
 	@echo "... multi_asset_synthetic_workflow"
 	@echo "... oracle_artifact"
@@ -6433,6 +7497,7 @@ help:
 	@echo "... oracle_tools"
 	@echo "... oracle_workflow_small_fixture_tests"
 	@echo "... order_filled_decoder_tests"
+	@echo "... probe_fastpath_latency"
 	@echo "... probe_market_event_to_execution_plan_latency"
 	@echo "... publish_gating_tests"
 	@echo "... raw_ingest_tests"
@@ -6441,10 +7506,12 @@ help:
 	@echo "... risk_cheap_guard_tests"
 	@echo "... risk_contract_tests"
 	@echo "... risk_cost_revalidator_tests"
+	@echo "... risk_depth_view_fast_path_tests"
 	@echo "... risk_edge_guard_tests"
 	@echo "... risk_engine_core_tests"
 	@echo "... risk_engine_view_evaluate_tests"
 	@echo "... risk_exposure_inventory_guard_tests"
+	@echo "... risk_hash_only_publisher_tests"
 	@echo "... risk_input_view_tests"
 	@echo "... risk_intent_validator_tests"
 	@echo "... risk_market_state_guard_tests"
@@ -6452,6 +7519,8 @@ help:
 	@echo "... risk_partial_fill_guard_tests"
 	@echo "... risk_publisher_tests"
 	@echo "... risk_reservation_book_tests"
+	@echo "... risk_scratch_tests"
+	@echo "... risk_vwap_revalidator_prefix_tests"
 	@echo "... run_feed_e2e"
 	@echo "... run_live_feed_smoke"
 	@echo "... run_market_state_live_smoke"
@@ -6463,6 +7532,7 @@ help:
 	@echo "... signal_edge_calculator_tests"
 	@echo "... signal_engine_v05_workflow_tests"
 	@echo "... signal_fee_model_tests"
+	@echo "... signal_hash_only_publisher_tests"
 	@echo "... signal_intent_builder_tests"
 	@echo "... signal_intent_deduper_tests"
 	@echo "... signal_intent_rate_limiter_tests"
@@ -6475,11 +7545,14 @@ help:
 	@echo "... signal_price_vector_builder_tests"
 	@echo "... signal_rejects_bad_state_tests"
 	@echo "... signal_rejects_insufficient_depth_tests"
+	@echo "... signal_scratch_tests"
+	@echo "... signal_snapshot_batch_reader_depth_view_tests"
 	@echo "... signal_snapshot_consistency_guard_tests"
 	@echo "... signal_to_risk_handoff_tests"
 	@echo "... signal_tools"
 	@echo "... signal_types_tests"
 	@echo "... signal_vwap_precheck_tests"
+	@echo "... signal_vwap_prefix_tests"
 	@echo "... signal_workflow_small_fixture_tests"
 	@echo "... snapshot_publisher_tests"
 	@echo "... source_runtime_tests"
@@ -6492,6 +7565,7 @@ help:
 	@echo "... state_runtime_config_tests"
 	@echo "... trading_engine"
 	@echo "... validate_raw_log"
+	@echo "... verify_canonical_decision_workflow"
 	@echo "... verify_execution_workflow"
 	@echo "... verify_execution_workflow_tests"
 	@echo "... verify_market_state_workflow"
@@ -6615,6 +7689,18 @@ help:
 	@echo "... tests/integration/chain_confirm/synthetic_reconciliation_test.o"
 	@echo "... tests/integration/chain_confirm/synthetic_reconciliation_test.i"
 	@echo "... tests/integration/chain_confirm/synthetic_reconciliation_test.s"
+	@echo "... tests/integration/decision_fastpath/fastpath_determinism_test.o"
+	@echo "... tests/integration/decision_fastpath/fastpath_determinism_test.i"
+	@echo "... tests/integration/decision_fastpath/fastpath_determinism_test.s"
+	@echo "... tests/integration/decision_fastpath/fastpath_fallback_test.o"
+	@echo "... tests/integration/decision_fastpath/fastpath_fallback_test.i"
+	@echo "... tests/integration/decision_fastpath/fastpath_fallback_test.s"
+	@echo "... tests/integration/decision_fastpath/fastpath_shadow_market39_test.o"
+	@echo "... tests/integration/decision_fastpath/fastpath_shadow_market39_test.i"
+	@echo "... tests/integration/decision_fastpath/fastpath_shadow_market39_test.s"
+	@echo "... tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.o"
+	@echo "... tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.i"
+	@echo "... tests/integration/decision_fastpath/fastpath_shadow_worldcup_30m_test.s"
 	@echo "... tests/integration/decode/decode_pipeline_test.o"
 	@echo "... tests/integration/decode/decode_pipeline_test.i"
 	@echo "... tests/integration/decode/decode_pipeline_test.s"
@@ -6702,9 +7788,39 @@ help:
 	@echo "... tests/unit/chain_confirm/order_filled_decoder_test.o"
 	@echo "... tests/unit/chain_confirm/order_filled_decoder_test.i"
 	@echo "... tests/unit/chain_confirm/order_filled_decoder_test.s"
+	@echo "... tests/unit/common/edge_math_test.o"
+	@echo "... tests/unit/common/edge_math_test.i"
+	@echo "... tests/unit/common/edge_math_test.s"
+	@echo "... tests/unit/common/risk_math_test.o"
+	@echo "... tests/unit/common/risk_math_test.i"
+	@echo "... tests/unit/common/risk_math_test.s"
+	@echo "... tests/unit/common/vwap_math_test.o"
+	@echo "... tests/unit/common/vwap_math_test.i"
+	@echo "... tests/unit/common/vwap_math_test.s"
 	@echo "... tests/unit/consistency_checker_tests.o"
 	@echo "... tests/unit/consistency_checker_tests.i"
 	@echo "... tests/unit/consistency_checker_tests.s"
+	@echo "... tests/unit/decision_fastpath/differential_verifier_test.o"
+	@echo "... tests/unit/decision_fastpath/differential_verifier_test.i"
+	@echo "... tests/unit/decision_fastpath/differential_verifier_test.s"
+	@echo "... tests/unit/decision_fastpath/event_local_decision_pipeline_test.o"
+	@echo "... tests/unit/decision_fastpath/event_local_decision_pipeline_test.i"
+	@echo "... tests/unit/decision_fastpath/event_local_decision_pipeline_test.s"
+	@echo "... tests/unit/decision_fastpath/fast_path_gate_test.o"
+	@echo "... tests/unit/decision_fastpath/fast_path_gate_test.i"
+	@echo "... tests/unit/decision_fastpath/fast_path_gate_test.s"
+	@echo "... tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.o"
+	@echo "... tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.i"
+	@echo "... tests/unit/decision_fastpath/fixed_buy_bundle_kernel_scalar_test.s"
+	@echo "... tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.o"
+	@echo "... tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.i"
+	@echo "... tests/unit/decision_fastpath/fixed_shape_kernel_registry_test.s"
+	@echo "... tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.o"
+	@echo "... tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.i"
+	@echo "... tests/unit/decision_fastpath/fixed_shape_kernel_spec_test.s"
+	@echo "... tests/unit/decision_fastpath/simd_kernel_parity_test.o"
+	@echo "... tests/unit/decision_fastpath/simd_kernel_parity_test.i"
+	@echo "... tests/unit/decision_fastpath/simd_kernel_parity_test.s"
 	@echo "... tests/unit/decode/event_normalizer_test.o"
 	@echo "... tests/unit/decode/event_normalizer_test.i"
 	@echo "... tests/unit/decode/event_normalizer_test.s"
@@ -6804,6 +7920,9 @@ help:
 	@echo "... tests/unit/risk/exposure_inventory_guard_test.o"
 	@echo "... tests/unit/risk/exposure_inventory_guard_test.i"
 	@echo "... tests/unit/risk/exposure_inventory_guard_test.s"
+	@echo "... tests/unit/risk/hash_only_risk_publisher_test.o"
+	@echo "... tests/unit/risk/hash_only_risk_publisher_test.i"
+	@echo "... tests/unit/risk/hash_only_risk_publisher_test.s"
 	@echo "... tests/unit/risk/intent_validator_test.o"
 	@echo "... tests/unit/risk/intent_validator_test.i"
 	@echo "... tests/unit/risk/intent_validator_test.s"
@@ -6819,6 +7938,9 @@ help:
 	@echo "... tests/unit/risk/risk_contract_test.o"
 	@echo "... tests/unit/risk/risk_contract_test.i"
 	@echo "... tests/unit/risk/risk_contract_test.s"
+	@echo "... tests/unit/risk/risk_depth_view_fast_path_test.o"
+	@echo "... tests/unit/risk/risk_depth_view_fast_path_test.i"
+	@echo "... tests/unit/risk/risk_depth_view_fast_path_test.s"
 	@echo "... tests/unit/risk/risk_engine_core_test.o"
 	@echo "... tests/unit/risk/risk_engine_core_test.i"
 	@echo "... tests/unit/risk/risk_engine_core_test.s"
@@ -6834,6 +7956,12 @@ help:
 	@echo "... tests/unit/risk/risk_publisher_test.o"
 	@echo "... tests/unit/risk/risk_publisher_test.i"
 	@echo "... tests/unit/risk/risk_publisher_test.s"
+	@echo "... tests/unit/risk/risk_scratch_test.o"
+	@echo "... tests/unit/risk/risk_scratch_test.i"
+	@echo "... tests/unit/risk/risk_scratch_test.s"
+	@echo "... tests/unit/risk/vwap_revalidator_prefix_test.o"
+	@echo "... tests/unit/risk/vwap_revalidator_prefix_test.i"
+	@echo "... tests/unit/risk/vwap_revalidator_prefix_test.s"
 	@echo "... tests/unit/signal/bundle_registry_test.o"
 	@echo "... tests/unit/signal/bundle_registry_test.i"
 	@echo "... tests/unit/signal/bundle_registry_test.s"
@@ -6846,6 +7974,9 @@ help:
 	@echo "... tests/unit/signal/fee_model_test.o"
 	@echo "... tests/unit/signal/fee_model_test.i"
 	@echo "... tests/unit/signal/fee_model_test.s"
+	@echo "... tests/unit/signal/hash_only_signal_publisher_test.o"
+	@echo "... tests/unit/signal/hash_only_signal_publisher_test.i"
+	@echo "... tests/unit/signal/hash_only_signal_publisher_test.s"
 	@echo "... tests/unit/signal/intent_builder_test.o"
 	@echo "... tests/unit/signal/intent_builder_test.i"
 	@echo "... tests/unit/signal/intent_builder_test.s"
@@ -6876,15 +8007,24 @@ help:
 	@echo "... tests/unit/signal/price_vector_builder_test.o"
 	@echo "... tests/unit/signal/price_vector_builder_test.i"
 	@echo "... tests/unit/signal/price_vector_builder_test.s"
+	@echo "... tests/unit/signal/signal_scratch_test.o"
+	@echo "... tests/unit/signal/signal_scratch_test.i"
+	@echo "... tests/unit/signal/signal_scratch_test.s"
 	@echo "... tests/unit/signal/signal_types_test.o"
 	@echo "... tests/unit/signal/signal_types_test.i"
 	@echo "... tests/unit/signal/signal_types_test.s"
+	@echo "... tests/unit/signal/snapshot_batch_reader_depth_view_test.o"
+	@echo "... tests/unit/signal/snapshot_batch_reader_depth_view_test.i"
+	@echo "... tests/unit/signal/snapshot_batch_reader_depth_view_test.s"
 	@echo "... tests/unit/signal/snapshot_consistency_guard_test.o"
 	@echo "... tests/unit/signal/snapshot_consistency_guard_test.i"
 	@echo "... tests/unit/signal/snapshot_consistency_guard_test.s"
 	@echo "... tests/unit/signal/vwap_precheck_test.o"
 	@echo "... tests/unit/signal/vwap_precheck_test.i"
 	@echo "... tests/unit/signal/vwap_precheck_test.s"
+	@echo "... tests/unit/signal/vwap_prefix_test.o"
+	@echo "... tests/unit/signal/vwap_prefix_test.i"
+	@echo "... tests/unit/signal/vwap_prefix_test.s"
 	@echo "... tests/unit/source_runtime_tests.o"
 	@echo "... tests/unit/source_runtime_tests.i"
 	@echo "... tests/unit/source_runtime_tests.s"
@@ -6897,18 +8037,27 @@ help:
 	@echo "... tests/unit/state/confirmed_trade_state_test.o"
 	@echo "... tests/unit/state/confirmed_trade_state_test.i"
 	@echo "... tests/unit/state/confirmed_trade_state_test.s"
+	@echo "... tests/unit/state/depth_prefix_test.o"
+	@echo "... tests/unit/state/depth_prefix_test.i"
+	@echo "... tests/unit/state/depth_prefix_test.s"
 	@echo "... tests/unit/state/lob_shard_test.o"
 	@echo "... tests/unit/state/lob_shard_test.i"
 	@echo "... tests/unit/state/lob_shard_test.s"
 	@echo "... tests/unit/state/lob_writer_test.o"
 	@echo "... tests/unit/state/lob_writer_test.i"
 	@echo "... tests/unit/state/lob_writer_test.s"
+	@echo "... tests/unit/state/market_depth_view_test.o"
+	@echo "... tests/unit/state/market_depth_view_test.i"
+	@echo "... tests/unit/state/market_depth_view_test.s"
 	@echo "... tests/unit/state/market_state_event_filter_test.o"
 	@echo "... tests/unit/state/market_state_event_filter_test.i"
 	@echo "... tests/unit/state/market_state_event_filter_test.s"
 	@echo "... tests/unit/state/market_state_event_test.o"
 	@echo "... tests/unit/state/market_state_event_test.i"
 	@echo "... tests/unit/state/market_state_event_test.s"
+	@echo "... tests/unit/state/market_state_view_depth_batch_test.o"
+	@echo "... tests/unit/state/market_state_view_depth_batch_test.i"
+	@echo "... tests/unit/state/market_state_view_depth_batch_test.s"
 	@echo "... tests/unit/state/market_state_view_test.o"
 	@echo "... tests/unit/state/market_state_view_test.i"
 	@echo "... tests/unit/state/market_state_view_test.s"
@@ -6957,6 +8106,9 @@ help:
 	@echo "... tools/multi_asset_synthetic_workflow.o"
 	@echo "... tools/multi_asset_synthetic_workflow.i"
 	@echo "... tools/multi_asset_synthetic_workflow.s"
+	@echo "... tools/probe_fastpath_latency.o"
+	@echo "... tools/probe_fastpath_latency.i"
+	@echo "... tools/probe_fastpath_latency.s"
 	@echo "... tools/probe_market_event_to_execution_plan_latency.o"
 	@echo "... tools/probe_market_event_to_execution_plan_latency.i"
 	@echo "... tools/probe_market_event_to_execution_plan_latency.s"
@@ -6978,6 +8130,9 @@ help:
 	@echo "... tools/validate_raw_log.o"
 	@echo "... tools/validate_raw_log.i"
 	@echo "... tools/validate_raw_log.s"
+	@echo "... tools/verify_canonical_decision_workflow.o"
+	@echo "... tools/verify_canonical_decision_workflow.i"
+	@echo "... tools/verify_canonical_decision_workflow.s"
 	@echo "... tools/verify_market_state_workflow.o"
 	@echo "... tools/verify_market_state_workflow.i"
 	@echo "... tools/verify_market_state_workflow.s"

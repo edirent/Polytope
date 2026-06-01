@@ -1,9 +1,10 @@
 #include "engine/risk/reprice/VWAPRevalidator.h"
 
+#include "engine/common/math/FixedPointMath.h"
+#include "engine/common/math/VwapMath.h"
 #include "oracle/public/CandidateBundle.h"
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -22,65 +23,19 @@ namespace {
     return result;
 }
 
-[[nodiscard]] std::int64_t level_size_lots(
-    const state::PriceLevel& level
-) noexcept {
-    if (!std::isfinite(level.size) || level.size <= 0.0) {
-        return 0;
-    }
-    if (level.size >=
-        static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
-        return std::numeric_limits<std::int64_t>::max();
-    }
-    return static_cast<std::int64_t>(std::floor(level.size));
-}
-
 [[nodiscard]] bool checked_mul_i64(
     std::int64_t lhs,
     std::int64_t rhs,
     std::int64_t* out
 ) noexcept {
-    const auto value =
-        static_cast<__int128>(lhs) * static_cast<__int128>(rhs);
-    if (value > std::numeric_limits<std::int64_t>::max() ||
-        value < std::numeric_limits<std::int64_t>::min()) {
-        return false;
-    }
-    *out = static_cast<std::int64_t>(value);
-    return true;
-}
-
-[[nodiscard]] bool checked_add_cost(
-    std::int64_t price_tick,
-    std::int64_t quantity_lots,
-    std::int64_t* total
-) noexcept {
-    std::int64_t add = 0;
-    if (!checked_mul_i64(price_tick, quantity_lots, &add)) {
-        return false;
-    }
-    const auto value =
-        static_cast<__int128>(*total) + static_cast<__int128>(add);
-    if (value > std::numeric_limits<std::int64_t>::max() ||
-        value < std::numeric_limits<std::int64_t>::min()) {
-        return false;
-    }
-    *total = static_cast<std::int64_t>(value);
-    return true;
+    return trading_engine::common::math::checked_mul_i64(lhs, rhs, out);
 }
 
 [[nodiscard]] bool checked_add_i64(
     std::int64_t value,
     std::int64_t* total
 ) noexcept {
-    const auto next =
-        static_cast<__int128>(*total) + static_cast<__int128>(value);
-    if (next > std::numeric_limits<std::int64_t>::max() ||
-        next < std::numeric_limits<std::int64_t>::min()) {
-        return false;
-    }
-    *total = static_cast<std::int64_t>(next);
-    return true;
+    return trading_engine::common::math::checked_add_i64(*total, value, total);
 }
 
 [[nodiscard]] std::int64_t depth_margin_bps(
@@ -90,13 +45,10 @@ namespace {
     if (requested_qty_lots <= 0 || executable_qty_lots <= 0) {
         return 0;
     }
-    const auto value =
-        static_cast<__int128>(executable_qty_lots) * 10'000 /
-        static_cast<__int128>(requested_qty_lots);
-    if (value > std::numeric_limits<std::int64_t>::max()) {
-        return std::numeric_limits<std::int64_t>::max();
-    }
-    return static_cast<std::int64_t>(value);
+    return trading_engine::common::math::ratio_bps(
+        executable_qty_lots,
+        requested_qty_lots
+    );
 }
 
 struct LegReprice {
@@ -134,46 +86,25 @@ struct LegReprice {
         state::kMaxSnapshotDepth
     );
 
-    std::int64_t remaining = planned_qty_lots;
-    for (std::uint32_t i = 0; i < level_count; ++i) {
-        const auto& level = snapshot.asks[i];
-        const auto available = level_size_lots(level);
-        if (level.price_tick <= 0 || available <= 0) {
-            continue;
-        }
-
-        if (!checked_add_i64(available, &out->executable_lots)) {
-            return reject(
-                RiskDecisionType::RejectInsufficientDepth,
-                "executable depth overflow"
-            );
-        }
-
-        if (remaining <= 0) {
-            continue;
-        }
-        const auto take = std::min(remaining, available);
-        if (!checked_add_cost(level.price_tick, take, &out->cost_tick)) {
-            return reject(
-                RiskDecisionType::RejectInsufficientDepth,
-                "cost overflow"
-            );
-        }
-        remaining -= take;
-    }
-
+    const auto priced = trading_engine::common::math::buy_vwap_linear(
+        snapshot.asks.data(),
+        static_cast<std::uint16_t>(level_count),
+        planned_qty_lots
+    );
+    out->executable_lots = priced.executable_qty_lots;
     if (out->executable_lots <= 0) {
         return reject(
             RiskDecisionType::RejectInsufficientDepth,
             "no executable depth"
         );
     }
-    if (remaining > 0) {
+    if (!priced.ok) {
         return reject(
             RiskDecisionType::RejectReducedBundleQty,
             "latest depth cannot fill original bundle quantity"
         );
     }
+    out->cost_tick = priced.total_cost_tick;
 
     CostRevalidationResult ok;
     ok.ok = true;
@@ -217,7 +148,12 @@ struct LegReprice {
         }
 
         const auto priced =
-            state::buy_vwap_from_prefix(depth_view, planned_qty_lots);
+            trading_engine::common::math::buy_vwap_prefix(
+                depth_view.prefix,
+                depth_view.asks.data(),
+                depth_view.ask_count,
+                planned_qty_lots
+            );
         if (!priced.ok) {
             return reject(
                 RiskDecisionType::RejectInsufficientDepth,
@@ -236,47 +172,25 @@ struct LegReprice {
         depth_view.ask_count,
         state::kMaxSnapshotDepth
     );
-
-    std::int64_t remaining = planned_qty_lots;
-    for (std::uint16_t i = 0; i < level_count; ++i) {
-        const auto& level = depth_view.asks[i];
-        const auto available = level_size_lots(level);
-        if (level.price_tick <= 0 || available <= 0) {
-            continue;
-        }
-
-        if (!checked_add_i64(available, &out->executable_lots)) {
-            return reject(
-                RiskDecisionType::RejectInsufficientDepth,
-                "executable depth overflow"
-            );
-        }
-
-        if (remaining <= 0) {
-            continue;
-        }
-        const auto take = std::min(remaining, available);
-        if (!checked_add_cost(level.price_tick, take, &out->cost_tick)) {
-            return reject(
-                RiskDecisionType::RejectInsufficientDepth,
-                "cost overflow"
-            );
-        }
-        remaining -= take;
-    }
-
+    const auto priced = trading_engine::common::math::buy_vwap_linear(
+        depth_view.asks.data(),
+        level_count,
+        planned_qty_lots
+    );
+    out->executable_lots = priced.executable_qty_lots;
     if (out->executable_lots <= 0) {
         return reject(
             RiskDecisionType::RejectInsufficientDepth,
             "no executable depth"
         );
     }
-    if (remaining > 0) {
+    if (!priced.ok) {
         return reject(
             RiskDecisionType::RejectReducedBundleQty,
             "latest depth cannot fill original bundle quantity"
         );
     }
+    out->cost_tick = priced.total_cost_tick;
 
     CostRevalidationResult ok;
     ok.ok = true;

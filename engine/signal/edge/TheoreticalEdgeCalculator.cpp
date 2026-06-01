@@ -1,54 +1,10 @@
 #include "engine/signal/edge/TheoreticalEdgeCalculator.h"
 
+#include "engine/common/math/EdgeMath.h"
+
 #include <algorithm>
-#include <limits>
 
 namespace trading_engine::signal {
-
-namespace {
-
-[[nodiscard]] bool checked_mul_i64(
-    std::int64_t lhs,
-    std::int64_t rhs,
-    std::int64_t* out
-) noexcept {
-    const auto value =
-        static_cast<__int128>(lhs) * static_cast<__int128>(rhs);
-    if (value > std::numeric_limits<std::int64_t>::max() ||
-        value < std::numeric_limits<std::int64_t>::min()) {
-        return false;
-    }
-    *out = static_cast<std::int64_t>(value);
-    return true;
-}
-
-[[nodiscard]] std::int64_t edge_bps(
-    std::int64_t unit_edge_tick,
-    std::int64_t cost_per_bundle_tick
-) noexcept {
-    if (cost_per_bundle_tick == 0) {
-        if (unit_edge_tick > 0) {
-            return std::numeric_limits<std::int64_t>::max();
-        }
-        if (unit_edge_tick < 0) {
-            return std::numeric_limits<std::int64_t>::min();
-        }
-        return 0;
-    }
-
-    const auto value =
-        static_cast<__int128>(unit_edge_tick) * 10'000 /
-        static_cast<__int128>(cost_per_bundle_tick);
-    if (value > std::numeric_limits<std::int64_t>::max()) {
-        return std::numeric_limits<std::int64_t>::max();
-    }
-    if (value < std::numeric_limits<std::int64_t>::min()) {
-        return std::numeric_limits<std::int64_t>::min();
-    }
-    return static_cast<std::int64_t>(value);
-}
-
-}  // namespace
 
 TheoreticalEdgeCalculator::TheoreticalEdgeCalculator(
     FeeModel fee_model,
@@ -89,22 +45,21 @@ EdgeBreakdown TheoreticalEdgeCalculator::calculate(
         return out;
     }
 
-    out.unit_edge_tick =
-        out.guaranteed_payout_per_bundle_tick -
-        out.vwap_cost_per_bundle_tick -
-        out.fee_per_bundle_tick -
-        out.latency_buffer_per_bundle_tick -
-        out.slippage_buffer_per_bundle_tick;
-
-    if (!checked_mul_i64(out.unit_edge_tick, out.bundle_qty, &out.total_edge_tick)) {
+    const auto edge = trading_engine::common::math::compute_edge({
+        .guaranteed_payout_tick = out.guaranteed_payout_per_bundle_tick,
+        .total_cost_tick = out.vwap_cost_per_bundle_tick,
+        .fee_tick = out.fee_per_bundle_tick,
+        .latency_buffer_tick = out.latency_buffer_per_bundle_tick,
+        .slippage_buffer_tick = out.slippage_buffer_per_bundle_tick,
+        .bundle_qty = out.bundle_qty
+    });
+    if (!edge.ok) {
         out.failure_reason = EdgeFailureReason::InvalidCost;
         return out;
     }
-
-    out.edge_bps = edge_bps(
-        out.unit_edge_tick,
-        out.vwap_cost_per_bundle_tick
-    );
+    out.unit_edge_tick = edge.unit_edge_tick;
+    out.total_edge_tick = edge.total_edge_tick;
+    out.edge_bps = edge.edge_bps;
 
     const auto min_unit_edge_tick = std::max(
         config.min_unit_edge_tick,

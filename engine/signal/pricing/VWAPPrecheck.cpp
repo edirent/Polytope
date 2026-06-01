@@ -1,11 +1,12 @@
 #include "engine/signal/pricing/VWAPPrecheck.h"
 
+#include "engine/common/math/FixedPointMath.h"
+#include "engine/common/math/VwapMath.h"
 #include "engine/signal/pricing/PriceVectorBuilder.h"
 
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <utility>
@@ -34,31 +35,7 @@ namespace {
 [[nodiscard]] std::int64_t level_size_lots(
     const trading_engine::state::PriceLevel& level
 ) noexcept {
-    if (!std::isfinite(level.size) || level.size <= 0.0) {
-        return 0;
-    }
-    if (level.size >=
-        static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
-        return std::numeric_limits<std::int64_t>::max();
-    }
-    return static_cast<std::int64_t>(std::floor(level.size));
-}
-
-[[nodiscard]] bool checked_add_cost(
-    std::int64_t price_tick,
-    std::int64_t quantity_lots,
-    std::int64_t* total
-) noexcept {
-    const auto add =
-        static_cast<__int128>(price_tick) *
-        static_cast<__int128>(quantity_lots);
-    const auto next = static_cast<__int128>(*total) + add;
-    if (next > std::numeric_limits<std::int64_t>::max() ||
-        next < std::numeric_limits<std::int64_t>::min()) {
-        return false;
-    }
-    *total = static_cast<std::int64_t>(next);
-    return true;
+    return trading_engine::common::math::price_level_size_lots(level);
 }
 
 struct LegCapacity {
@@ -94,14 +71,7 @@ struct LegCapacity {
     std::int64_t value,
     std::int64_t* total
 ) noexcept {
-    const auto next =
-        static_cast<__int128>(*total) + static_cast<__int128>(value);
-    if (next > std::numeric_limits<std::int64_t>::max() ||
-        next < std::numeric_limits<std::int64_t>::min()) {
-        return false;
-    }
-    *total = static_cast<std::int64_t>(next);
-    return true;
+    return trading_engine::common::math::checked_add_i64(*total, value, total);
 }
 
 [[nodiscard]] bool checked_mul_i64(
@@ -109,30 +79,17 @@ struct LegCapacity {
     std::int64_t rhs,
     std::int64_t* out
 ) noexcept {
-    const auto value =
-        static_cast<__int128>(lhs) * static_cast<__int128>(rhs);
-    if (value > std::numeric_limits<std::int64_t>::max() ||
-        value < std::numeric_limits<std::int64_t>::min()) {
-        return false;
-    }
-    *out = static_cast<std::int64_t>(value);
-    return true;
+    return trading_engine::common::math::checked_mul_i64(lhs, rhs, out);
 }
 
 [[nodiscard]] std::int64_t ceil_div_positive(
     std::int64_t numerator,
     std::int64_t denominator
 ) noexcept {
-    if (denominator <= 0) {
-        return 0;
-    }
-    const auto value =
-        (static_cast<__int128>(numerator) + denominator - 1) /
-        static_cast<__int128>(denominator);
-    if (value > std::numeric_limits<std::int64_t>::max()) {
-        return std::numeric_limits<std::int64_t>::max();
-    }
-    return static_cast<std::int64_t>(value);
+    return trading_engine::common::math::ceil_div_positive(
+        numerator,
+        denominator
+    );
 }
 
 [[nodiscard]] CostFailureReason calculate_buy_capacity(
@@ -295,43 +252,21 @@ struct LegCapacity {
         snapshot.ask_count,
         trading_engine::state::kMaxSnapshotDepth
     );
-
-    std::int64_t remaining = quantity_lots;
-    std::int64_t leg_cost = 0;
-    std::int64_t worst_price_tick = 0;
-    std::int64_t best_price_tick = 0;
-    for (std::uint32_t i = 0; i < level_count && remaining > 0; ++i) {
-        const auto& level = snapshot.asks[i];
-        const auto available = level_size_lots(level);
-        if (level.price_tick <= 0 || available <= 0) {
-            continue;
-        }
-
-        if (best_price_tick == 0) {
-            best_price_tick = level.price_tick;
-        }
-
-        const auto take = std::min(remaining, available);
-        if (!checked_add_cost(level.price_tick, take, &leg_cost)) {
-            return CostFailureReason::InvalidLeg;
-        }
-        worst_price_tick = std::max(worst_price_tick, level.price_tick);
-        remaining -= take;
-    }
-
-    if (remaining > 0) {
+    const auto priced = trading_engine::common::math::buy_vwap_linear(
+        snapshot.asks.data(),
+        static_cast<std::uint16_t>(level_count),
+        quantity_lots
+    );
+    if (!priced.ok) {
         return CostFailureReason::InsufficientDepth;
     }
 
     out->asset_id = leg.asset_id;
-    out->total_cost_tick = leg_cost;
-    out->vwap_price_tick = leg_cost / quantity_lots;
-    out->worst_price_tick = worst_price_tick;
+    out->total_cost_tick = priced.total_cost_tick;
+    out->vwap_price_tick = priced.vwap_tick;
+    out->worst_price_tick = priced.worst_price_tick;
     out->enough_depth = true;
     out->book_age_ns = 0;
-    if (best_price_tick > 0) {
-        // Slippage is derived by the caller from worst minus best.
-    }
     return CostFailureReason::None;
 }
 
@@ -350,7 +285,12 @@ struct LegCapacity {
 
     if (depth->prefix.ask_count > 0) {
         const auto prefix_result =
-            trading_engine::state::buy_vwap_from_prefix(*depth, quantity_lots);
+            trading_engine::common::math::buy_vwap_prefix(
+                depth->prefix,
+                depth->asks.data(),
+                depth->ask_count,
+                quantity_lots
+            );
         if (!prefix_result.ok) {
             return CostFailureReason::InsufficientDepth;
         }
@@ -368,33 +308,19 @@ struct LegCapacity {
         depth->ask_count,
         trading_engine::state::kMaxSnapshotDepth
     );
-
-    std::int64_t remaining = quantity_lots;
-    std::int64_t leg_cost = 0;
-    std::int64_t worst_price_tick = 0;
-    for (std::uint16_t i = 0; i < level_count && remaining > 0; ++i) {
-        const auto& level = depth->asks[i];
-        const auto available = level_size_lots(level);
-        if (level.price_tick <= 0 || available <= 0) {
-            continue;
-        }
-
-        const auto take = std::min(remaining, available);
-        if (!checked_add_cost(level.price_tick, take, &leg_cost)) {
-            return CostFailureReason::InvalidLeg;
-        }
-        worst_price_tick = std::max(worst_price_tick, level.price_tick);
-        remaining -= take;
-    }
-
-    if (remaining > 0) {
+    const auto priced = trading_engine::common::math::buy_vwap_linear(
+        depth->asks.data(),
+        level_count,
+        quantity_lots
+    );
+    if (!priced.ok) {
         return CostFailureReason::InsufficientDepth;
     }
 
     out->asset_id = asset_id;
-    out->total_cost_tick = leg_cost;
-    out->vwap_price_tick = leg_cost / quantity_lots;
-    out->worst_price_tick = worst_price_tick;
+    out->total_cost_tick = priced.total_cost_tick;
+    out->vwap_price_tick = priced.vwap_tick;
+    out->worst_price_tick = priced.worst_price_tick;
     out->enough_depth = true;
     out->book_age_ns = 0;
     return CostFailureReason::None;
@@ -417,33 +343,19 @@ struct LegCapacity {
         snapshot->ask_count,
         trading_engine::state::kMaxSnapshotDepth
     );
-
-    std::int64_t remaining = quantity_lots;
-    std::int64_t leg_cost = 0;
-    std::int64_t worst_price_tick = 0;
-    for (std::uint32_t i = 0; i < level_count && remaining > 0; ++i) {
-        const auto& level = snapshot->asks[i];
-        const auto available = level_size_lots(level);
-        if (level.price_tick <= 0 || available <= 0) {
-            continue;
-        }
-
-        const auto take = std::min(remaining, available);
-        if (!checked_add_cost(level.price_tick, take, &leg_cost)) {
-            return CostFailureReason::InvalidLeg;
-        }
-        worst_price_tick = std::max(worst_price_tick, level.price_tick);
-        remaining -= take;
-    }
-
-    if (remaining > 0) {
+    const auto priced = trading_engine::common::math::buy_vwap_linear(
+        snapshot->asks.data(),
+        static_cast<std::uint16_t>(level_count),
+        quantity_lots
+    );
+    if (!priced.ok) {
         return CostFailureReason::InsufficientDepth;
     }
 
     out->asset_id = asset_id;
-    out->total_cost_tick = leg_cost;
-    out->vwap_price_tick = leg_cost / quantity_lots;
-    out->worst_price_tick = worst_price_tick;
+    out->total_cost_tick = priced.total_cost_tick;
+    out->vwap_price_tick = priced.vwap_tick;
+    out->worst_price_tick = priced.worst_price_tick;
     out->enough_depth = true;
     out->book_age_ns = 0;
     return CostFailureReason::None;
