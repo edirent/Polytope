@@ -8,6 +8,7 @@ logs/
 runs/
 
 build/
+build-*/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
@@ -32,3 +33,4 @@ frontend/**/dist/
 *.gcno
 
 research/notebooks/.ipynb_checkpoints/
+research/runs/

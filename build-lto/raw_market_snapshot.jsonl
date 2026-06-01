@@ -1,1 +1,0 @@
-{"market_id":"m1","event_id":"e1","title":"Winner?","description":"Example market","outcomes":["YES","NO"],"asset_ids":["asset_yes","asset_no"],"resolution_source":"fixture","end_time":"2030-01-01T00:00:00Z","tags":["test"],"fetched_at_ns":1,"source":"fixture"}

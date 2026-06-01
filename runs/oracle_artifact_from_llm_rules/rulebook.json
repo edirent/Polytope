@@ -1,1 +1,0 @@
-{"rules":[{"rule_id":"draft_rule_m1_exactly_one","type":"ExactlyOne","variable_ids":["m1:YES","m1:NO"],"approved":true,"approved_by":"manual","approved_at_ns":1,"source_rule_draft_id":"draft_rule_m1_exactly_one"}]}
