@@ -72,6 +72,8 @@ private:
     [[nodiscard]] RegimeSnapshot build_regime_snapshot(std::uint64_t ts_ns) const;
     [[nodiscard]] std::vector<PaperFilledOrderSnapshot>
     build_filled_order_snapshots() const;
+    [[nodiscard]] std::vector<PaperTerminalPnLSnapshot>
+    build_terminal_pnl_snapshots() const;
     [[nodiscard]] static std::uint64_t child_key(
         std::uint64_t plan_id,
         std::uint64_t child_order_id
@@ -83,6 +85,24 @@ private:
         std::uint64_t approved_intent_id = 0;
         std::uint64_t reservation_id = 0;
         std::uint64_t bundle_id = 0;
+    };
+
+    struct PlanTerminalState {
+        std::uint64_t plan_id = 0;
+        std::uint64_t bundle_id = 0;
+        std::uint64_t source_intent_id = 0;
+        std::uint64_t approved_intent_id = 0;
+        std::uint64_t reservation_id = 0;
+
+        std::uint16_t expected_child_orders = 0;
+        std::uint16_t filled_child_orders = 0;
+
+        std::int64_t chosen_bundle_qty = 0;
+        std::int64_t guaranteed_payout_tick = 0;
+        std::int64_t expected_terminal_pnl_tick = 0;
+        std::int64_t actual_buy_cost_tick = 0;
+
+        std::uint64_t updated_ts_ns = 0;
     };
 
     PaperEventAdapter adapter_;
@@ -116,6 +136,7 @@ private:
     std::unordered_set<std::uint64_t> filled_plan_ids_;
     std::unordered_set<std::uint64_t> failed_plan_ids_;
     std::unordered_map<std::uint64_t, ObservedChildOrder> child_orders_;
+    std::unordered_map<std::uint64_t, PlanTerminalState> terminal_by_plan_;
     std::unordered_map<std::string, std::uint32_t> asset_index_by_asset_id_;
 };
 

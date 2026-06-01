@@ -245,7 +245,7 @@ struct PaperProcessStatus {
         return json_object_or_default(
             dashboard,
             "performance",
-            R"({"intents_observed":0,"approvals_observed":0,"plans_observed":0,"execution_reports_observed":0,"filled_plans":0,"failed_plans":0,"gross_pnl_tick":0,"net_pnl_tick":0,"max_drawdown_tick":0,"version":0,"updated_ts_ns":0})"
+            R"({"intents_observed":0,"approvals_observed":0,"plans_observed":0,"execution_reports_observed":0,"filled_plans":0,"failed_plans":0,"gross_pnl_tick":0,"net_pnl_tick":0,"terminal_payout_tick":0,"terminal_cost_tick":0,"terminal_pnl_tick":0,"terminal_complete_plans":0,"max_drawdown_tick":0,"version":0,"updated_ts_ns":0})"
         );
     }
     if (path == "/api/v1/regime") {

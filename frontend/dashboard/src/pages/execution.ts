@@ -4,6 +4,7 @@ import { metricGrid } from "../components/metricGrid";
 import { statusPill } from "../components/statusPill";
 import {
   activeFilledOrders,
+  activeTerminalPnL,
   displayMarket,
   shortAssetId
 } from "../state/filledOrders";
@@ -119,6 +120,15 @@ export const executionPage: PageDefinition = {
           label: "Filled Orders",
           value: formatInteger(activeFilledOrders(state).length),
           tone: "good"
+        },
+        {
+          label: "Terminal Plans",
+          value: formatInteger(activeTerminalPnL(state).filter((plan) => plan.complete).length)
+        },
+        {
+          label: "Terminal PnL",
+          value: formatTick(state.performance?.terminal_pnl_tick),
+          tone: (state.performance?.terminal_pnl_tick ?? 0) >= 0 ? "good" : "bad"
         }
       ])
     );

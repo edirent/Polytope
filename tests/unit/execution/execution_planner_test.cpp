@@ -100,6 +100,7 @@ ApprovedOrderDecisionEnvelope valid_decision_envelope() {
     decision.bundle_id = source_intent.bundle_id;
     decision.type = OrderDecisionType::PaperOrderDecision;
     decision.chosen_bundle_qty = 10;
+    decision.guaranteed_payout_tick = 1'000;
     decision.estimated_total_cost_tick = 850;
     decision.total_edge_tick = 150;
     decision.slippage_buffer_tick = 2;
@@ -262,6 +263,17 @@ void ExecutionPlanner_BuildsPlanFromOrderDecision() {
     expect_equal(result.plan.source_intent_id, 101ULL, "source_intent_id");
     expect_equal(result.plan.bundle_id, 202ULL, "bundle_id");
     expect_equal(result.plan.order_count, static_cast<std::uint16_t>(2), "orders");
+    expect_equal(result.plan.chosen_bundle_qty, 10LL, "chosen qty");
+    expect_equal(
+        result.plan.guaranteed_payout_tick,
+        1'000LL,
+        "guaranteed payout"
+    );
+    expect_equal(
+        result.plan.expected_terminal_pnl_tick,
+        150LL,
+        "expected terminal pnl"
+    );
     expect_equal(result.plan.orders[0].quantity_lots, 10LL, "first qty");
     expect_equal(result.plan.orders[1].quantity_lots, 20LL, "second qty");
 }

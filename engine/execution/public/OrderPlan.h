@@ -29,6 +29,10 @@ struct OrderPlan {
     std::int64_t min_expected_edge_tick = 0;
     std::int64_t max_slippage_tick = 0;
 
+    std::int64_t chosen_bundle_qty = 0;
+    std::int64_t guaranteed_payout_tick = 0;
+    std::int64_t expected_terminal_pnl_tick = 0;
+
     std::uint64_t created_ts_ns = 0;
     std::uint64_t expire_after_ns = 0;
 

@@ -48,6 +48,9 @@ OrderPlan plan() {
     out.reservation_id = 66;
     out.bundle_id = 88;
     out.order_count = 1;
+    out.chosen_bundle_qty = 10;
+    out.guaranteed_payout_tick = 10'000;
+    out.expected_terminal_pnl_tick = 3'000;
     out.created_ts_ns = 1000;
     out.expire_after_ns = 2000;
     out.idempotency_key = "idem";
@@ -156,10 +159,34 @@ int test_consumes_execution_report_and_updates_dashboard() {
         check != 0) {
         return check;
     }
+    if (const auto check = expect_equal(
+            latest.filled_orders[0].unrealized_pnl_tick,
+            2'000LL,
+            "filled order pnl"
+        );
+        check != 0) {
+        return check;
+    }
+    if (const auto check = expect_equal(
+            latest.terminal_pnl.size(),
+            1ULL,
+            "terminal pnl rows"
+        );
+        check != 0) {
+        return check;
+    }
+    if (const auto check = expect_equal(
+            latest.terminal_pnl[0].terminal_pnl_tick,
+            3'000LL,
+            "terminal pnl"
+        );
+        check != 0) {
+        return check;
+    }
     return expect_equal(
-        latest.filled_orders[0].unrealized_pnl_tick,
-        2'000LL,
-        "filled order pnl"
+        latest.performance.terminal_pnl_tick,
+        3'000LL,
+        "performance terminal pnl"
     );
 }
 

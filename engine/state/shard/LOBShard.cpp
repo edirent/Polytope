@@ -137,12 +137,7 @@ bool quality_equal(
     const EntityState& entity,
     double price
 ) noexcept {
-    if (entity.book.tick_size && *entity.book.tick_size > 0.0) {
-        return static_cast<std::int64_t>(
-            std::llround(price / *entity.book.tick_size)
-        );
-    }
-
+    (void)entity;
     return static_cast<std::int64_t>(
         std::llround(price * static_cast<double>(kDefaultPriceScale))
     );

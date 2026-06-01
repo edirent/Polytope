@@ -21,6 +21,10 @@ struct PerformanceSnapshot {
 
     std::int64_t gross_pnl_tick = 0;
     std::int64_t net_pnl_tick = 0;
+    std::int64_t terminal_payout_tick = 0;
+    std::int64_t terminal_cost_tick = 0;
+    std::int64_t terminal_pnl_tick = 0;
+    std::uint64_t terminal_complete_plans = 0;
     std::int64_t max_drawdown_tick = 0;
     double max_drawdown_ratio = 0.0;
 

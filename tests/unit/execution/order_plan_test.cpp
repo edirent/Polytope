@@ -76,6 +76,13 @@ void OrderPlan_DefaultsCreated() {
     expect_equal(plan.max_total_cost_tick, 0LL, "max_total_cost_tick");
     expect_equal(plan.min_expected_edge_tick, 0LL, "min_expected_edge_tick");
     expect_equal(plan.max_slippage_tick, 0LL, "max_slippage_tick");
+    expect_equal(plan.chosen_bundle_qty, 0LL, "chosen_bundle_qty");
+    expect_equal(plan.guaranteed_payout_tick, 0LL, "guaranteed_payout_tick");
+    expect_equal(
+        plan.expected_terminal_pnl_tick,
+        0LL,
+        "expected_terminal_pnl_tick"
+    );
     expect_equal(plan.created_ts_ns, 0ULL, "created_ts_ns");
     expect_equal(plan.expire_after_ns, 0ULL, "expire_after_ns");
     expect_true(plan.idempotency_key.empty(), "idempotency_key empty");

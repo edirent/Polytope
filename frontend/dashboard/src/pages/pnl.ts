@@ -8,6 +8,7 @@ import {
 import { metricGrid } from "../components/metricGrid";
 import {
   activeFilledOrders,
+  activeTerminalPnL,
   aggregateFilledOrders,
   shortAssetId
 } from "../state/filledOrders";
@@ -21,6 +22,67 @@ function pnlClass(value: number): string {
     return "pnl-negative";
   }
   return "";
+}
+
+function terminalPnlTable(state: Parameters<PageDefinition["render"]>[0]): HTMLElement {
+  const plans = activeTerminalPnL(state);
+  const wrapper = element("div", "table-wrap");
+  if (plans.length === 0) {
+    wrapper.appendChild(
+      element("p", "empty", "No completed terminal PnL plans yet.")
+    );
+    return wrapper;
+  }
+
+  const table = document.createElement("table");
+  table.className = "data-table";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  for (const label of [
+    "Plan",
+    "Bundle",
+    "Complete",
+    "Qty",
+    "Buy Cost",
+    "Guaranteed Payout",
+    "Terminal PnL"
+  ]) {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headRow.appendChild(th);
+  }
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  for (const plan of plans.slice().reverse()) {
+    const tr = document.createElement("tr");
+    const cells = [
+      String(plan.plan_id),
+      String(plan.bundle_id),
+      `${plan.filled_child_orders}/${plan.expected_child_orders}`,
+      formatInteger(plan.chosen_bundle_qty),
+      formatTick(plan.actual_buy_cost_tick),
+      formatTick(plan.guaranteed_payout_tick),
+      plan.complete ? formatTick(plan.terminal_pnl_tick) : "Incomplete"
+    ];
+
+    for (let i = 0; i < cells.length; ++i) {
+      const td = document.createElement("td");
+      td.textContent = cells[i];
+      if (i === 0) {
+        td.className = "mono";
+      }
+      if (i === 6 && plan.complete) {
+        td.classList.add(pnlClass(plan.terminal_pnl_tick));
+      }
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  wrapper.appendChild(table);
+  return wrapper;
 }
 
 function openPnlTable(state: Parameters<PageDefinition["render"]>[0]): HTMLElement {
@@ -126,6 +188,26 @@ export const pnlPage: PageDefinition = {
           value: formatTick(state.performance?.net_pnl_tick)
         },
         {
+          label: "Terminal PnL",
+          value: formatTick(state.performance?.terminal_pnl_tick),
+          detail: "guaranteed settlement",
+          tone: (state.performance?.terminal_pnl_tick ?? 0) >= 0 ? "good" : "bad"
+        },
+        {
+          label: "Terminal Cost",
+          value: formatTick(state.performance?.terminal_cost_tick),
+          detail: "actual filled cost"
+        },
+        {
+          label: "Terminal Payout",
+          value: formatTick(state.performance?.terminal_payout_tick)
+        },
+        {
+          label: "Terminal Plans",
+          value: formatInteger(state.performance?.terminal_complete_plans),
+          detail: "complete bundles"
+        },
+        {
           label: "Max Drawdown",
           value: formatTick(state.performance?.max_drawdown_tick),
           tone: "warn"
@@ -189,6 +271,8 @@ export const pnlPage: PageDefinition = {
         }
       ])
     );
+    page.appendChild(element("h2", undefined, "Terminal Guaranteed PnL"));
+    page.appendChild(terminalPnlTable(state));
     page.appendChild(element("h2", undefined, "Open PnL by Filled Order"));
     page.appendChild(openPnlTable(state));
     return page;

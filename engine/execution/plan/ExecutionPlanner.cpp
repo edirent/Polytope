@@ -148,6 +148,10 @@ PlanResult ExecutionPlanner::build_plan(
         ? intent.total_edge_tick
         : intent.estimated_edge_tick;
     plan.max_slippage_tick = intent.slippage_buffer_tick;
+    plan.chosen_bundle_qty = approval.approved_bundle_qty;
+    plan.guaranteed_payout_tick = intent.guaranteed_payout_tick;
+    plan.expected_terminal_pnl_tick =
+        intent.guaranteed_payout_tick - intent.estimated_cost_tick;
     plan.created_ts_ns = now_ns;
     plan.expire_after_ns = intent.expires_at_ns;
     plan.idempotency_key = intent.idempotency_key;
@@ -275,6 +279,10 @@ PlanResult ExecutionPlanner::build_plan(
     plan.max_total_cost_tick = decision.estimated_total_cost_tick;
     plan.min_expected_edge_tick = decision.total_edge_tick;
     plan.max_slippage_tick = decision.slippage_buffer_tick;
+    plan.chosen_bundle_qty = decision.chosen_bundle_qty;
+    plan.guaranteed_payout_tick = decision.guaranteed_payout_tick;
+    plan.expected_terminal_pnl_tick =
+        decision.guaranteed_payout_tick - decision.estimated_total_cost_tick;
     plan.created_ts_ns = now_ns;
     plan.expire_after_ns = decision.expires_at_ns;
     if (!config.hot_path_skip_order_strings) {

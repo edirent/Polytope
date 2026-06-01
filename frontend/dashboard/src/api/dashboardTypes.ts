@@ -25,6 +25,10 @@ export interface PerformanceSnapshot {
   failed_plans: number;
   gross_pnl_tick: number;
   net_pnl_tick: number;
+  terminal_payout_tick: number;
+  terminal_cost_tick: number;
+  terminal_pnl_tick: number;
+  terminal_complete_plans: number;
   max_drawdown_tick: number;
   max_drawdown_ratio: number;
   returns_count: number;
@@ -112,6 +116,23 @@ export interface FilledOrder {
   event_ts_ns: number;
 }
 
+export interface TerminalPnL {
+  plan_id: number;
+  bundle_id: number;
+  source_intent_id: number;
+  approved_intent_id: number;
+  reservation_id: number;
+  expected_child_orders: number;
+  filled_child_orders: number;
+  complete: boolean;
+  chosen_bundle_qty: number;
+  guaranteed_payout_tick: number;
+  expected_terminal_pnl_tick: number;
+  actual_buy_cost_tick: number;
+  terminal_pnl_tick: number;
+  updated_ts_ns: number;
+}
+
 export interface DashboardSnapshot {
   seq_no: number;
   ts_ns: number;
@@ -123,6 +144,7 @@ export interface DashboardSnapshot {
   risk: RiskDashboardSnapshot;
   execution: ExecutionDashboardSnapshot;
   filled_orders: FilledOrder[];
+  terminal_pnl: TerminalPnL[];
 }
 
 export interface LatestSnapshotEmptyResponse {

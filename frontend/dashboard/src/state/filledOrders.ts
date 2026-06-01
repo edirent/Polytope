@@ -1,4 +1,4 @@
-import type { FilledOrder } from "../api/dashboardTypes";
+import type { FilledOrder, TerminalPnL } from "../api/dashboardTypes";
 import type { DashboardUiState } from "./dashboardStore";
 
 export interface FilledOrderAggregate {
@@ -18,6 +18,10 @@ export interface FilledOrderAggregate {
 export function activeFilledOrders(state: DashboardUiState): FilledOrder[] {
   const snapshotOrders = state.snapshot?.filled_orders ?? [];
   return snapshotOrders.length > 0 ? snapshotOrders : state.executionReports;
+}
+
+export function activeTerminalPnL(state: DashboardUiState): TerminalPnL[] {
+  return state.snapshot?.terminal_pnl ?? [];
 }
 
 export function shortAssetId(assetId: string): string {

@@ -108,7 +108,7 @@ void DepthBatchReadReadsAllAssets() {
     expect_equal(depth[0].asset_index, 4U, "asset a index");
     expect_equal(depth[1].asset_index, 9U, "asset b index");
     expect_equal(depth[0].ask_count, static_cast<std::uint16_t>(1), "ask count");
-    expect_equal(depth[0].asks[0].price_tick, 51LL, "ask price");
+    expect_equal(depth[0].asks[0].price_tick, 510000LL, "ask price");
 }
 
 void DepthBatchReadRejectsMissingAsset() {

@@ -182,8 +182,8 @@ void MarketStateView_SnapshotReturnsBestBidAsk() {
 
     const auto bbo = view.get_bbo(kEntityId);
     expect_true(bbo.ok, "bbo ok");
-    expect_equal(bbo.value.bid.price_tick, 50LL, "bid tick");
-    expect_equal(bbo.value.ask.price_tick, 54LL, "ask tick");
+    expect_equal(bbo.value.bid.price_tick, 500000LL, "bid tick");
+    expect_equal(bbo.value.ask.price_tick, 540000LL, "ask tick");
 
     const auto snapshot = view.get_snapshot(kEntityId);
     expect_true(snapshot.ok, "snapshot ok");
@@ -191,8 +191,8 @@ void MarketStateView_SnapshotReturnsBestBidAsk() {
     expect_true(snapshot.value.has_ask, "snapshot has ask");
     expect_equal(snapshot.value.bid_count, 2U, "bid_count");
     expect_equal(snapshot.value.ask_count, 2U, "ask_count");
-    expect_equal(snapshot.value.bids[0].price_tick, 50LL, "bid order");
-    expect_equal(snapshot.value.asks[0].price_tick, 54LL, "ask order");
+    expect_equal(snapshot.value.bids[0].price_tick, 500000LL, "bid order");
+    expect_equal(snapshot.value.asks[0].price_tick, 540000LL, "ask order");
 }
 
 void MarketStateView_DeltaUpdatesBestBidAsk() {
@@ -206,7 +206,7 @@ void MarketStateView_DeltaUpdatesBestBidAsk() {
     MarketStateView view(store);
     const auto bid = view.get_best_bid(kEntityId);
     expect_true(bid.ok, "best bid ok");
-    expect_equal(bid.value.price_tick, 52LL, "updated bid tick");
+    expect_equal(bid.value.price_tick, 520000LL, "updated bid tick");
     expect_equal(bid.version, 11ULL, "version");
 }
 
@@ -220,8 +220,8 @@ void MarketStateView_MidAndSpreadComputedCorrectly() {
 
     expect_true(mid.ok, "mid ok");
     expect_true(spread.ok, "spread ok");
-    expect_equal(mid.value, 52LL, "mid tick");
-    expect_equal(spread.value, 4LL, "spread tick");
+    expect_equal(mid.value, 520000LL, "mid tick");
+    expect_equal(spread.value, 40000LL, "spread tick");
 }
 
 void MarketStateView_MissingBidOrAskReturnsError() {
@@ -311,9 +311,9 @@ void MarketStateView_SnapshotCopyHasStableVersion() {
     expect_true(before.ok, "before snapshot ok");
     expect_true(after.ok, "after snapshot ok");
     expect_equal(before.version, 10ULL, "before version");
-    expect_equal(before.value.best_bid_tick, 50LL, "before copy bid");
+    expect_equal(before.value.best_bid_tick, 500000LL, "before copy bid");
     expect_equal(after.version, 11ULL, "after version");
-    expect_equal(after.value.best_bid_tick, 52LL, "after copy bid");
+    expect_equal(after.value.best_bid_tick, 520000LL, "after copy bid");
 }
 
 void MarketStateView_StateHashStable() {
@@ -345,7 +345,7 @@ void MarketStateView_ReadsPublishedSnapshot() {
 
     expect_true(snapshot.ok, "snapshot ok");
     expect_equal(snapshot.value.entity_id, std::string{kEntityId}, "asset");
-    expect_equal(snapshot.value.best_bid_tick, 50LL, "bid");
+    expect_equal(snapshot.value.best_bid_tick, 500000LL, "bid");
 }
 
 void MarketStateView_DoesNotReadMutableEntityStore() {
@@ -362,8 +362,8 @@ void MarketStateView_DoesNotReadMutableEntityStore() {
 
     expect_true(before.ok, "before ok");
     expect_true(after.ok, "after ok");
-    expect_equal(before.value.best_bid_tick, 50LL, "before copy stable");
-    expect_equal(after.value.best_bid_tick, 52LL, "after published update");
+    expect_equal(before.value.best_bid_tick, 500000LL, "before copy stable");
+    expect_equal(after.value.best_bid_tick, 520000LL, "after published update");
 }
 
 void MarketStateView_ReturnsBookAndChainFields() {
@@ -374,7 +374,7 @@ void MarketStateView_ReturnsBookAndChainFields() {
 
     const auto snapshot = view.get_snapshot(kEntityId);
     expect_true(snapshot.ok, "snapshot ok");
-    expect_equal(snapshot.value.best_bid_tick, 50LL, "book bid");
+    expect_equal(snapshot.value.best_bid_tick, 500000LL, "book bid");
     expect_true(snapshot.value.has_confirmed_trade, "has chain trade");
     expect_equal(snapshot.value.last_trade_price_tick, 500000LL, "trade price");
     expect_equal(snapshot.value.last_trade_size_lots, 1000LL, "trade size");

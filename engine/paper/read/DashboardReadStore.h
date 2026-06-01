@@ -74,6 +74,26 @@ struct PaperFilledOrderSnapshot {
     std::uint64_t event_ts_ns = 0;
 };
 
+struct PaperTerminalPnLSnapshot {
+    std::uint64_t plan_id = 0;
+    std::uint64_t bundle_id = 0;
+    std::uint64_t source_intent_id = 0;
+    std::uint64_t approved_intent_id = 0;
+    std::uint64_t reservation_id = 0;
+
+    std::uint16_t expected_child_orders = 0;
+    std::uint16_t filled_child_orders = 0;
+    bool complete = false;
+
+    std::int64_t chosen_bundle_qty = 0;
+    std::int64_t guaranteed_payout_tick = 0;
+    std::int64_t expected_terminal_pnl_tick = 0;
+    std::int64_t actual_buy_cost_tick = 0;
+    std::int64_t terminal_pnl_tick = 0;
+
+    std::uint64_t updated_ts_ns = 0;
+};
+
 struct DashboardSnapshot {
     std::uint64_t seq_no = 0;
     std::uint64_t ts_ns = 0;
@@ -88,6 +108,7 @@ struct DashboardSnapshot {
     ExecutionDashboardSnapshot execution;
 
     std::vector<PaperFilledOrderSnapshot> filled_orders;
+    std::vector<PaperTerminalPnLSnapshot> terminal_pnl;
 };
 
 class DashboardReadStore {

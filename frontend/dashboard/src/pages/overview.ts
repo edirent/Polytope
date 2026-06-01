@@ -47,6 +47,12 @@ export const overviewPage: PageDefinition = {
           tone: (state.snapshot?.account.unrealized_pnl_tick ?? 0) >= 0 ? "good" : "bad"
         },
         {
+          label: "Terminal PnL",
+          value: formatTick(state.performance?.terminal_pnl_tick),
+          detail: "guaranteed settlement",
+          tone: (state.performance?.terminal_pnl_tick ?? 0) >= 0 ? "good" : "bad"
+        },
+        {
           label: "Signals",
           value: formatInteger(state.snapshot?.signal.paper_opportunities),
           detail: "paper opportunities"

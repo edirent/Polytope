@@ -4,6 +4,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace trading_engine::paper {
 namespace {
@@ -183,6 +184,19 @@ void PaperTradingEngine::handle_observed_event(
 void PaperTradingEngine::record_order_plan(
     const trading_engine::execution::OrderPlan& plan
 ) {
+    PlanTerminalState terminal;
+    terminal.plan_id = plan.plan_id;
+    terminal.bundle_id = plan.bundle_id;
+    terminal.source_intent_id = plan.source_intent_id;
+    terminal.approved_intent_id = plan.approved_intent_id;
+    terminal.reservation_id = plan.reservation_id;
+    terminal.expected_child_orders = plan.order_count;
+    terminal.chosen_bundle_qty = plan.chosen_bundle_qty;
+    terminal.guaranteed_payout_tick = plan.guaranteed_payout_tick;
+    terminal.expected_terminal_pnl_tick = plan.expected_terminal_pnl_tick;
+    terminal.updated_ts_ns = plan.created_ts_ns;
+    terminal_by_plan_.insert_or_assign(plan.plan_id, terminal);
+
     for (std::uint16_t i = 0; i < plan.order_count; ++i) {
         ObservedChildOrder observed;
         observed.order = plan.orders[i];
@@ -243,6 +257,15 @@ void PaperTradingEngine::record_filled_order(const FillApplication& fill) {
     }
 
     filled_orders_.push_back(std::move(filled));
+
+    auto terminal_it = terminal_by_plan_.find(fill.report.plan_id);
+    if (terminal_it != terminal_by_plan_.end()) {
+        auto& terminal = terminal_it->second;
+        terminal.actual_buy_cost_tick += filled.notional_tick;
+        terminal.filled_child_orders =
+            static_cast<std::uint16_t>(terminal.filled_child_orders + 1);
+        terminal.updated_ts_ns = fill.report.event_ts_ns;
+    }
 }
 
 void PaperTradingEngine::publish_dashboard(std::uint64_t ts_ns) {
@@ -310,6 +333,7 @@ DashboardSnapshot PaperTradingEngine::build_dashboard_from_pnl(
     snapshot.execution.plans_filled = filled_plan_ids_.size();
     snapshot.execution.plans_failed = failed_plan_ids_.size();
     snapshot.filled_orders = build_filled_order_snapshots();
+    snapshot.terminal_pnl = build_terminal_pnl_snapshots();
 
     return snapshot;
 }
@@ -343,6 +367,15 @@ PerformanceSnapshot PaperTradingEngine::build_performance_snapshot(
         pnl.realized_pnl_tick + pnl.unrealized_pnl_mid_tick;
     snapshot.net_pnl_tick =
         snapshot.gross_pnl_tick - ledger_.cash_ledger().fees_paid_tick;
+    for (const auto& terminal : build_terminal_pnl_snapshots()) {
+        if (!terminal.complete) {
+            continue;
+        }
+        snapshot.terminal_payout_tick += terminal.guaranteed_payout_tick;
+        snapshot.terminal_cost_tick += terminal.actual_buy_cost_tick;
+        snapshot.terminal_pnl_tick += terminal.terminal_pnl_tick;
+        ++snapshot.terminal_complete_plans;
+    }
     snapshot.max_drawdown_tick = metrics.drawdown.max_drawdown_tick;
     snapshot.max_drawdown_ratio = metrics.drawdown.max_drawdown_ratio;
 
@@ -439,6 +472,44 @@ PaperTradingEngine::build_filled_order_snapshots() const {
             : order.avg_fill_price_tick - order.mark_price_tick;
         order.unrealized_pnl_tick = order.filled_lots * price_delta;
     }
+    return out;
+}
+
+std::vector<PaperTerminalPnLSnapshot>
+PaperTradingEngine::build_terminal_pnl_snapshots() const {
+    std::vector<PaperTerminalPnLSnapshot> out;
+    out.reserve(terminal_by_plan_.size());
+    for (const auto& [_, terminal] : terminal_by_plan_) {
+        PaperTerminalPnLSnapshot snapshot;
+        snapshot.plan_id = terminal.plan_id;
+        snapshot.bundle_id = terminal.bundle_id;
+        snapshot.source_intent_id = terminal.source_intent_id;
+        snapshot.approved_intent_id = terminal.approved_intent_id;
+        snapshot.reservation_id = terminal.reservation_id;
+        snapshot.expected_child_orders = terminal.expected_child_orders;
+        snapshot.filled_child_orders = terminal.filled_child_orders;
+        snapshot.complete = terminal.expected_child_orders > 0 &&
+            terminal.filled_child_orders >= terminal.expected_child_orders;
+        snapshot.chosen_bundle_qty = terminal.chosen_bundle_qty;
+        snapshot.guaranteed_payout_tick = terminal.guaranteed_payout_tick;
+        snapshot.expected_terminal_pnl_tick =
+            terminal.expected_terminal_pnl_tick;
+        snapshot.actual_buy_cost_tick = terminal.actual_buy_cost_tick;
+        snapshot.terminal_pnl_tick = snapshot.complete
+            ? terminal.guaranteed_payout_tick - terminal.actual_buy_cost_tick
+            : 0;
+        snapshot.updated_ts_ns = terminal.updated_ts_ns;
+        out.push_back(snapshot);
+    }
+
+    std::sort(
+        out.begin(),
+        out.end(),
+        [](const PaperTerminalPnLSnapshot& left,
+           const PaperTerminalPnLSnapshot& right) {
+            return left.plan_id < right.plan_id;
+        }
+    );
     return out;
 }
 

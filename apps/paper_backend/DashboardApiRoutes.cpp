@@ -15,6 +15,7 @@ using trading_engine::paper::LatencySnapshot;
 using trading_engine::paper::LiquidityRegime;
 using trading_engine::paper::PaperFilledOrderSnapshot;
 using trading_engine::paper::PaperMetricStatus;
+using trading_engine::paper::PaperTerminalPnLSnapshot;
 using trading_engine::paper::PerformanceSnapshot;
 using trading_engine::paper::RegimeSnapshot;
 using trading_engine::paper::RiskRegime;
@@ -166,6 +167,12 @@ using trading_engine::paper::SignalRegime;
         << ",\"failed_plans\":" << performance.failed_plans
         << ",\"gross_pnl_tick\":" << performance.gross_pnl_tick
         << ",\"net_pnl_tick\":" << performance.net_pnl_tick
+        << ",\"terminal_payout_tick\":"
+        << performance.terminal_payout_tick
+        << ",\"terminal_cost_tick\":" << performance.terminal_cost_tick
+        << ",\"terminal_pnl_tick\":" << performance.terminal_pnl_tick
+        << ",\"terminal_complete_plans\":"
+        << performance.terminal_complete_plans
         << ",\"max_drawdown_tick\":" << performance.max_drawdown_tick
         << ",\"max_drawdown_ratio\":" << performance.max_drawdown_ratio
         << ",\"returns_count\":" << performance.returns_count
@@ -230,6 +237,40 @@ using trading_engine::paper::SignalRegime;
             << ",\"unrealized_pnl_tick\":" << order.unrealized_pnl_tick
             << ",\"mark_quality\":\"" << json_escape(order.mark_quality)
             << "\",\"event_ts_ns\":" << order.event_ts_ns << '}';
+    }
+    out << ']';
+    return out.str();
+}
+
+[[nodiscard]] std::string terminal_pnl_json(
+    const std::vector<PaperTerminalPnLSnapshot>& plans
+) {
+    std::ostringstream out;
+    out << '[';
+    bool first = true;
+    for (const auto& plan : plans) {
+        if (!first) {
+            out << ',';
+        }
+        first = false;
+        out << "{\"plan_id\":" << plan.plan_id
+            << ",\"bundle_id\":" << plan.bundle_id
+            << ",\"source_intent_id\":" << plan.source_intent_id
+            << ",\"approved_intent_id\":" << plan.approved_intent_id
+            << ",\"reservation_id\":" << plan.reservation_id
+            << ",\"expected_child_orders\":"
+            << static_cast<unsigned>(plan.expected_child_orders)
+            << ",\"filled_child_orders\":"
+            << static_cast<unsigned>(plan.filled_child_orders)
+            << ",\"complete\":" << (plan.complete ? "true" : "false")
+            << ",\"chosen_bundle_qty\":" << plan.chosen_bundle_qty
+            << ",\"guaranteed_payout_tick\":"
+            << plan.guaranteed_payout_tick
+            << ",\"expected_terminal_pnl_tick\":"
+            << plan.expected_terminal_pnl_tick
+            << ",\"actual_buy_cost_tick\":" << plan.actual_buy_cost_tick
+            << ",\"terminal_pnl_tick\":" << plan.terminal_pnl_tick
+            << ",\"updated_ts_ns\":" << plan.updated_ts_ns << '}';
     }
     out << ']';
     return out.str();
@@ -389,7 +430,9 @@ std::string dashboard_snapshot_json(
         << ",\"plans_failed\":" << snapshot.execution.plans_failed
         << ",\"output_hash\":" << snapshot.execution.output_hash
         << "},\"filled_orders\":"
-        << filled_orders_json(snapshot.filled_orders) << '}';
+        << filled_orders_json(snapshot.filled_orders)
+        << ",\"terminal_pnl\":"
+        << terminal_pnl_json(snapshot.terminal_pnl) << '}';
     return out.str();
 }
 
