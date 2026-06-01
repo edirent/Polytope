@@ -1,0 +1,31 @@
+{
+  "crypto": [
+    {
+      "id": "btc_above_100k_sample",
+      "strike": 100000,
+      "expiry": "2026-12-31T00:00:00Z",
+      "spot": 71320.86,
+      "iv": 0.55,
+      "rate": 0.0,
+      "polymarket_price": 0.22
+    }
+  ],
+  "sports": [
+    {
+      "id": "sample_moneyline",
+      "outcome": "Team A",
+      "polymarket_price": 0.52,
+      "odds": [
+        {
+          "outcome": "Team A",
+          "decimal_odds": 1.91
+        },
+        {
+          "outcome": "Team B",
+          "decimal_odds": 2.02
+        }
+      ]
+    }
+  ]
+}
+

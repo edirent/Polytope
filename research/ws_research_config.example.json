@@ -1,0 +1,92 @@
+{
+  "duration_seconds": 30,
+  "deribit": {
+    "enabled": true,
+    "url": "wss://www.deribit.com/ws/api/v2",
+    "subscriptions": [
+      "ticker.BTC-PERPETUAL.100ms",
+      "ticker.ETH-PERPETUAL.100ms"
+    ],
+    "requests": [
+      {
+        "method": "public/get_historical_volatility",
+        "params": {
+          "currency": "BTC"
+        }
+      },
+      {
+        "method": "public/get_historical_volatility",
+        "params": {
+          "currency": "ETH"
+        }
+      }
+    ]
+  },
+  "binance": {
+    "enabled": true,
+    "spot_url": "wss://stream.binance.com:9443",
+    "futures_url": "wss://fstream.binance.com",
+    "spot_streams": [
+      "btcusdt@ticker",
+      "ethusdt@ticker"
+    ],
+    "futures_streams": [
+      "btcusdt@depth5@100ms",
+      "ethusdt@depth5@100ms"
+    ]
+  },
+  "coinbase": {
+    "enabled": true,
+    "url": "wss://advanced-trade-ws.coinbase.com",
+    "product_ids": [
+      "BTC-USD",
+      "ETH-USD"
+    ],
+    "channels": [
+      "heartbeats",
+      "ticker",
+      "level2"
+    ]
+  },
+  "kraken": {
+    "enabled": true,
+    "url": "wss://ws.kraken.com/v2",
+    "symbols": [
+      "BTC/USD",
+      "ETH/USD"
+    ],
+    "channels": [
+      "ticker",
+      "book"
+    ],
+    "book_depth": 10
+  },
+  "polymarket": {
+    "enabled": true,
+    "url": "wss://ws-subscriptions-clob.polymarket.com/ws/market",
+    "asset_ids": [
+      "112680630004798425069810935278212000865453267506345451433803052322987302357330"
+    ],
+    "custom_feature_enabled": true
+  },
+  "pinnacle": {
+    "enabled": false,
+    "credential_env": "PINNACLE_API_KEY",
+    "note": "Private/enterprise source. Adapter records missing credentials and does not fake data."
+  },
+  "betfair": {
+    "enabled": false,
+    "credential_env": "BETFAIR_APP_KEY",
+    "note": "Private source. Adapter records missing credentials and does not fake data."
+  },
+  "sportsradar": {
+    "enabled": false,
+    "credential_env": "SPORTSRADAR_API_KEY",
+    "note": "Private source. Adapter records missing credentials and does not fake data."
+  },
+  "opta": {
+    "enabled": false,
+    "credential_env": "OPTA_API_KEY",
+    "note": "Private source. Adapter records missing credentials and does not fake data."
+  }
+}
