@@ -47,8 +47,11 @@ add_subdirectory(engine/state)
 add_subdirectory(oracle)
 add_subdirectory(engine/signal)
 add_subdirectory(engine/order_decision)
+add_subdirectory(engine/strategy)
 add_subdirectory(engine/risk)
+target_link_libraries(verify_market_making_workflow PRIVATE engine_risk)
 add_subdirectory(engine/execution)
+target_link_libraries(verify_market_making_workflow PRIVATE engine_execution)
 add_subdirectory(engine/paper)
 add_subdirectory(engine/decision_fastpath)
 add_subdirectory(apps/paper_backend)
@@ -710,6 +713,34 @@ foreach(test_case
     MarketDepthView_DefaultsAreSafe
 )
     add_test(NAME ${test_case} COMMAND risk_contract_tests ${test_case})
+endforeach()
+
+add_executable(risk_quote_evaluator_tests
+    tests/unit/risk/quote_risk_evaluator_test.cpp
+)
+
+target_link_libraries(risk_quote_evaluator_tests PRIVATE
+    engine_risk
+)
+
+foreach(test_case
+    QuoteRiskEvaluator_ApprovesSafeQuote
+    QuoteRiskEvaluator_RejectsNullQuote
+    QuoteRiskEvaluator_RejectsExpiredQuote
+    QuoteRiskEvaluator_RejectsStaleBook
+    QuoteRiskEvaluator_RejectsCrossedBook
+    QuoteRiskEvaluator_RejectsBookNotUsable
+    QuoteRiskEvaluator_RejectsInventoryLimit
+    QuoteRiskEvaluator_RejectsExposureLimit
+    QuoteRiskEvaluator_RejectsDuplicateQuote
+    QuoteRiskEvaluator_RejectsTooFrequentReplace
+    QuoteRiskEvaluator_RejectsLowEdgeToFair
+    QuoteRiskEvaluator_RejectsUnsupportedSideIfConfigured
+    QuoteRiskEvaluator_KillSwitchRejectsAll
+    ApprovedQuote_PreservesQuoteFields
+    ApprovedQuote_IsNotOrder
+)
+    add_test(NAME ${test_case} COMMAND risk_quote_evaluator_tests ${test_case})
 endforeach()
 
 add_executable(risk_input_view_tests

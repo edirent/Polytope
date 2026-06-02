@@ -5,6 +5,25 @@
 
 namespace trading_engine::risk {
 
+struct QuoteRiskPolicy {
+    bool quote_risk_enabled = true;
+    bool quote_kill_switch_enabled = false;
+
+    std::int64_t max_quote_qty_lots = 0;
+    std::int64_t max_quote_notional_tick = 0;
+    std::int64_t max_asset_inventory_lots = 0;
+    std::int64_t min_edge_to_fair_tick = 0;
+
+    std::uint64_t max_quote_age_ns = 1'000'000'000ULL;
+    std::uint64_t max_book_age_ns = 1'000'000'000ULL;
+    std::uint64_t min_replace_interval_ns = 100'000'000ULL;
+
+    std::uint32_t max_active_quotes_per_asset = 2;
+
+    bool allow_bid_quotes = true;
+    bool allow_ask_quotes = true;
+};
+
 struct RiskPolicySnapshot {
     std::uint64_t policy_version = 1;
     std::uint64_t policy_hash = 0;
@@ -35,6 +54,8 @@ struct RiskPolicySnapshot {
     std::uint32_t max_pending_intents_per_bundle = 1;
     std::uint32_t max_pending_intents_total = 1024;
     std::uint32_t max_approvals_per_second = 100;
+
+    QuoteRiskPolicy quote_risk;
 };
 
 namespace detail {
@@ -93,6 +114,18 @@ inline void mix_double(std::uint64_t* hash, double value) noexcept {
     detail::mix_u32(&hash, policy.max_pending_intents_per_bundle);
     detail::mix_u32(&hash, policy.max_pending_intents_total);
     detail::mix_u32(&hash, policy.max_approvals_per_second);
+    detail::mix_bool(&hash, policy.quote_risk.quote_risk_enabled);
+    detail::mix_bool(&hash, policy.quote_risk.quote_kill_switch_enabled);
+    detail::mix_i64(&hash, policy.quote_risk.max_quote_qty_lots);
+    detail::mix_i64(&hash, policy.quote_risk.max_quote_notional_tick);
+    detail::mix_i64(&hash, policy.quote_risk.max_asset_inventory_lots);
+    detail::mix_i64(&hash, policy.quote_risk.min_edge_to_fair_tick);
+    detail::mix_u64(&hash, policy.quote_risk.max_quote_age_ns);
+    detail::mix_u64(&hash, policy.quote_risk.max_book_age_ns);
+    detail::mix_u64(&hash, policy.quote_risk.min_replace_interval_ns);
+    detail::mix_u32(&hash, policy.quote_risk.max_active_quotes_per_asset);
+    detail::mix_bool(&hash, policy.quote_risk.allow_bid_quotes);
+    detail::mix_bool(&hash, policy.quote_risk.allow_ask_quotes);
     return hash;
 }
 

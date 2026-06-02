@@ -29,6 +29,7 @@ add_library(engine_risk STATIC
     publish/HashOnlyRiskPublisher.cpp
     publish/JsonlRiskDecisionWriter.cpp
     publish/RiskDecisionPublisher.cpp
+    quote/QuoteRiskEvaluator.cpp
     reprice/CostRevalidator.cpp
     reprice/FeeRevalidator.cpp
     reprice/LatencyRevalidator.cpp
@@ -48,6 +49,7 @@ target_include_directories(engine_risk PUBLIC
 target_link_libraries(engine_risk PUBLIC
     engine_signal
     engine_order_decision
+    engine_strategy_market_making
 )
 
 add_executable(verify_risk_workflow

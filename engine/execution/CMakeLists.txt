@@ -1,16 +1,20 @@
 add_library(engine_execution STATIC
     public/ExecutionTypes.cpp
+    public/MakerExecutionTypes.cpp
     core/ExecutionGateway.cpp
     core/ExecutionWorkflow.cpp
     plan/ExecutionPlanner.cpp
     plan/OrderBuilder.cpp
     plan/PlanValidator.cpp
+    adapter/PaperMakerExecutionAdapter.cpp
+    adapter/PaperMakerFillModel.cpp
     adapter/PaperExecutionAdapter.cpp
     adapter/SandboxExecutionAdapter.cpp
     adapter/LiveExecutionAdapter.cpp
     state/OrderStateMachine.cpp
     state/PlanStateMachine.cpp
     state/FillTracker.cpp
+    state/ActivePaperQuoteBook.cpp
     state/PartialFillPolicy.cpp
     cancel/CancelManager.cpp
     metrics/ExecutionMetrics.cpp
@@ -184,6 +188,68 @@ foreach(test_case
     PaperExecutionAdapter_RejectsMissingSnapshot
 )
     add_test(NAME ${test_case} COMMAND execution_paper_adapter_tests ${test_case})
+endforeach()
+
+add_executable(active_paper_quote_book_tests
+    ${CMAKE_SOURCE_DIR}/tests/unit/execution/active_paper_quote_book_test.cpp
+)
+
+target_compile_features(active_paper_quote_book_tests PRIVATE cxx_std_20)
+
+target_link_libraries(active_paper_quote_book_tests PRIVATE
+    engine_execution
+)
+
+foreach(test_case
+    ActivePaperQuoteBook_AddsApprovedQuote
+    ActivePaperQuoteBook_ReplacesSameQuoteGroup
+    ActivePaperQuoteBook_IgnoresDuplicateIdempotencyHash
+    ActivePaperQuoteBook_CancelsQuoteGroup
+    ActivePaperQuoteBook_ExpiresOldQuotes
+    ActivePaperQuoteBook_QueriesByAsset
+)
+    add_test(NAME ${test_case} COMMAND active_paper_quote_book_tests ${test_case})
+endforeach()
+
+add_executable(paper_maker_fill_model_tests
+    ${CMAKE_SOURCE_DIR}/tests/unit/execution/paper_maker_fill_model_test.cpp
+)
+
+target_compile_features(paper_maker_fill_model_tests PRIVATE cxx_std_20)
+
+target_link_libraries(paper_maker_fill_model_tests PRIVATE
+    engine_execution
+)
+
+foreach(test_case
+    PaperMaker_NoFillModeDoesNotFill
+    PaperMaker_ConservativeBidFillsOnlyWhenTradeThrough
+    PaperMaker_ConservativeAskFillsOnlyWhenTradeThrough
+    PaperMaker_ConservativeDoesNotFillWithoutTradeEvidence
+    PaperMaker_BookCrossBidFillsWhenBidCrossesAsk
+    PaperMaker_BookCrossAskFillsWhenAskCrossesBid
+    PaperMaker_DoesNotFillExpiredQuote
+)
+    add_test(NAME ${test_case} COMMAND paper_maker_fill_model_tests ${test_case})
+endforeach()
+
+add_executable(paper_maker_execution_adapter_tests
+    ${CMAKE_SOURCE_DIR}/tests/unit/execution/paper_maker_execution_adapter_test.cpp
+)
+
+target_compile_features(paper_maker_execution_adapter_tests PRIVATE cxx_std_20)
+
+target_link_libraries(paper_maker_execution_adapter_tests PRIVATE
+    engine_execution
+)
+
+foreach(test_case
+    PaperMaker_EmitsMakerExecutionReport
+    PaperMaker_DuplicateApprovedQuoteIgnored
+    PaperMaker_CancelRemovesQuote
+    PaperMaker_ReplaceCancelsOldAndPostsNew
+)
+    add_test(NAME ${test_case} COMMAND paper_maker_execution_adapter_tests ${test_case})
 endforeach()
 
 add_executable(execution_order_state_machine_tests

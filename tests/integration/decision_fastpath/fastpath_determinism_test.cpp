@@ -36,6 +36,10 @@ void FastPathDeterminism_OutputHashStable() {
         "runs/worldcup_30615_full_20260530_062519/"
         "oracle_artifact_30615_top8"
     };
+    if (!std::filesystem::exists(artifact / "checksums.txt")) {
+        std::cout << "SKIP: worldcup artifact fixture missing\n";
+        return;
+    }
     const auto registry =
         decision_fastpath_test::registry_from_artifact(artifact);
     if (registry.specs().empty()) {
