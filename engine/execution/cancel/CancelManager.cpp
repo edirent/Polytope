@@ -58,11 +58,29 @@ CancelWorkflowResult CancelManager::cancel_open_orders(
     std::uint64_t now_ns
 ) {
     if (config.mode == ExecutionMode::Live) {
+        if (!config.execution_enabled || !config.live_enabled) {
+            return {
+                .ok = false,
+                .plan_id = plan.plan_id,
+                .code = AdapterResultCode::LiveExecutionDisabled,
+                .error = "live execution cancel is disabled"
+            };
+        }
+        if (adapter_ == nullptr) {
+            return {
+                .ok = false,
+                .plan_id = plan.plan_id,
+                .code = AdapterResultCode::MissingAdapter,
+                .error = "missing execution adapter"
+            };
+        }
+
+        const auto cancel = adapter_->cancel_plan(plan.plan_id);
         return {
-            .ok = false,
-            .plan_id = plan.plan_id,
-            .code = AdapterResultCode::LiveExecutionDisabled,
-            .error = "live execution cancel is disabled"
+            .ok = cancel.ok,
+            .plan_id = cancel.plan_id,
+            .code = cancel.code,
+            .error = cancel.error
         };
     }
 

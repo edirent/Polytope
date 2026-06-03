@@ -11,6 +11,8 @@ add_library(engine_execution STATIC
     adapter/PaperExecutionAdapter.cpp
     adapter/SandboxExecutionAdapter.cpp
     adapter/LiveExecutionAdapter.cpp
+    adapter/LiveMakerExecutionAdapter.cpp
+    adapter/PolymarketLiveOrderTransport.cpp
     state/OrderStateMachine.cpp
     state/PlanStateMachine.cpp
     state/FillTracker.cpp
@@ -31,6 +33,10 @@ target_include_directories(engine_execution PUBLIC
 target_link_libraries(engine_execution PUBLIC
     engine_risk
     engine_order_decision
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Threads::Threads
 )
 
 add_executable(verify_execution_workflow
@@ -165,8 +171,35 @@ foreach(test_case
     LiveExecutionAdapter_DisabledByDefault
     LiveExecutionAdapter_SubmitReturnsDisabled
     LiveExecutionAdapter_DoesNotAccessNetwork
+    LiveExecutionAdapter_RequiresExplicitLiveContext
+    LiveExecutionAdapter_SubmitsSignedOrdersWhenEnabled
+    LiveExecutionAdapter_RejectsMissingSigner
+    LiveExecutionAdapter_CancelUsesVenueOrderIds
 )
     add_test(NAME ${test_case} COMMAND execution_live_adapter_tests ${test_case})
+endforeach()
+
+add_executable(execution_live_maker_adapter_tests
+    ${CMAKE_SOURCE_DIR}/tests/unit/execution/live_maker_execution_adapter_test.cpp
+)
+
+target_compile_features(execution_live_maker_adapter_tests PRIVATE cxx_std_20)
+
+target_link_libraries(execution_live_maker_adapter_tests PRIVATE
+    engine_execution
+)
+
+foreach(test_case
+    LiveMakerExecutionAdapter_DisabledByDefault
+    LiveMakerExecutionAdapter_SubmitsPostOnlyBidAsk
+    LiveMakerExecutionAdapter_RejectsNonRestingAck
+    LiveMakerExecutionAdapter_DuplicateApprovedQuoteIgnored
+    LiveMakerExecutionAdapter_ReplacesActiveQuote
+)
+    add_test(
+        NAME ${test_case}
+        COMMAND execution_live_maker_adapter_tests ${test_case}
+    )
 endforeach()
 
 add_executable(execution_paper_adapter_tests
@@ -344,6 +377,7 @@ foreach(test_case
     CancelManager_CancelsOpenPaperOrders
     CancelManager_DoesNotCancelFilledOrders
     CancelManager_LiveDisabledReturnsUnavailable
+    CancelManager_LiveEnabledCallsAdapter
 )
     add_test(NAME ${test_case} COMMAND execution_cancel_manager_tests ${test_case})
 endforeach()

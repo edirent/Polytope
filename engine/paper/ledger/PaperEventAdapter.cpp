@@ -35,12 +35,45 @@ PaperEventAdapterResult PaperEventAdapter::observe(
 }
 
 PaperEventAdapterResult PaperEventAdapter::observe(
+    const trading_engine::strategy::market_making::QuoteIntent& intent
+) {
+    return {
+        .event = make_event(
+            PaperEventType::QuoteIntentObserved,
+            intent.created_ts_ns
+        )
+    };
+}
+
+PaperEventAdapterResult PaperEventAdapter::observe(
+    const trading_engine::risk::QuoteRiskDecision& decision
+) {
+    return {
+        .event = make_event(
+            PaperEventType::QuoteRiskDecisionObserved,
+            decision.decision_ts_ns
+        )
+    };
+}
+
+PaperEventAdapterResult PaperEventAdapter::observe(
     const trading_engine::risk::ApprovedIntent& approved
 ) {
     return {
         .event = make_event(
             PaperEventType::ApprovedIntentObserved,
             approved.approved_at_ns
+        )
+    };
+}
+
+PaperEventAdapterResult PaperEventAdapter::observe(
+    const trading_engine::risk::ApprovedQuote& approved
+) {
+    return {
+        .event = make_event(
+            PaperEventType::ApprovedQuoteObserved,
+            approved.approved_ts_ns
         )
     };
 }
@@ -91,6 +124,24 @@ PaperEventAdapterResult PaperEventAdapter::observe(
     result.fill.asset_id = order.asset_id;
     result.fill.asset_index = order.asset_index;
     result.fill.side = order.side;
+    return result;
+}
+
+PaperEventAdapterResult PaperEventAdapter::observe(
+    const trading_engine::execution::MakerExecutionReport& report
+) {
+    PaperEventAdapterResult result;
+    result.event = make_event(
+        PaperEventType::ExecutionReportObserved,
+        report.recv_ts_ns != 0 ? report.recv_ts_ns : report.exchange_ts_ns
+    );
+
+    const MakerFillApplication maker_fill_application;
+    const auto fill = maker_fill_application.from_report(report);
+    if (fill.has_fill) {
+        result.has_paper_fill = true;
+        result.paper_fill = fill.fill;
+    }
     return result;
 }
 

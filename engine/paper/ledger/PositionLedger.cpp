@@ -43,6 +43,42 @@ void PositionLedger::apply_buy(
     }
 }
 
+PositionLedgerApplyResult PositionLedger::apply_sell(
+    const std::string& asset_id,
+    std::uint32_t asset_index,
+    std::int64_t lots,
+    std::int64_t price_tick
+) {
+    if (asset_id.empty() || lots <= 0 || price_tick < 0) {
+        return {false, PositionLedgerApplyStatus::InvalidFill, 0};
+    }
+
+    auto it = positions_.find(asset_id);
+    if (it == positions_.end() || it->second.qty_lots < lots) {
+        return {false, PositionLedgerApplyStatus::InsufficientPosition, 0};
+    }
+
+    auto& position = it->second;
+    if (position.asset_index == 0) {
+        position.asset_index = asset_index;
+    }
+
+    const auto avg_cost_tick = position.avg_cost_tick;
+    const auto realized_pnl_tick = (price_tick - avg_cost_tick) * lots;
+    position.qty_lots -= lots;
+    position.cost_basis_tick -= avg_cost_tick * lots;
+    position.realized_pnl_tick += realized_pnl_tick;
+
+    if (position.qty_lots == 0) {
+        position.cost_basis_tick = 0;
+        position.avg_cost_tick = 0;
+    } else {
+        position.avg_cost_tick = position.cost_basis_tick / position.qty_lots;
+    }
+
+    return {true, PositionLedgerApplyStatus::Applied, realized_pnl_tick};
+}
+
 void PositionLedger::mark_mid(
     const std::string& asset_id,
     std::int64_t mid_tick

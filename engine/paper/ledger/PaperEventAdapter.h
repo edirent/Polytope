@@ -1,14 +1,19 @@
 #pragma once
 
 #include "engine/execution/public/ExecutionReport.h"
+#include "engine/execution/public/MakerExecutionTypes.h"
 #include "engine/execution/public/OrderPlan.h"
 #include "engine/execution/public/ReservationDisposition.h"
 #include "engine/paper/ledger/FillApplication.h"
+#include "engine/paper/ledger/MakerFillApplication.h"
 #include "engine/paper/public/PaperEvent.h"
 #include "engine/risk/public/ApprovedIntent.h"
+#include "engine/risk/public/ApprovedQuote.h"
+#include "engine/risk/public/QuoteRiskDecision.h"
 #include "engine/risk/public/RiskDecision.h"
 #include "engine/signal/public/OpportunityIntent.h"
 #include "engine/state/MarketStateSnapshot.h"
+#include "engine/strategy/market_making/public/QuoteIntent.h"
 
 #include <cstdint>
 #include <unordered_map>
@@ -20,6 +25,9 @@ struct PaperEventAdapterResult {
 
     bool has_fill = false;
     FillApplication fill;
+
+    bool has_paper_fill = false;
+    PaperFill paper_fill;
 };
 
 class PaperEventAdapter {
@@ -33,7 +41,19 @@ public:
     );
 
     [[nodiscard]] PaperEventAdapterResult observe(
+        const trading_engine::strategy::market_making::QuoteIntent& intent
+    );
+
+    [[nodiscard]] PaperEventAdapterResult observe(
+        const trading_engine::risk::QuoteRiskDecision& decision
+    );
+
+    [[nodiscard]] PaperEventAdapterResult observe(
         const trading_engine::risk::ApprovedIntent& approved
+    );
+
+    [[nodiscard]] PaperEventAdapterResult observe(
+        const trading_engine::risk::ApprovedQuote& approved
     );
 
     [[nodiscard]] PaperEventAdapterResult observe(
@@ -42,6 +62,10 @@ public:
 
     [[nodiscard]] PaperEventAdapterResult observe(
         const trading_engine::execution::ExecutionReport& report
+    );
+
+    [[nodiscard]] PaperEventAdapterResult observe(
+        const trading_engine::execution::MakerExecutionReport& report
     );
 
     [[nodiscard]] PaperEventAdapterResult observe(

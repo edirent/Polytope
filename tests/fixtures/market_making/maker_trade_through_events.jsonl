@@ -1,0 +1,2 @@
+{"ts_ns":1000000000,"asset_index":7,"has_trade":true,"trade_price_tick":489000,"trade_qty_lots":100,"trade_aggressor_side":"Sell"}
+{"ts_ns":2000000000,"asset_index":7,"has_trade":true,"trade_price_tick":531000,"trade_qty_lots":100,"trade_aggressor_side":"Buy","duplicate_last_report":true}

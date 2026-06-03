@@ -1,0 +1,15 @@
+{
+  "roundtrip": {
+    "maker_fills": 2,
+    "duplicate_reports_ignored": 1,
+    "realized_pnl_tick": 4000000,
+    "ending_cash_tick": 100004000000,
+    "open_position_qty": 0,
+    "unrealized_pnl_mid_tick": 0
+  },
+  "nofill": {
+    "maker_fills": 0,
+    "realized_pnl_tick": 0,
+    "unrealized_pnl_mid_tick": 0
+  }
+}

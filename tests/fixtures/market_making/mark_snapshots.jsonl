@@ -1,0 +1,3 @@
+{"ts_ns":900000000,"asset_index":7,"book_version":1,"snapshot_version_hash":9101,"usable_for_depth":true,"bid_tick":510000,"ask_tick":530000,"bid_size":1000.0,"ask_size":1000.0}
+{"ts_ns":6000000000,"asset_index":7,"book_version":2,"snapshot_version_hash":9102,"usable_for_depth":true,"bid_tick":505000,"ask_tick":525000,"bid_size":1000.0,"ask_size":1000.0}
+{"ts_ns":32000000000,"asset_index":7,"book_version":3,"snapshot_version_hash":9103,"usable_for_depth":true,"bid_tick":515000,"ask_tick":535000,"bid_size":1000.0,"ask_size":1000.0}

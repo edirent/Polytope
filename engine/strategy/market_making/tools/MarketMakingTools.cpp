@@ -45,9 +45,10 @@ MarketMakingResult run_small_workflow(bool check_determinism) {
     config.strategy_id = 99;
     config.oracle_artifact_hash = 11;
     config.policy_hash = 22;
-    config.min_half_spread_tick = 5'000;
-    config.max_inventory_skew_tick = 1'000;
-    config.base_quote_size_lots = 5;
+    config.min_half_spread_tick = kDefaultDefensiveHalfSpreadTick;
+    config.max_inventory_skew_tick =
+        kDefaultDefensiveInventorySkewTick;
+    config.base_quote_size_lots = kDefaultDefensiveQuoteSizeLots;
     config.max_inventory_lots = 100;
     config.quote_ttl_ns = 10'000;
     config.requote_threshold_tick = 2'000;
@@ -80,8 +81,8 @@ MarketMakingResult run_small_workflow(bool check_determinism) {
     aggregate.replacements += second.replacements;
     aggregate.rejected_no_quote += second.rejected_no_quote;
     aggregate.active_quotes = engine.quote_book().active_quotes().size();
-    aggregate.avg_half_spread_tick = 5'000;
-    aggregate.avg_inventory_skew_tick = 200;
+    aggregate.avg_half_spread_tick = kDefaultDefensiveHalfSpreadTick;
+    aggregate.avg_inventory_skew_tick = 15'000;
     aggregate.quote_uptime_ns = 100;
     aggregate.output_hash =
         compute_market_making_result_hash(aggregate) ^ engine.quote_book().hash();

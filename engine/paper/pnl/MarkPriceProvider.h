@@ -11,7 +11,8 @@ enum class MarkQuality : std::uint8_t {
     MissingBid,
     MissingAsk,
     MissingBook,
-    Degraded
+    Degraded,
+    NoPosition
 };
 
 struct MarkPrice {

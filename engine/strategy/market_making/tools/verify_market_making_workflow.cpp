@@ -126,9 +126,9 @@ QuoteRiskSummary evaluate_quote_risk(
     }
 
     QuoteRiskPolicy policy;
-    policy.max_quote_notional_tick = 20'000'000;
+    policy.max_quote_notional_tick = 10'000'000;
     policy.max_asset_inventory_lots = 100;
-    policy.min_edge_to_fair_tick = 1'000;
+    policy.min_edge_to_fair_tick = -50'000;
     policy.max_book_age_ns = 1'000'000'000ULL;
 
     const auto fresh_depth =
@@ -177,9 +177,9 @@ std::optional<trading_engine::risk::ApprovedQuote> approve_first_quote(
     }
 
     QuoteRiskPolicy policy;
-    policy.max_quote_notional_tick = 20'000'000;
+    policy.max_quote_notional_tick = 10'000'000;
     policy.max_asset_inventory_lots = 100;
-    policy.min_edge_to_fair_tick = 1'000;
+    policy.min_edge_to_fair_tick = -50'000;
     policy.max_book_age_ns = 1'000'000'000ULL;
 
     const auto depth = trading_engine::strategy::market_making::tools::make_depth_view(

@@ -13,7 +13,10 @@ enum class PaperMode : std::uint8_t {
 enum class PaperEventType : std::uint8_t {
     OpportunityIntentObserved,
     RiskDecisionObserved,
+    QuoteIntentObserved,
+    QuoteRiskDecisionObserved,
     ApprovedIntentObserved,
+    ApprovedQuoteObserved,
     OrderPlanCreated,
     ExecutionReportObserved,
     ReservationDispositionObserved,

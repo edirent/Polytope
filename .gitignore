@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+config/credentials.local.env
 
 logs/
 *.log

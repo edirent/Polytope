@@ -5,13 +5,25 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace {
 
 using trading_engine::execution::AdapterResultCode;
+using trading_engine::execution::ChildOrderStatus;
 using trading_engine::execution::ExecutionContext;
+using trading_engine::execution::ExecutionMode;
+using trading_engine::execution::ILiveOrderSigner;
+using trading_engine::execution::ILiveOrderTransport;
 using trading_engine::execution::LiveExecutionAdapter;
+using trading_engine::execution::LiveExecutionConfig;
+using trading_engine::execution::LiveOrderRequest;
+using trading_engine::execution::LiveOrderSignResult;
+using trading_engine::execution::LiveTransportCancelResult;
+using trading_engine::execution::LiveTransportSubmitResult;
 using trading_engine::execution::OrderPlan;
+using trading_engine::execution::PlanStatus;
+using trading_engine::execution::SignedLiveOrder;
 
 [[noreturn]] void fail(const std::string& message) {
     throw std::runtime_error(message);
@@ -58,6 +70,87 @@ OrderPlan valid_plan() {
     order.worst_allowed_price_tick = 10;
     return plan;
 }
+
+ExecutionContext live_context() {
+    ExecutionContext context;
+    context.now_ns = 1500;
+    context.config.mode = ExecutionMode::Live;
+    context.config.execution_enabled = true;
+    context.config.live_enabled = true;
+    return context;
+}
+
+LiveExecutionConfig enabled_live_config() {
+    LiveExecutionConfig config;
+    config.enabled = true;
+    config.max_child_notional_tick = 1000;
+    return config;
+}
+
+class FakeSigner final : public ILiveOrderSigner {
+public:
+    bool fail = false;
+    std::vector<LiveOrderRequest> requests;
+
+    [[nodiscard]] LiveOrderSignResult sign_order(
+        const LiveOrderRequest& request
+    ) override {
+        requests.push_back(request);
+        if (fail) {
+            return {
+                .ok = false,
+                .error = "sign failed"
+            };
+        }
+        return {
+            .ok = true,
+            .order = SignedLiveOrder{
+                .request_body_json = "{\"order\":\"signed\"}",
+                .venue_order_id_hint = "hint-1"
+            }
+        };
+    }
+};
+
+class FakeTransport final : public ILiveOrderTransport {
+public:
+    bool fail_submit = false;
+    bool fail_cancel = false;
+    std::vector<std::string> submitted_bodies;
+    std::vector<std::string> canceled_order_ids;
+
+    [[nodiscard]] LiveTransportSubmitResult submit_order(
+        std::string_view request_body_json
+    ) override {
+        submitted_bodies.emplace_back(request_body_json);
+        if (fail_submit) {
+            return {
+                .ok = false,
+                .error = "submit failed"
+            };
+        }
+        return {
+            .ok = true,
+            .venue_order_id = "venue-1",
+            .venue_status = "live"
+        };
+    }
+
+    [[nodiscard]] LiveTransportCancelResult cancel_order(
+        std::string_view venue_order_id
+    ) override {
+        canceled_order_ids.emplace_back(venue_order_id);
+        if (fail_cancel) {
+            return {
+                .ok = false,
+                .error = "cancel failed"
+            };
+        }
+        return {
+            .ok = true
+        };
+    }
+};
 
 void LiveExecutionAdapter_DisabledByDefault() {
     LiveExecutionAdapter adapter;
@@ -108,6 +201,105 @@ void LiveExecutionAdapter_DoesNotAccessNetwork() {
     );
 }
 
+void LiveExecutionAdapter_RequiresExplicitLiveContext() {
+    FakeSigner signer;
+    FakeTransport transport;
+    LiveExecutionAdapter adapter(
+        enabled_live_config(),
+        &signer,
+        &transport
+    );
+    ExecutionContext context;
+
+    const auto result = adapter.submit_plan(valid_plan(), context);
+
+    expect_true(!result.ok, "submit rejected");
+    expect_equal(
+        result.code,
+        AdapterResultCode::LiveExecutionDisabled,
+        "disabled code"
+    );
+    expect_true(signer.requests.empty(), "signer unused");
+    expect_true(transport.submitted_bodies.empty(), "transport unused");
+}
+
+void LiveExecutionAdapter_SubmitsSignedOrdersWhenEnabled() {
+    FakeSigner signer;
+    FakeTransport transport;
+    LiveExecutionAdapter adapter(
+        enabled_live_config(),
+        &signer,
+        &transport
+    );
+
+    const auto result = adapter.submit_plan(valid_plan(), live_context());
+    const auto reports = adapter.poll_reports();
+
+    expect_true(result.ok, "submit ok");
+    expect_equal(result.status, PlanStatus::Acked, "plan status");
+    expect_equal(result.child_orders_submitted, 1ULL, "submitted");
+    expect_equal(result.child_orders_rejected, 0ULL, "rejected");
+    expect_equal(result.code, AdapterResultCode::Ok, "result code");
+    expect_equal(signer.requests.size(), static_cast<std::size_t>(1), "signed");
+    expect_equal(
+        transport.submitted_bodies.size(),
+        static_cast<std::size_t>(1),
+        "submitted bodies"
+    );
+    expect_equal(reports.size(), static_cast<std::size_t>(1), "reports");
+    expect_equal(reports[0].status, ChildOrderStatus::Acked, "report status");
+    expect_equal(reports[0].filled_lots, 0LL, "no fake fill");
+    expect_equal(reports[0].remaining_lots, 1LL, "remaining");
+    expect_equal(reports[0].venue_order_id, std::string{"venue-1"}, "venue id");
+}
+
+void LiveExecutionAdapter_RejectsMissingSigner() {
+    FakeTransport transport;
+    LiveExecutionAdapter adapter(
+        enabled_live_config(),
+        nullptr,
+        &transport
+    );
+
+    const auto result = adapter.submit_plan(valid_plan(), live_context());
+
+    expect_true(!result.ok, "submit rejected");
+    expect_equal(
+        result.code,
+        AdapterResultCode::AdapterError,
+        "adapter error"
+    );
+    expect_true(transport.submitted_bodies.empty(), "transport unused");
+}
+
+void LiveExecutionAdapter_CancelUsesVenueOrderIds() {
+    FakeSigner signer;
+    FakeTransport transport;
+    LiveExecutionAdapter adapter(
+        enabled_live_config(),
+        &signer,
+        &transport
+    );
+
+    const auto submit = adapter.submit_plan(valid_plan(), live_context());
+    (void)adapter.poll_reports();
+    const auto cancel = adapter.cancel_plan(submit.plan_id);
+
+    expect_true(submit.ok, "submit ok");
+    expect_true(cancel.ok, "cancel ok");
+    expect_equal(cancel.code, AdapterResultCode::Ok, "cancel code");
+    expect_equal(
+        transport.canceled_order_ids.size(),
+        static_cast<std::size_t>(1),
+        "cancel count"
+    );
+    expect_equal(
+        transport.canceled_order_ids[0],
+        std::string{"venue-1"},
+        "venue cancel id"
+    );
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -123,6 +315,22 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "LiveExecutionAdapter_DoesNotAccessNetwork",
             &LiveExecutionAdapter_DoesNotAccessNetwork
+        },
+        {
+            "LiveExecutionAdapter_RequiresExplicitLiveContext",
+            &LiveExecutionAdapter_RequiresExplicitLiveContext
+        },
+        {
+            "LiveExecutionAdapter_SubmitsSignedOrdersWhenEnabled",
+            &LiveExecutionAdapter_SubmitsSignedOrdersWhenEnabled
+        },
+        {
+            "LiveExecutionAdapter_RejectsMissingSigner",
+            &LiveExecutionAdapter_RejectsMissingSigner
+        },
+        {
+            "LiveExecutionAdapter_CancelUsesVenueOrderIds",
+            &LiveExecutionAdapter_CancelUsesVenueOrderIds
         }
     };
     return test_map;

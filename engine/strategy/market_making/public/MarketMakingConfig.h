@@ -6,6 +6,10 @@
 
 namespace trading_engine::strategy::market_making {
 
+inline constexpr std::int64_t kDefaultDefensiveHalfSpreadTick = 25'000;
+inline constexpr std::int64_t kDefaultDefensiveQuoteSizeLots = 9;
+inline constexpr std::int64_t kDefaultDefensiveInventorySkewTick = 75'000;
+
 struct MarketMakingConfig {
     std::uint64_t strategy_id = 1;
     std::uint64_t oracle_artifact_hash = 0;
@@ -14,18 +18,19 @@ struct MarketMakingConfig {
     std::int64_t min_price_tick = 1;
     std::int64_t max_price_tick = kPriceOneTick - 1;
 
-    std::int64_t min_half_spread_tick = 1'000;
+    std::int64_t min_half_spread_tick = kDefaultDefensiveHalfSpreadTick;
     std::int64_t fee_buffer_tick = 0;
     std::int64_t latency_buffer_tick = 0;
     std::int64_t volatility_buffer_tick = 0;
     std::int64_t liquidity_buffer_tick = 0;
     std::int64_t uncertainty_buffer_tick = 0;
 
-    std::int64_t max_inventory_skew_tick = 0;
+    std::int64_t max_inventory_skew_tick =
+        kDefaultDefensiveInventorySkewTick;
     std::int64_t target_position_lots = 0;
     std::int64_t min_inventory_lots = 0;
     std::int64_t max_inventory_lots = 100;
-    std::int64_t base_quote_size_lots = 1;
+    std::int64_t base_quote_size_lots = kDefaultDefensiveQuoteSizeLots;
 
     std::uint64_t quote_ttl_ns = 5'000'000'000ULL;
     std::int64_t requote_threshold_tick = 1'000;

@@ -1,5 +1,6 @@
 #include "engine/paper/ledger/PaperLedger.h"
 #include "engine/paper/public/PaperEvent.h"
+#include "engine/paper/public/PaperFill.h"
 
 #include <iostream>
 #include <string>
@@ -9,10 +10,13 @@ namespace {
 using trading_engine::execution::ChildOrderStatus;
 using trading_engine::execution::OrderSide;
 using trading_engine::paper::FillApplication;
+using trading_engine::paper::FillLiquidityRole;
 using trading_engine::paper::PaperEvent;
 using trading_engine::paper::PaperEventType;
+using trading_engine::paper::PaperFill;
 using trading_engine::paper::PaperLedger;
 using trading_engine::paper::PaperLedgerApplyStatus;
+using trading_engine::paper::Side;
 
 int fail(const char* message) {
     std::cerr << message << '\n';
@@ -48,6 +52,32 @@ FillApplication buy_fill(
     fill.report.remaining_lots = 0;
     fill.report.avg_fill_price_tick = price_tick;
     fill.report.event_ts_ns = 123;
+    return fill;
+}
+
+PaperFill maker_fill(
+    std::uint64_t fill_id,
+    std::uint64_t report_id,
+    Side side,
+    std::int64_t qty_lots,
+    std::int64_t price_tick,
+    std::int64_t fee_tick = 0
+) {
+    PaperFill fill;
+    fill.fill_id = fill_id;
+    fill.report_id = report_id;
+    fill.quote_id = 501;
+    fill.approved_quote_id = 601;
+    fill.quote_group_id = 701;
+    fill.asset_index = 17;
+    fill.asset_id = "asset_yes";
+    fill.side = side;
+    fill.liquidity_role = FillLiquidityRole::Maker;
+    fill.qty_lots = qty_lots;
+    fill.fill_price_tick = price_tick;
+    fill.fee_tick = fee_tick;
+    fill.ts_ns = 1'000;
+    fill.idempotency_hash = fill_id;
     return fill;
 }
 
@@ -165,6 +195,69 @@ int test_observation_events_do_not_produce_pnl() {
     return 0;
 }
 
+int test_maker_bid_fill_increases_position() {
+    PaperLedger ledger{100'000'000};
+    const auto result =
+        ledger.apply_fill(maker_fill(1, 10, Side::Buy, 100, 490'000));
+    if (!result.applied || result.status != PaperLedgerApplyStatus::Applied) {
+        return fail("maker bid fill should apply");
+    }
+    return expect_equal(
+        ledger.position_ledger().lots("asset_yes"),
+        100LL,
+        "position lots"
+    );
+}
+
+int test_maker_bid_fill_decreases_cash() {
+    PaperLedger ledger{100'000'000};
+    (void)ledger.apply_fill(maker_fill(1, 10, Side::Buy, 100, 490'000, 7));
+    return expect_equal(
+        ledger.cash_ledger().cash_tick,
+        50'999'993LL,
+        "cash after maker buy"
+    );
+}
+
+int test_maker_ask_fill_realizes_pnl() {
+    PaperLedger ledger{100'000'000};
+    (void)ledger.apply_fill(maker_fill(1, 10, Side::Buy, 100, 490'000));
+    const auto sell =
+        ledger.apply_fill(maker_fill(2, 11, Side::Sell, 100, 530'000, 5));
+    if (!sell.applied || sell.status != PaperLedgerApplyStatus::Applied) {
+        return fail("maker ask fill should apply");
+    }
+    if (const auto check =
+            expect_equal(ledger.position_ledger().lots("asset_yes"), 0LL, "qty");
+        check != 0) {
+        return check;
+    }
+    return expect_equal(
+        ledger.cash_ledger().realized_pnl_tick,
+        3'999'995LL,
+        "realized pnl"
+    );
+}
+
+int test_duplicate_maker_report_ignored() {
+    PaperLedger ledger{100'000'000};
+    const auto fill = maker_fill(1, 10, Side::Buy, 100, 490'000);
+    const auto first = ledger.apply_fill(fill);
+    const auto second = ledger.apply_fill(fill);
+    if (!first.applied) {
+        return fail("first maker fill should apply");
+    }
+    if (second.applied ||
+        second.status != PaperLedgerApplyStatus::DuplicateIgnored) {
+        return fail("duplicate maker fill should be ignored");
+    }
+    return expect_equal(
+        ledger.position_ledger().lots("asset_yes"),
+        100LL,
+        "position after duplicate"
+    );
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -190,6 +283,18 @@ int main(int argc, char** argv) {
     }
     if (test_case == "PaperLedger_OpportunityAndRiskEventsDoNotProducePnL") {
         return test_observation_events_do_not_produce_pnl();
+    }
+    if (test_case == "PaperLedger_MakerBidFillIncreasesPosition") {
+        return test_maker_bid_fill_increases_position();
+    }
+    if (test_case == "PaperLedger_MakerBidFillDecreasesCash") {
+        return test_maker_bid_fill_decreases_cash();
+    }
+    if (test_case == "PaperLedger_MakerAskFillRealizesPnl") {
+        return test_maker_ask_fill_realizes_pnl();
+    }
+    if (test_case == "PaperLedger_DuplicateMakerReportIgnored") {
+        return test_duplicate_maker_report_ignored();
     }
 
     return fail("unknown test case");

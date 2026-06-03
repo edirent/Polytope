@@ -16,12 +16,14 @@ using PaperPosition = Position;
 enum class PositionLedgerApplyStatus : std::uint8_t {
     Applied,
     InvalidFill,
-    UnsupportedSell
+    UnsupportedSell,
+    InsufficientPosition
 };
 
 struct PositionLedgerApplyResult {
     bool applied = false;
     PositionLedgerApplyStatus status = PositionLedgerApplyStatus::InvalidFill;
+    std::int64_t realized_pnl_tick = 0;
 };
 
 struct PositionFill {
@@ -47,6 +49,13 @@ public:
         std::uint32_t asset_index,
         std::int64_t lots,
         std::int64_t cost_tick
+    );
+
+    [[nodiscard]] PositionLedgerApplyResult apply_sell(
+        const std::string& asset_id,
+        std::uint32_t asset_index,
+        std::int64_t lots,
+        std::int64_t price_tick
     );
 
     void mark_mid(const std::string& asset_id, std::int64_t mid_tick);

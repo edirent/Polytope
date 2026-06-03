@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace {
 
@@ -15,6 +16,10 @@ using trading_engine::execution::ExecutionConfig;
 using trading_engine::execution::ExecutionMode;
 using trading_engine::execution::ExecutionReport;
 using trading_engine::execution::FillTracker;
+using trading_engine::execution::AdapterCancelResult;
+using trading_engine::execution::AdapterSubmitResult;
+using trading_engine::execution::ExecutionContext;
+using trading_engine::execution::IExecutionAdapter;
 using trading_engine::execution::OrderPlan;
 
 [[noreturn]] void fail(const std::string& message) {
@@ -66,6 +71,37 @@ ExecutionReport fill_report(
     report.avg_fill_price_tick = 50;
     return report;
 }
+
+class FakeAdapter final : public IExecutionAdapter {
+public:
+    bool cancel_called = false;
+
+    [[nodiscard]] AdapterSubmitResult submit_plan(
+        const OrderPlan& plan,
+        const ExecutionContext&
+    ) override {
+        return {
+            .ok = true,
+            .plan_id = plan.plan_id,
+            .code = AdapterResultCode::Ok
+        };
+    }
+
+    [[nodiscard]] std::vector<ExecutionReport> poll_reports() override {
+        return {};
+    }
+
+    [[nodiscard]] AdapterCancelResult cancel_plan(
+        std::uint64_t plan_id
+    ) override {
+        cancel_called = true;
+        return {
+            .ok = true,
+            .plan_id = plan_id,
+            .code = AdapterResultCode::Ok
+        };
+    }
+};
 
 void CancelManager_CancelsOpenPaperOrders() {
     const auto plan = plan_with_children(2);
@@ -142,6 +178,29 @@ void CancelManager_LiveDisabledReturnsUnavailable() {
     expect_true(result.reports.empty(), "no reports");
 }
 
+void CancelManager_LiveEnabledCallsAdapter() {
+    const auto plan = plan_with_children(1);
+    const FillTracker tracker(plan);
+    ExecutionConfig config;
+    config.mode = ExecutionMode::Live;
+    config.execution_enabled = true;
+    config.live_enabled = true;
+
+    FakeAdapter adapter;
+    CancelManager manager(&adapter);
+    const auto result = manager.cancel_open_orders(
+        plan,
+        tracker.plan_state(),
+        config,
+        1234
+    );
+
+    expect_true(result.ok, "live cancel ok");
+    expect_true(adapter.cancel_called, "adapter called");
+    expect_equal(result.code, AdapterResultCode::Ok, "live cancel code");
+    expect_true(result.reports.empty(), "adapter owns live reports");
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -157,6 +216,10 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {
             "CancelManager_LiveDisabledReturnsUnavailable",
             &CancelManager_LiveDisabledReturnsUnavailable
+        },
+        {
+            "CancelManager_LiveEnabledCallsAdapter",
+            &CancelManager_LiveEnabledCallsAdapter
         }
     };
     return test_map;

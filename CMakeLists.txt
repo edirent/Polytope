@@ -3201,6 +3201,22 @@ target_link_libraries(probe_market_event_to_execution_plan_latency PRIVATE
     engine_decision_fastpath
 )
 
+add_executable(probe_market_making_e2e_latency
+    tools/probe_market_making_e2e_latency.cpp
+)
+
+target_include_directories(probe_market_making_e2e_latency PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(probe_market_making_e2e_latency PRIVATE
+    market_making_tools
+    engine_risk
+    engine_execution
+    engine_paper
+)
+
 add_executable(verify_canonical_decision_workflow
     tools/verify_canonical_decision_workflow.cpp
     engine/feed/raw_ingest/RawPacket.cpp
