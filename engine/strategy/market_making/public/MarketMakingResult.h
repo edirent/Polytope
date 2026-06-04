@@ -16,6 +16,11 @@ struct MarketMakingResult {
     std::uint64_t cancels_emitted = 0;
     std::uint64_t replacements = 0;
     std::uint64_t rejected_no_quote = 0;
+    NoQuoteReason no_quote_reason = NoQuoteReason::None;
+    FairValueQuality fair_value_quality = FairValueQuality::Disabled;
+    std::int64_t fair_confidence_bps = 0;
+    std::int64_t fair_book_spread_tick = 0;
+    std::int64_t fair_value_tick = 0;
     std::uint64_t active_quotes = 0;
     std::uint64_t approved_quotes = 0;
     std::uint64_t rejected_quotes = 0;

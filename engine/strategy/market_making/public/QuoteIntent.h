@@ -21,6 +21,9 @@ struct QuoteLeg {
 
     std::int64_t fair_value_tick = 0;
     std::int64_t edge_to_fair_tick = 0;
+    bool risk_reducing = false;
+    bool allow_fair_deviation_exemption = false;
+    bool allow_spread_exemption = false;
 
     std::uint64_t book_version = 0;
     std::uint64_t snapshot_version_hash = 0;
@@ -37,6 +40,7 @@ struct QuoteIntent {
     std::string asset_id;
     std::uint32_t market_index = 0;
     std::uint32_t asset_index = 0;
+    QuoteIntentRiskMode risk_mode = QuoteIntentRiskMode::Opening;
 
     bool has_bid = false;
     bool has_ask = false;

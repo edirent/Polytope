@@ -7,6 +7,7 @@ export interface PageDefinition {
     | "signals"
     | "risk"
     | "execution"
+    | "market-maker"
     | "pnl"
     | "regime"
     | "latency";

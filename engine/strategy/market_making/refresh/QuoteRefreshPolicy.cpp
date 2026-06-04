@@ -2,9 +2,62 @@
 
 #include "engine/strategy/market_making/refresh/QuoteTTL.h"
 
+#include <algorithm>
 #include <cstdlib>
 
 namespace trading_engine::strategy::market_making {
+
+namespace {
+
+[[nodiscard]] bool leg_shape_matches(
+    const QuoteLeg& active,
+    const QuoteLeg& candidate,
+    std::int64_t min_price_change_tick
+) noexcept {
+    const auto min_change = std::max<std::int64_t>(0, min_price_change_tick);
+    return active.quantity_lots == candidate.quantity_lots &&
+           std::llabs(active.price_tick - candidate.price_tick) <= min_change;
+}
+
+[[nodiscard]] bool quote_shape_matches(
+    const ActiveQuoteState& active,
+    const QuoteIntent& candidate,
+    std::int64_t min_price_change_tick
+) noexcept {
+    if (active.has_bid != candidate.has_bid ||
+        active.has_ask != candidate.has_ask) {
+        return false;
+    }
+    if (active.has_bid &&
+        !leg_shape_matches(
+            active.bid,
+            candidate.bid,
+            min_price_change_tick
+        )) {
+        return false;
+    }
+    if (active.has_ask &&
+        !leg_shape_matches(
+            active.ask,
+            candidate.ask,
+            min_price_change_tick
+        )) {
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool inside_requote_cooldown(
+    const ActiveQuoteState& active,
+    const MarketMakingConfig& config,
+    std::uint64_t now_ns
+) noexcept {
+    return config.min_requote_interval_ns > 0 &&
+           now_ns >= active.created_ts_ns &&
+           now_ns - active.created_ts_ns < config.min_requote_interval_ns;
+}
+
+}  // namespace
 
 QuoteRefreshDecision QuoteRefreshPolicy::evaluate(
     const ActiveQuoteState* active,
@@ -39,6 +92,18 @@ QuoteRefreshDecision QuoteRefreshPolicy::evaluate(
     if (!candidate) {
         decision.should_cancel = true;
         decision.reason = CancelReason::RiskDegraded;
+        return decision;
+    }
+
+    if (quote_shape_matches(
+            *active,
+            *candidate,
+            config.min_quote_price_change_tick
+        )) {
+        return decision;
+    }
+
+    if (inside_requote_cooldown(*active, config, now_ns)) {
         return decision;
     }
 

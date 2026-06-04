@@ -100,17 +100,20 @@ PaperLedgerApplyResult PaperLedger::apply_fill(const FillApplication& fill) {
 }
 
 PaperLedgerApplyResult PaperLedger::apply_fill(const PaperFill& fill) {
+    const auto supported_liquidity_role =
+        fill.liquidity_role == FillLiquidityRole::Maker ||
+        fill.liquidity_role == FillLiquidityRole::Taker;
     if (fill.fill_id == 0 ||
         fill.qty_lots <= 0 ||
         fill.fill_price_tick < 0 ||
         fill.fee_tick < 0 ||
         fill.asset_id.empty() ||
-        fill.liquidity_role != FillLiquidityRole::Maker) {
+        !supported_liquidity_role) {
         return {
             .applied = false,
             .status = PaperLedgerApplyStatus::RejectedInvalidFill,
             .fill_id = fill.fill_id,
-            .reason = "invalid maker fill",
+            .reason = "invalid paper fill",
             .snapshot = snapshot()
         };
     }
@@ -122,7 +125,7 @@ PaperLedgerApplyResult PaperLedger::apply_fill(const PaperFill& fill) {
             .applied = false,
             .status = PaperLedgerApplyStatus::DuplicateIgnored,
             .fill_id = fill.fill_id,
-            .reason = "duplicate maker fill",
+            .reason = "duplicate paper fill",
             .snapshot = snapshot()
         };
     }
@@ -156,7 +159,7 @@ PaperLedgerApplyResult PaperLedger::apply_fill(const PaperFill& fill) {
                 .applied = false,
                 .status = status,
                 .fill_id = fill.fill_id,
-                .reason = "maker sell exceeds current position",
+                .reason = "paper sell exceeds current position",
                 .snapshot = snapshot()
             };
         }
@@ -170,7 +173,7 @@ PaperLedgerApplyResult PaperLedger::apply_fill(const PaperFill& fill) {
             .applied = false,
             .status = PaperLedgerApplyStatus::RejectedUnsupportedSide,
             .fill_id = fill.fill_id,
-            .reason = "unsupported maker fill side",
+            .reason = "unsupported paper fill side",
             .snapshot = snapshot()
         };
     }
@@ -179,7 +182,9 @@ PaperLedgerApplyResult PaperLedger::apply_fill(const PaperFill& fill) {
     if (fill.report_id != 0) {
         applied_maker_report_ids_.insert(fill.report_id);
     }
-    ++maker_fill_count_;
+    if (fill.liquidity_role == FillLiquidityRole::Maker) {
+        ++maker_fill_count_;
+    }
 
     return {
         .applied = true,

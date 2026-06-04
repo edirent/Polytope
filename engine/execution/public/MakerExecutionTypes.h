@@ -14,7 +14,9 @@ using QuoteSide = strategy::market_making::QuoteSide;
 enum class PaperMakerFillMode : std::uint8_t {
     NoFill,
     Conservative,
-    BookCross
+    BookCross,
+    MidCross,
+    QueueAware
 };
 
 enum class MakerQuoteStatus : std::uint8_t {

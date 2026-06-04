@@ -82,7 +82,8 @@ std::vector<MakerFillResult> PaperMakerFillModel::evaluate(
     const PaperMakerMarketEvent& event,
     PaperMakerFillMode mode,
     bool allow_partial_fills,
-    std::int64_t max_fill_qty_per_trade
+    std::int64_t max_fill_qty_per_trade,
+    std::uint64_t queue_min_rest_ns
 ) const {
     std::vector<MakerFillResult> fills;
     if (mode == PaperMakerFillMode::NoFill ||
@@ -178,6 +179,101 @@ std::vector<MakerFillResult> PaperMakerFillModel::evaluate(
                     quote.ask.price_tick,
                     event.ts_ns,
                     "book_cross_ask"
+                ));
+            }
+        }
+    }
+    if (mode == PaperMakerFillMode::QueueAware) {
+        if (!event.depth ||
+            event.ts_ns < quote.created_ts_ns ||
+            event.ts_ns - quote.created_ts_ns < queue_min_rest_ns) {
+            return fills;
+        }
+        if (quote.has_bid && event.depth->ask_count > 0 &&
+            event.depth->asks[0].price_tick > 0 &&
+            event.depth->asks[0].price_tick < quote.bid.price_tick) {
+            const auto qty = capped_qty(
+                remaining_for(quote, QuoteSide::Bid),
+                level_size_lots(event.depth->asks[0]),
+                allow_partial_fills,
+                max_fill_qty_per_trade
+            );
+            if (qty > 0) {
+                fills.push_back(make_fill(
+                    quote,
+                    QuoteSide::Bid,
+                    qty,
+                    quote.bid.price_tick,
+                    event.ts_ns,
+                    "queue_aware_cross_bid"
+                ));
+            }
+        }
+        if (quote.has_ask && event.depth->bid_count > 0 &&
+            event.depth->bids[0].price_tick > 0 &&
+            event.depth->bids[0].price_tick > quote.ask.price_tick) {
+            const auto qty = capped_qty(
+                remaining_for(quote, QuoteSide::Ask),
+                level_size_lots(event.depth->bids[0]),
+                allow_partial_fills,
+                max_fill_qty_per_trade
+            );
+            if (qty > 0) {
+                fills.push_back(make_fill(
+                    quote,
+                    QuoteSide::Ask,
+                    qty,
+                    quote.ask.price_tick,
+                    event.ts_ns,
+                    "queue_aware_cross_ask"
+                ));
+            }
+        }
+    }
+    if (mode == PaperMakerFillMode::MidCross) {
+        if (!event.depth || event.depth->bid_count == 0 ||
+            event.depth->ask_count == 0 ||
+            event.depth->bids[0].price_tick <= 0 ||
+            event.depth->asks[0].price_tick <= 0) {
+            return fills;
+        }
+        const auto mid_tick =
+            (event.depth->bids[0].price_tick +
+             event.depth->asks[0].price_tick) /
+            2;
+        if (quote.has_bid && mid_tick <= quote.bid.price_tick) {
+            const auto qty = capped_qty(
+                remaining_for(quote, QuoteSide::Bid),
+                std::max<std::int64_t>(1, level_size_lots(event.depth->asks[0])),
+                allow_partial_fills,
+                max_fill_qty_per_trade
+            );
+            if (qty > 0) {
+                fills.push_back(make_fill(
+                    quote,
+                    QuoteSide::Bid,
+                    qty,
+                    quote.bid.price_tick,
+                    event.ts_ns,
+                    "mid_cross_bid"
+                ));
+            }
+        }
+        if (quote.has_ask && mid_tick >= quote.ask.price_tick) {
+            const auto qty = capped_qty(
+                remaining_for(quote, QuoteSide::Ask),
+                std::max<std::int64_t>(1, level_size_lots(event.depth->bids[0])),
+                allow_partial_fills,
+                max_fill_qty_per_trade
+            );
+            if (qty > 0) {
+                fills.push_back(make_fill(
+                    quote,
+                    QuoteSide::Ask,
+                    qty,
+                    quote.ask.price_tick,
+                    event.ts_ns,
+                    "mid_cross_ask"
                 ));
             }
         }

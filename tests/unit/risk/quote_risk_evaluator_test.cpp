@@ -237,6 +237,148 @@ void QuoteRiskEvaluator_RejectsLowEdgeToFair() {
     expect_decision(input(&q, &d, &p), QuoteRiskDecisionType::RejectLowEdgeToFair);
 }
 
+void QuoteRiskEvaluator_RejectsTightBookSpread() {
+    const auto q = quote();
+    auto d = depth();
+    auto p = policy();
+    p.min_book_spread_tick = 25'000;
+    expect_decision(input(&q, &d, &p), QuoteRiskDecisionType::RejectSpreadTooTight);
+}
+
+void QuoteRiskEvaluator_RejectsWideBookSpread() {
+    const auto q = quote();
+    auto d = depth();
+    auto p = policy();
+    p.max_book_spread_tick = 10'000;
+    expect_decision(input(&q, &d, &p), QuoteRiskDecisionType::RejectSpreadTooWide);
+}
+
+void QuoteRiskEvaluator_RejectsQuoteCrossingFairValue() {
+    auto q = quote();
+    const auto d = depth();
+    auto p = policy();
+    q.ask.price_tick = q.fair_value_tick;
+    expect_decision(
+        input(&q, &d, &p),
+        QuoteRiskDecisionType::RejectFairValueDeviation
+    );
+}
+
+void QuoteRiskEvaluator_RejectsFairValueDeviationBps() {
+    auto q = quote();
+    const auto d = depth();
+    auto p = policy();
+    p.max_quote_fair_deviation_bps = 100;
+    q.bid.price_tick = 490'000;
+    q.bid.edge_to_fair_tick = 10'000;
+    q.ask.price_tick = 510'000;
+    q.ask.edge_to_fair_tick = 10'000;
+    expect_decision(
+        input(&q, &d, &p),
+        QuoteRiskDecisionType::RejectFairValueDeviation
+    );
+}
+
+void QuoteRiskEvaluator_RejectsFairValueDeviationTick() {
+    auto q = quote();
+    const auto d = depth();
+    auto p = policy();
+    p.max_quote_fair_deviation_tick = 5'000;
+    q.bid.price_tick = 490'000;
+    q.bid.edge_to_fair_tick = 10'000;
+    q.ask.price_tick = 510'000;
+    q.ask.edge_to_fair_tick = 10'000;
+    expect_decision(
+        input(&q, &d, &p),
+        QuoteRiskDecisionType::RejectFairValueDeviation
+    );
+}
+
+void QuoteRiskEvaluator_AllowsRiskReducingAskThroughFairValue() {
+    auto q = quote();
+    const auto d = depth();
+    auto p = policy();
+    p.min_edge_to_fair_tick = 10'000;
+    p.max_quote_fair_deviation_bps = 100;
+    q.has_bid = false;
+    q.target_position_lots = 0;
+    q.current_position_lots = 10;
+    q.ask.price_tick = 450'000;
+    q.ask.edge_to_fair_tick = -50'000;
+    q.ask.risk_reducing = true;
+    q.ask.allow_fair_deviation_exemption = true;
+    q.ask.allow_spread_exemption = true;
+    auto in = input(&q, &d, &p);
+    in.current_position_lots = 10;
+    expect_decision(in, QuoteRiskDecisionType::Approve);
+}
+
+void QuoteRiskEvaluator_AllowsReduceOnlyAskThroughTightSpread() {
+    auto q = quote(QuoteIntentType::PassiveUnwind);
+    auto d = depth();
+    auto p = policy();
+    p.min_book_spread_tick = 25'000;
+    q.has_bid = false;
+    q.target_position_lots = 0;
+    q.current_position_lots = 10;
+    q.ask.quantity_lots = 10;
+    q.ask.price_tick = 505'000;
+    q.ask.risk_reducing = true;
+    q.ask.allow_fair_deviation_exemption = true;
+    q.ask.allow_spread_exemption = true;
+    auto in = input(&q, &d, &p);
+    in.current_position_lots = 10;
+    expect_decision(in, QuoteRiskDecisionType::Approve);
+}
+
+void QuoteRiskEvaluator_MixedQuoteStillRejectsTightSpreadForOpeningBid() {
+    auto q = quote();
+    auto d = depth();
+    auto p = policy();
+    p.min_book_spread_tick = 25'000;
+    q.target_position_lots = 0;
+    q.current_position_lots = 10;
+    q.ask.risk_reducing = true;
+    q.ask.allow_fair_deviation_exemption = true;
+    q.ask.allow_spread_exemption = true;
+    auto in = input(&q, &d, &p);
+    in.current_position_lots = 10;
+    expect_decision(in, QuoteRiskDecisionType::RejectSpreadTooTight);
+}
+
+void QuoteRiskEvaluator_AllowsReduceOnlyAskAboveMaxQuoteQty() {
+    auto q = quote(QuoteIntentType::PassiveUnwind);
+    const auto d = depth();
+    auto p = policy();
+    p.max_quote_qty_lots = 5;
+    q.has_bid = false;
+    q.target_position_lots = 0;
+    q.current_position_lots = 10;
+    q.ask.quantity_lots = 10;
+    q.ask.risk_reducing = true;
+    q.ask.allow_fair_deviation_exemption = true;
+    q.ask.allow_spread_exemption = true;
+    auto in = input(&q, &d, &p);
+    in.current_position_lots = 10;
+    expect_decision(in, QuoteRiskDecisionType::Approve);
+}
+
+void QuoteRiskEvaluator_RejectsReduceOnlyAskAboveReducibleInventory() {
+    auto q = quote(QuoteIntentType::PassiveUnwind);
+    const auto d = depth();
+    auto p = policy();
+    q.has_bid = false;
+    q.target_position_lots = 0;
+    q.current_position_lots = 10;
+    q.ask.quantity_lots = 11;
+    q.ask.risk_reducing = true;
+    q.ask.allow_fair_deviation_exemption = true;
+    q.ask.allow_spread_exemption = true;
+    auto in = input(&q, &d, &p);
+    in.current_position_lots = 10;
+    expect_decision(in, QuoteRiskDecisionType::RejectInvalidQuote);
+}
+
 void QuoteRiskEvaluator_RejectsUnsupportedSideIfConfigured() {
     const auto q = quote();
     const auto d = depth();
@@ -293,6 +435,16 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {"QuoteRiskEvaluator_RejectsDuplicateQuote", &QuoteRiskEvaluator_RejectsDuplicateQuote},
         {"QuoteRiskEvaluator_RejectsTooFrequentReplace", &QuoteRiskEvaluator_RejectsTooFrequentReplace},
         {"QuoteRiskEvaluator_RejectsLowEdgeToFair", &QuoteRiskEvaluator_RejectsLowEdgeToFair},
+        {"QuoteRiskEvaluator_RejectsTightBookSpread", &QuoteRiskEvaluator_RejectsTightBookSpread},
+        {"QuoteRiskEvaluator_RejectsWideBookSpread", &QuoteRiskEvaluator_RejectsWideBookSpread},
+        {"QuoteRiskEvaluator_RejectsQuoteCrossingFairValue", &QuoteRiskEvaluator_RejectsQuoteCrossingFairValue},
+        {"QuoteRiskEvaluator_RejectsFairValueDeviationBps", &QuoteRiskEvaluator_RejectsFairValueDeviationBps},
+        {"QuoteRiskEvaluator_RejectsFairValueDeviationTick", &QuoteRiskEvaluator_RejectsFairValueDeviationTick},
+        {"QuoteRiskEvaluator_AllowsRiskReducingAskThroughFairValue", &QuoteRiskEvaluator_AllowsRiskReducingAskThroughFairValue},
+        {"QuoteRiskEvaluator_AllowsReduceOnlyAskThroughTightSpread", &QuoteRiskEvaluator_AllowsReduceOnlyAskThroughTightSpread},
+        {"QuoteRiskEvaluator_MixedQuoteStillRejectsTightSpreadForOpeningBid", &QuoteRiskEvaluator_MixedQuoteStillRejectsTightSpreadForOpeningBid},
+        {"QuoteRiskEvaluator_AllowsReduceOnlyAskAboveMaxQuoteQty", &QuoteRiskEvaluator_AllowsReduceOnlyAskAboveMaxQuoteQty},
+        {"QuoteRiskEvaluator_RejectsReduceOnlyAskAboveReducibleInventory", &QuoteRiskEvaluator_RejectsReduceOnlyAskAboveReducibleInventory},
         {"QuoteRiskEvaluator_RejectsUnsupportedSideIfConfigured", &QuoteRiskEvaluator_RejectsUnsupportedSideIfConfigured},
         {"QuoteRiskEvaluator_KillSwitchRejectsAll", &QuoteRiskEvaluator_KillSwitchRejectsAll},
         {"ApprovedQuote_PreservesQuoteFields", &ApprovedQuote_PreservesQuoteFields},

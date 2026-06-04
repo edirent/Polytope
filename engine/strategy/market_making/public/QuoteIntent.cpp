@@ -13,6 +13,12 @@ std::uint64_t compute_quote_leg_hash(const QuoteLeg& leg) noexcept {
     hash = fnv1a_mix(hash, static_cast<std::uint64_t>(leg.quantity_lots));
     hash = fnv1a_mix(hash, static_cast<std::uint64_t>(leg.fair_value_tick));
     hash = fnv1a_mix(hash, static_cast<std::uint64_t>(leg.edge_to_fair_tick));
+    hash = fnv1a_mix(hash, leg.risk_reducing ? 1ULL : 0ULL);
+    hash = fnv1a_mix(
+        hash,
+        leg.allow_fair_deviation_exemption ? 1ULL : 0ULL
+    );
+    hash = fnv1a_mix(hash, leg.allow_spread_exemption ? 1ULL : 0ULL);
     hash = fnv1a_mix(hash, leg.book_version);
     hash = fnv1a_mix(hash, leg.snapshot_version_hash);
     return hash;
@@ -28,6 +34,7 @@ std::uint64_t compute_quote_intent_hash(const QuoteIntent& intent) noexcept {
     hash = stable_hash_string(hash, intent.asset_id);
     hash = fnv1a_mix(hash, intent.market_index);
     hash = fnv1a_mix(hash, intent.asset_index);
+    hash = fnv1a_mix(hash, static_cast<std::uint8_t>(intent.risk_mode));
     hash = fnv1a_mix(hash, intent.has_bid ? 1ULL : 0ULL);
     hash = fnv1a_mix(hash, intent.has_ask ? 1ULL : 0ULL);
     if (intent.has_bid) {
@@ -40,6 +47,12 @@ std::uint64_t compute_quote_intent_hash(const QuoteIntent& intent) noexcept {
     hash = fnv1a_mix(hash, static_cast<std::uint64_t>(intent.half_spread_tick));
     hash =
         fnv1a_mix(hash, static_cast<std::uint64_t>(intent.inventory_skew_tick));
+    hash =
+        fnv1a_mix(hash, static_cast<std::uint64_t>(intent.target_position_lots));
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(intent.current_position_lots)
+    );
     hash = fnv1a_mix(hash, intent.created_ts_ns);
     hash = fnv1a_mix(hash, intent.expires_at_ns);
     hash = fnv1a_mix(hash, intent.snapshot_version_hash);

@@ -1,5 +1,6 @@
 import { executionPage } from "./execution";
 import { latencyPage } from "./latency";
+import { marketMakerPage } from "./marketMaker";
 import { marketsPage } from "./markets";
 import { overviewPage } from "./overview";
 import { pnlPage } from "./pnl";
@@ -14,6 +15,7 @@ export const pages: PageDefinition[] = [
   signalsPage,
   riskPage,
   executionPage,
+  marketMakerPage,
   pnlPage,
   regimePage,
   latencyPage

@@ -3,10 +3,13 @@
 .env.*
 !.env.example
 config/credentials.local.env
+config/credentials.local.env.bak.*
 
 logs/
 *.log
 runs/
+.local/
+secp256k1/
 
 build/
 build-*/

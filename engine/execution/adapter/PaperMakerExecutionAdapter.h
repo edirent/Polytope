@@ -12,6 +12,7 @@ struct PaperMakerExecutionConfig {
     PaperMakerFillMode fill_mode = PaperMakerFillMode::Conservative;
     bool allow_partial_fills = true;
     std::int64_t max_fill_qty_per_trade = 0;
+    std::uint64_t queue_min_rest_ns = 250'000'000ULL;
 };
 
 class PaperMakerExecutionAdapter {

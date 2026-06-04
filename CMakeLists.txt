@@ -52,6 +52,25 @@ add_subdirectory(engine/risk)
 target_link_libraries(verify_market_making_workflow PRIVATE engine_risk)
 add_subdirectory(engine/execution)
 target_link_libraries(verify_market_making_workflow PRIVATE engine_execution)
+
+add_executable(market_making_crucible_tests
+    tests/unit/market_making/market_making_crucible_test.cpp
+)
+target_link_libraries(market_making_crucible_tests PRIVATE
+    market_making_tools
+    engine_risk
+    engine_execution
+)
+
+foreach(test_case
+    FuzzerRejectsCrossedMissingAndNegativeBooks
+    JitterArenaToxicTakerBeatsCancelAndRealizesLoss
+    AvalancheSkewsQuotesAndRiskCutsBuyChannel
+    SignatureLatencyP99Under100us
+)
+    add_test(NAME ${test_case} COMMAND market_making_crucible_tests ${test_case})
+endforeach()
+
 add_subdirectory(engine/paper)
 add_subdirectory(engine/decision_fastpath)
 add_subdirectory(apps/paper_backend)
@@ -735,6 +754,15 @@ foreach(test_case
     QuoteRiskEvaluator_RejectsDuplicateQuote
     QuoteRiskEvaluator_RejectsTooFrequentReplace
     QuoteRiskEvaluator_RejectsLowEdgeToFair
+    QuoteRiskEvaluator_RejectsTightBookSpread
+    QuoteRiskEvaluator_RejectsWideBookSpread
+    QuoteRiskEvaluator_RejectsQuoteCrossingFairValue
+    QuoteRiskEvaluator_RejectsFairValueDeviationBps
+    QuoteRiskEvaluator_AllowsRiskReducingAskThroughFairValue
+    QuoteRiskEvaluator_AllowsReduceOnlyAskThroughTightSpread
+    QuoteRiskEvaluator_MixedQuoteStillRejectsTightSpreadForOpeningBid
+    QuoteRiskEvaluator_AllowsReduceOnlyAskAboveMaxQuoteQty
+    QuoteRiskEvaluator_RejectsReduceOnlyAskAboveReducibleInventory
     QuoteRiskEvaluator_RejectsUnsupportedSideIfConfigured
     QuoteRiskEvaluator_KillSwitchRejectsAll
     ApprovedQuote_PreservesQuoteFields
@@ -3215,6 +3243,101 @@ target_link_libraries(probe_market_making_e2e_latency PRIVATE
     engine_risk
     engine_execution
     engine_paper
+)
+
+add_executable(probe_polymarket_auth_read
+    tools/probe_polymarket_auth_read.cpp
+)
+
+target_include_directories(probe_polymarket_auth_read PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(probe_polymarket_auth_read PRIVATE
+    engine_execution
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Threads::Threads
+)
+
+add_executable(profile_live_order_signer
+    tools/profile_live_order_signer.cpp
+)
+
+target_include_directories(profile_live_order_signer PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+find_path(SECP256K1_INCLUDE_DIR secp256k1.h)
+find_library(SECP256K1_LIBRARY secp256k1)
+if (SECP256K1_INCLUDE_DIR AND SECP256K1_LIBRARY)
+    target_compile_definitions(profile_live_order_signer PRIVATE
+        HAVE_LIBSECP256K1=1
+    )
+    target_include_directories(profile_live_order_signer PRIVATE
+        ${SECP256K1_INCLUDE_DIR}
+    )
+    target_link_libraries(profile_live_order_signer PRIVATE
+        ${SECP256K1_LIBRARY}
+    )
+else()
+    target_compile_definitions(profile_live_order_signer PRIVATE
+        HAVE_LIBSECP256K1=0
+    )
+endif()
+
+target_link_libraries(profile_live_order_signer PRIVATE
+    engine_execution
+    OpenSSL::Crypto
+)
+
+add_executable(run_market_making_loopback_replay
+    tools/run_market_making_loopback_replay.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/source_runtime/WebSocketClient.cpp
+)
+
+target_include_directories(run_market_making_loopback_replay PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(run_market_making_loopback_replay PRIVATE
+    engine_decode
+    engine_state
+    market_making_tools
+    engine_risk
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Threads::Threads
+)
+
+add_executable(run_market_maker_dashboard_live
+    tools/run_market_maker_dashboard_live.cpp
+    engine/feed/raw_ingest/RawPacket.cpp
+    engine/feed/source_runtime/WebSocketClient.cpp
+)
+
+target_include_directories(run_market_maker_dashboard_live PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(run_market_maker_dashboard_live PRIVATE
+    engine_decode
+    engine_state
+    market_making_tools
+    engine_risk
+    engine_execution
+    engine_paper
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Threads::Threads
 )
 
 add_executable(verify_canonical_decision_workflow

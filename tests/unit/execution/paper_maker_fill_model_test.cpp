@@ -200,6 +200,50 @@ void PaperMaker_BookCrossAskFillsWhenAskCrossesBid() {
     expect_equal(fills[0].filled_qty_lots, 10LL, "qty");
 }
 
+void PaperMaker_QueueAwareRequiresRestingTime() {
+    PaperMakerFillModel model;
+    auto resting_quote = quote();
+    resting_quote.expires_at_ns = 1'000'000'000;
+    const auto depth = depth_view(490'000, 494'000);
+    PaperMakerMarketEvent event;
+    event.ts_ns = resting_quote.created_ts_ns + 100'000'000;
+    event.asset_index = 7;
+    event.depth = &depth;
+
+    const auto fills = model.evaluate(
+        resting_quote,
+        event,
+        PaperMakerFillMode::QueueAware,
+        true,
+        0,
+        250'000'000
+    );
+    expect_true(fills.empty(), "no fill before min rest");
+}
+
+void PaperMaker_QueueAwareFillsOnlyOnStrictCrossAfterResting() {
+    PaperMakerFillModel model;
+    auto resting_quote = quote();
+    resting_quote.expires_at_ns = 1'000'000'000;
+    const auto depth = depth_view(490'000, 494'000);
+    PaperMakerMarketEvent event;
+    event.ts_ns = resting_quote.created_ts_ns + 300'000'000;
+    event.asset_index = 7;
+    event.depth = &depth;
+
+    const auto fills = model.evaluate(
+        resting_quote,
+        event,
+        PaperMakerFillMode::QueueAware,
+        true,
+        0,
+        250'000'000
+    );
+    expect_equal(fills.size(), static_cast<std::size_t>(1), "fill count");
+    expect_equal(fills[0].side, QuoteSide::Bid, "side");
+    expect_equal(fills[0].reason, std::string{"queue_aware_cross_bid"}, "reason");
+}
+
 void PaperMaker_DoesNotFillExpiredQuote() {
     PaperMakerFillModel model;
     auto expired = quote();
@@ -222,6 +266,8 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {"PaperMaker_ConservativeDoesNotFillWithoutTradeEvidence", &PaperMaker_ConservativeDoesNotFillWithoutTradeEvidence},
         {"PaperMaker_BookCrossBidFillsWhenBidCrossesAsk", &PaperMaker_BookCrossBidFillsWhenBidCrossesAsk},
         {"PaperMaker_BookCrossAskFillsWhenAskCrossesBid", &PaperMaker_BookCrossAskFillsWhenAskCrossesBid},
+        {"PaperMaker_QueueAwareRequiresRestingTime", &PaperMaker_QueueAwareRequiresRestingTime},
+        {"PaperMaker_QueueAwareFillsOnlyOnStrictCrossAfterResting", &PaperMaker_QueueAwareFillsOnlyOnStrictCrossAfterResting},
         {"PaperMaker_DoesNotFillExpiredQuote", &PaperMaker_DoesNotFillExpiredQuote},
     };
     return test_map;

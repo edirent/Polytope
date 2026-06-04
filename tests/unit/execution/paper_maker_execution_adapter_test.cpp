@@ -182,6 +182,27 @@ void PaperMaker_CancelRemovesQuote() {
     expect_true(reports.empty(), "cancelled no fills");
 }
 
+void PaperMaker_CancelThenRepostsSameQuote() {
+    PaperMakerExecutionAdapter adapter(PaperMakerFillMode::Conservative);
+    const auto quote = bid_only_quote();
+
+    const auto first = adapter.submit_approved_quote(quote, 1'100);
+    expect_true(first.ok, "first submit");
+    expect_true(
+        adapter.cancel_quote_group(quote.quote_group_id, 1'200).ok,
+        "cancel"
+    );
+
+    const auto repost = adapter.submit_approved_quote(quote, 1'300);
+    expect_true(repost.ok, "repost");
+    expect_true(!repost.duplicate_ignored, "not duplicate after cancel");
+    expect_equal(
+        adapter.quote_book().active_quote_count(),
+        static_cast<std::size_t>(1),
+        "active"
+    );
+}
+
 void PaperMaker_ReplaceCancelsOldAndPostsNew() {
     PaperMakerExecutionAdapter adapter(PaperMakerFillMode::BookCross);
     const auto first = approved_quote(301, 401);
@@ -216,6 +237,7 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {"PaperMaker_EmitsMakerExecutionReport", &PaperMaker_EmitsMakerExecutionReport},
         {"PaperMaker_DuplicateApprovedQuoteIgnored", &PaperMaker_DuplicateApprovedQuoteIgnored},
         {"PaperMaker_CancelRemovesQuote", &PaperMaker_CancelRemovesQuote},
+        {"PaperMaker_CancelThenRepostsSameQuote", &PaperMaker_CancelThenRepostsSameQuote},
         {"PaperMaker_ReplaceCancelsOldAndPostsNew", &PaperMaker_ReplaceCancelsOldAndPostsNew},
     };
     return test_map;

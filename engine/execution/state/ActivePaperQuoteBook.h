@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 namespace trading_engine::execution {
@@ -48,7 +47,8 @@ private:
 
     std::unordered_map<std::uint64_t, PaperMakerQuote> quotes_by_id_;
     std::unordered_map<std::uint64_t, std::uint64_t> quote_id_by_group_;
-    std::unordered_set<std::uint64_t> seen_idempotency_hashes_;
+    std::unordered_map<std::uint64_t, std::uint64_t>
+        quote_id_by_idempotency_hash_;
 
     std::size_t duplicate_ignored_count_ = 0;
     std::size_t cancelled_quote_count_ = 0;

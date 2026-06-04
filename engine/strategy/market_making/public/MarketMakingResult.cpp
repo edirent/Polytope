@@ -12,6 +12,26 @@ std::uint64_t compute_market_making_result_hash(
     hash = fnv1a_mix(hash, result.cancels_emitted);
     hash = fnv1a_mix(hash, result.replacements);
     hash = fnv1a_mix(hash, result.rejected_no_quote);
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(result.no_quote_reason)
+    );
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(result.fair_value_quality)
+    );
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(result.fair_confidence_bps)
+    );
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(result.fair_book_spread_tick)
+    );
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(result.fair_value_tick)
+    );
     hash = fnv1a_mix(hash, result.active_quotes);
     hash = fnv1a_mix(hash, result.approved_quotes);
     hash = fnv1a_mix(hash, result.rejected_quotes);

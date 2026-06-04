@@ -24,6 +24,7 @@ public:
     );
 
     [[nodiscard]] const QuoteBook& quote_book() const noexcept;
+    bool remove_active_quote(std::uint32_t asset_index);
 
 private:
     MarketMakingConfig config_;

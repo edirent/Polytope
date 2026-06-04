@@ -91,6 +91,74 @@ void MarketMakingWorkflow_CancelsOnBadBook() {
     expect_true(engine.quote_book().find(7) == nullptr, "removed");
 }
 
+void MarketMakingWorkflow_ReportsNoQuoteReason() {
+    MarketMakingEngine engine(config());
+    auto depth = tools::make_depth_view(600'000, 500'000, 20.0, 20.0, 1, 100);
+    const auto result = engine.on_market_update(input(depth, 20, 100));
+    expect_equal(result.rejected_no_quote, 1ULL, "rejected");
+    expect_equal(
+        result.no_quote_reason,
+        NoQuoteReason::FairCrossedBook,
+        "reason"
+    );
+    expect_equal(
+        result.fair_value_quality,
+        FairValueQuality::CrossedBook,
+        "fair quality"
+    );
+}
+
+void MarketMakingWorkflow_ReportsExternalStaleNoQuoteReason() {
+    auto cfg = config();
+    cfg.external_fair_weight_bps = 10'000;
+    cfg.require_external_fair_for_opening_quotes = true;
+    MarketMakingEngine engine(cfg);
+    auto depth = tools::make_depth_view(490'000, 510'000, 20.0, 20.0, 1, 100);
+    const auto result = engine.on_market_update(input(depth, 20, 100));
+    expect_equal(result.rejected_no_quote, 1ULL, "rejected");
+    expect_equal(
+        result.no_quote_reason,
+        NoQuoteReason::FairExternalStale,
+        "reason"
+    );
+    expect_equal(
+        result.fair_value_quality,
+        FairValueQuality::ExternalStale,
+        "fair quality"
+    );
+}
+
+void MarketMakingWorkflow_ExternalRemovalAllowsRequote() {
+    MarketMakingEngine engine(config());
+    auto depth = tools::make_depth_view(490'000, 510'000, 20.0, 20.0, 1, 100);
+    (void)engine.on_market_update(input(depth, 20, 100));
+    expect_true(engine.remove_active_quote(7), "external remove");
+    expect_true(engine.quote_book().find(7) == nullptr, "removed");
+
+    const auto result = engine.on_market_update(input(depth, 25, 200));
+    expect_equal(result.quotes_emitted, 1ULL, "requote");
+    expect_true(engine.quote_book().find(7) != nullptr, "active again");
+}
+
+void MarketMakingWorkflow_DynamicHalfSpreadOverridesStaticBase() {
+    auto cfg = config();
+    cfg.min_half_spread_tick = 25'000;
+    cfg.latency_buffer_tick = 500;
+    cfg.max_inventory_skew_tick = 0;
+    MarketMakingEngine engine(cfg);
+    auto depth = tools::make_depth_view(490'000, 510'000, 20.0, 20.0, 1, 100);
+    auto in = input(depth, 20, 100);
+    in.dynamic_half_spread_tick = 13'309;
+
+    const auto result = engine.on_market_update(in);
+    expect_equal(result.quotes_emitted, 1ULL, "quotes");
+    expect_equal(
+        result.quotes[0].half_spread_tick,
+        13'309LL,
+        "dynamic half spread"
+    );
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -98,7 +166,11 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {"MarketMakingWorkflow_PostsQuote", &MarketMakingWorkflow_PostsQuote},
         {"MarketMakingWorkflow_CancelsOnFairMove", &MarketMakingWorkflow_CancelsOnFairMove},
         {"MarketMakingWorkflow_InventorySkewChangesQuote", &MarketMakingWorkflow_InventorySkewChangesQuote},
-        {"MarketMakingWorkflow_CancelsOnBadBook", &MarketMakingWorkflow_CancelsOnBadBook}
+        {"MarketMakingWorkflow_CancelsOnBadBook", &MarketMakingWorkflow_CancelsOnBadBook},
+        {"MarketMakingWorkflow_ReportsNoQuoteReason", &MarketMakingWorkflow_ReportsNoQuoteReason},
+        {"MarketMakingWorkflow_ReportsExternalStaleNoQuoteReason", &MarketMakingWorkflow_ReportsExternalStaleNoQuoteReason},
+        {"MarketMakingWorkflow_ExternalRemovalAllowsRequote", &MarketMakingWorkflow_ExternalRemovalAllowsRequote},
+        {"MarketMakingWorkflow_DynamicHalfSpreadOverridesStaticBase", &MarketMakingWorkflow_DynamicHalfSpreadOverridesStaticBase}
     };
     return map;
 }

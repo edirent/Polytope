@@ -4,3 +4,76 @@ markets:
     enabled: true
     symbols: []
     quote_currency: USD
+
+  - name: btc_macro_target_next
+    venue: polymarket
+    enabled: true
+    strategy: market_maker
+    market_family: crypto_price_target
+    event_slug: bitcoin-above-on-june-5-2026
+    primary_outcome: "Yes"
+    slug: bitcoin-above-64k-on-june-5-2026
+    question: "Will the price of Bitcoin be above $64,000 on June 5?"
+    condition_id: "0x34ecf20e4baddd4062279778e96ce898d91a845dd1b60289aaaf05cdf7d64a38"
+    end_time_utc: "2026-06-05T16:00:00Z"
+    resolution:
+      source: binance_btcusdt_1m_close
+      payoff_model: digital_close_above
+      strike: 64000
+      observation_time_et: "2026-06-05T12:00:00-04:00"
+      asset: BTC
+      quote: USDT
+    orderbook:
+      min_tick_size: 0.001
+      min_order_size_lots: 5
+      maker_base_fee_bps: 1000
+      taker_base_fee_bps: 1000
+    tokens:
+      "yes":
+        outcome: "Yes"
+        asset_id: "12563185783471240613395907789703187646629710430787815068142892089727251994561"
+      "no":
+        outcome: "No"
+        asset_id: "12608433391396331155306434267062131916555683778362796330808483570875643412554"
+    oracle:
+      primary: binance_btcusdt
+      spot_ws: "wss://data-stream.binance.vision/ws/btcusdt@trade"
+      volatility_source: realized_vol_fallback
+    risk:
+      assumed_latency_ms: 2
+      quote_size_lots: 5
+      target_position_lots: 25
+      max_inventory_lots: 50
+      pure_taker_mode: true
+      as_model_enabled: false
+      external_fair_weight_bps: 10000
+      require_external_fair: true
+      exclude_5m_updown: true
+      taker_max_entry_mid_slippage_tick: 1000
+      book_quarantine_ms: 75
+      queue_min_rest_ms: 750
+      momentum_bid_shutoff:
+        enabled: true
+        move_500ms_bps: 1.0
+        move_1s_bps: 2.0
+      locked_book_taker_hunter:
+        enabled: true
+        min_edge_tick: 10000
+        cooldown_ms: 250
+        size_lots: 5
+      lead_lag_sniping:
+        enabled: true
+        min_move_500ms_bps: 0.0
+        min_stale_edge_tick: 10000
+        cooldown_ms: 250
+        taker_size_lots: 5
+    paper_seed:
+      complete_set: true
+      initial_position_lots: 25
+      initial_position_price: 0.376
+      initial_complement_position_lots: 25
+      initial_complement_position_price: 0.624
+
+excluded_markets:
+  - reason: toxic_intraday_updown
+    slug_pattern: "btc-updown-5m-*"

@@ -59,7 +59,8 @@ std::vector<MakerExecutionReport> PaperMakerExecutionAdapter::on_market_event(
             event,
             config_.fill_mode,
             config_.allow_partial_fills,
-            config_.max_fill_qty_per_trade
+            config_.max_fill_qty_per_trade,
+            config_.queue_min_rest_ns
         );
         for (const auto& fill : fills) {
             const auto remaining_before =

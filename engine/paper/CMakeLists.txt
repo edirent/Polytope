@@ -200,6 +200,7 @@ foreach(test_case
     PaperLedger_MakerBidFillDecreasesCash
     PaperLedger_MakerAskFillRealizesPnl
     PaperLedger_DuplicateMakerReportIgnored
+    PaperLedger_TakerBuyFillAppliesWithoutMakerCount
 )
     add_test(NAME ${test_case} COMMAND paper_ledger_tests ${test_case})
 endforeach()

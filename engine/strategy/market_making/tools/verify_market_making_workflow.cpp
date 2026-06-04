@@ -213,6 +213,10 @@ const char* fill_mode_name(PaperMakerFillMode mode) {
             return "Conservative";
         case PaperMakerFillMode::BookCross:
             return "BookCross";
+        case PaperMakerFillMode::MidCross:
+            return "MidCross";
+        case PaperMakerFillMode::QueueAware:
+            return "QueueAware";
     }
     return "Unknown";
 }

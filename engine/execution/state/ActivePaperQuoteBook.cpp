@@ -52,13 +52,20 @@ bool ActivePaperQuoteBook::add_or_replace(
         return false;
     }
     if (quote.idempotency_hash != 0 &&
-        seen_idempotency_hashes_.contains(quote.idempotency_hash)) {
+        quote_id_by_idempotency_hash_.contains(quote.idempotency_hash)) {
         ++duplicate_ignored_count_;
         return false;
     }
 
     const auto existing = quote_id_by_group_.find(quote.quote_group_id);
     if (existing != quote_id_by_group_.end()) {
+        const auto old_quote = quotes_by_id_.find(existing->second);
+        if (old_quote != quotes_by_id_.end() &&
+            old_quote->second.idempotency_hash != 0) {
+            quote_id_by_idempotency_hash_.erase(
+                old_quote->second.idempotency_hash
+            );
+        }
         quotes_by_id_.erase(existing->second);
         quote_id_by_group_.erase(existing);
         ++replaced_quote_count_;
@@ -71,7 +78,8 @@ bool ActivePaperQuoteBook::add_or_replace(
     }
     quote_id_by_group_[paper_quote.quote_group_id] = paper_quote.quote_id;
     if (paper_quote.idempotency_hash != 0) {
-        seen_idempotency_hashes_.insert(paper_quote.idempotency_hash);
+        quote_id_by_idempotency_hash_[paper_quote.idempotency_hash] =
+            paper_quote.quote_id;
     }
     quotes_by_id_[paper_quote.quote_id] = paper_quote;
     return true;
@@ -87,6 +95,10 @@ bool ActivePaperQuoteBook::cancel_by_group(
     }
     const auto quote_id = it->second;
     quote_id_by_group_.erase(it);
+    const auto quote = quotes_by_id_.find(quote_id);
+    if (quote != quotes_by_id_.end() && quote->second.idempotency_hash != 0) {
+        quote_id_by_idempotency_hash_.erase(quote->second.idempotency_hash);
+    }
     quotes_by_id_.erase(quote_id);
     ++cancelled_quote_count_;
     return true;
@@ -101,6 +113,9 @@ bool ActivePaperQuoteBook::cancel_by_quote_id(
         return false;
     }
     quote_id_by_group_.erase(it->second.quote_group_id);
+    if (it->second.idempotency_hash != 0) {
+        quote_id_by_idempotency_hash_.erase(it->second.idempotency_hash);
+    }
     quotes_by_id_.erase(it);
     ++cancelled_quote_count_;
     return true;
@@ -120,6 +135,9 @@ void ActivePaperQuoteBook::expire_old(std::uint64_t now_ns) {
             continue;
         }
         quote_id_by_group_.erase(it->second.quote_group_id);
+        if (it->second.idempotency_hash != 0) {
+            quote_id_by_idempotency_hash_.erase(it->second.idempotency_hash);
+        }
         quotes_by_id_.erase(it);
         ++expired_quote_count_;
     }
@@ -151,6 +169,9 @@ bool ActivePaperQuoteBook::apply_fill(
                                              : MakerQuoteStatus::PartiallyFilled;
     if (quote.status == MakerQuoteStatus::Filled) {
         quote_id_by_group_.erase(quote.quote_group_id);
+        if (quote.idempotency_hash != 0) {
+            quote_id_by_idempotency_hash_.erase(quote.idempotency_hash);
+        }
         quotes_by_id_.erase(it);
     }
     return true;

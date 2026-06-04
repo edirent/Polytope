@@ -1,5 +1,6 @@
 add_library(engine_strategy_market_making STATIC
     core/MarketMakingEngine.cpp
+    fair/DigitalOptionFairModel.cpp
     fair/FairValueModel.cpp
     metrics/MarketMakingMetrics.cpp
     public/CancelQuoteIntent.cpp
@@ -84,7 +85,16 @@ target_link_libraries(market_making_fair_value_tests PRIVATE
 )
 
 foreach(test_case
+    DigitalOptionFairModel_PricesAtmDigitalBelowHalf
+    DigitalOptionFairModel_ExpiresToIntrinsic
+    AvellanedaStoikovModel_WidensOnVolatilityMultiplier
     FairValueModel_MidFairValue
+    FairValueModel_MicropriceMovesTowardThinAsk
+    FairValueModel_BlendsComplementImpliedFair
+    FairValueModel_ExternalFairOverridesBookFair
+    FairValueModel_ExternalFairBypassesBookLowConfidence
+    FairValueModel_RejectsMissingRequiredExternalFair
+    FairValueModel_RejectsWideSpread
     FairValueModel_RejectsMissingBidAsk
     FairValueModel_RejectsCrossedBook
     FairValueModel_RejectsStaleBook
@@ -102,8 +112,19 @@ target_link_libraries(market_making_quote_model_tests PRIVATE
 foreach(test_case
     SpreadModel_UsesMaxBuffers
     InventorySkew_LongInventoryShiftsQuotesDown
+    InventorySkew_UsesTargetInventoryAsNeutral
+    InventorySkew_TteAmplifiesNearExpiry
+    InventorySkew_NonlinearPressureAcceleratesPastThreshold
     QuoteSizeModel_ReducesBidNearInventoryLimit
     QuoteEngine_BuildsBidAsk
+    QuoteEngine_DisablesBidSide
+    QuoteEngine_AllowsReducingAskBelowFair
+    QuoteEngine_PassiveReduceAskJoinsBestAsk
+    QuoteEngine_UrgentReduceAskMovesToMidpoint
+    QuoteEngine_ReduceOnlyQtyCappedToTarget
+    QuoteEngine_ClampsOpeningAskToCorrectSideOfFair
+    QuoteEngine_RequiresExternalFairForOpeningQuotes
+    QuoteEngine_DropsOpeningBidWhenReducingAskWouldSelfCross
     QuoteEngine_RejectsCrossedQuote
 )
     add_test(NAME ${test_case} COMMAND market_making_quote_model_tests ${test_case})
@@ -118,6 +139,8 @@ target_link_libraries(market_making_refresh_tests PRIVATE
 
 foreach(test_case
     QuoteRefreshPolicy_ReplacesOnFairMove
+    QuoteRefreshPolicy_DoesNotReplaceSameShapeWithNewHash
+    QuoteRefreshPolicy_HoldsChangedQuoteInsideTwoMsCooldown
     QuoteRefreshPolicy_CancelsOnStaleBook
     QuoteRefreshPolicy_CancelsOnTtl
 )
@@ -152,6 +175,10 @@ foreach(test_case
     MarketMakingWorkflow_CancelsOnFairMove
     MarketMakingWorkflow_InventorySkewChangesQuote
     MarketMakingWorkflow_CancelsOnBadBook
+    MarketMakingWorkflow_ReportsNoQuoteReason
+    MarketMakingWorkflow_ReportsExternalStaleNoQuoteReason
+    MarketMakingWorkflow_ExternalRemovalAllowsRequote
+    MarketMakingWorkflow_DynamicHalfSpreadOverridesStaticBase
 )
     add_test(NAME ${test_case} COMMAND market_making_engine_tests ${test_case})
 endforeach()

@@ -129,6 +129,12 @@ execution::PaperMakerFillMode parse_fill_mode(const std::string& value) {
     if (value == "book-cross" || value == "BookCross") {
         return execution::PaperMakerFillMode::BookCross;
     }
+    if (value == "mid-cross" || value == "MidCross") {
+        return execution::PaperMakerFillMode::MidCross;
+    }
+    if (value == "queue-aware" || value == "QueueAware") {
+        return execution::PaperMakerFillMode::QueueAware;
+    }
     if (value == "conservative" || value == "Conservative") {
         return execution::PaperMakerFillMode::Conservative;
     }
@@ -396,6 +402,10 @@ const char* fill_mode_name(execution::PaperMakerFillMode mode) noexcept {
             return "Conservative";
         case execution::PaperMakerFillMode::BookCross:
             return "BookCross";
+        case execution::PaperMakerFillMode::MidCross:
+            return "MidCross";
+        case execution::PaperMakerFillMode::QueueAware:
+            return "QueueAware";
     }
     return "Unknown";
 }

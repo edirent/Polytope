@@ -258,6 +258,29 @@ int test_duplicate_maker_report_ignored() {
     );
 }
 
+int test_taker_buy_fill_applies_without_incrementing_maker_count() {
+    PaperLedger ledger{100'000'000};
+    auto fill = maker_fill(1, 10, Side::Buy, 100, 270'000);
+    fill.liquidity_role = FillLiquidityRole::Taker;
+
+    const auto result = ledger.apply_fill(fill);
+    const auto snapshot = ledger.snapshot();
+    if (!result.applied || result.status != PaperLedgerApplyStatus::Applied) {
+        return fail("taker buy fill should apply");
+    }
+    if (const auto check =
+            expect_equal(ledger.position_ledger().lots("asset_yes"), 100LL, "position lots");
+        check != 0) {
+        return check;
+    }
+    if (const auto check =
+            expect_equal(snapshot.applied_fill_count, 1U, "applied fills");
+        check != 0) {
+        return check;
+    }
+    return expect_equal(snapshot.maker_fill_count, 0ULL, "maker fill count");
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -295,6 +318,9 @@ int main(int argc, char** argv) {
     }
     if (test_case == "PaperLedger_DuplicateMakerReportIgnored") {
         return test_duplicate_maker_report_ignored();
+    }
+    if (test_case == "PaperLedger_TakerBuyFillAppliesWithoutMakerCount") {
+        return test_taker_buy_fill_applies_without_incrementing_maker_count();
     }
 
     return fail("unknown test case");
