@@ -98,12 +98,21 @@ struct Config {
     std::uint64_t fair_basis_update_interval_ms = 1'000;
     std::int64_t fair_basis_min_tick = -100'000;
     std::int64_t fair_basis_max_tick = 100'000;
-    bool lead_lag_sniping_enabled = true;
+    bool lead_lag_sniping_enabled = false;
     double lead_lag_min_move_500ms_bps = 2.0;
     std::int64_t lead_lag_min_stale_edge_tick = 5'000;
     std::uint64_t lead_lag_cooldown_ms = 250;
     std::int64_t lead_lag_taker_size_lots = 5;
-    std::int64_t taker_max_entry_mid_slippage_tick = 1'000;
+    bool macro_divergence_taker_enabled = true;
+    double macro_divergence_ewma_alpha = 0.01;  // EWMA fair (slow oracle)
+    double basis_ewma_alpha = 0.001;            // EWMA basis (local-mid - fair)
+    std::int64_t macro_shock_min_edge_tick = 20'000;
+    std::int64_t max_allowed_spread_tick = 20'000;
+    std::int64_t max_allowed_basis_tick = 300'000;
+    std::uint64_t macro_divergence_cooldown_ms = 60'000;
+    std::int64_t macro_divergence_taker_size_lots = 10;
+    std::uint64_t max_taker_fills_per_minute = 10;
+    std::int64_t taker_max_entry_mid_slippage_tick = 2'000;
     bool locked_book_taker_hunter_enabled = true;
     std::int64_t locked_book_taker_min_edge_tick = 10'000;
     std::uint64_t locked_book_taker_cooldown_ms = 250;
@@ -156,6 +165,10 @@ struct Config {
     std::int64_t urgent_reduce_excess_lots = 50;
     std::int64_t passive_reduce_join_tick = 1;
     std::int64_t urgent_unwind_aggression_tick = 0;
+    std::uint64_t urgent_reduce_age_ms = 30'000;
+    std::uint64_t puke_reduce_age_ms = 120'000;
+    std::int64_t urgent_reduce_pressure_bps = 5'000;
+    std::int64_t puke_reduce_pressure_bps = 9'000;
     bool reduce_only_quote_to_target = true;
     std::uint64_t tte_skew_start_seconds = 120;
     std::uint64_t tte_puke_start_seconds = 30;
@@ -227,11 +240,22 @@ struct Stats {
     std::atomic<std::uint64_t> momentum_bid_shutoffs{0};
     std::atomic<std::uint64_t> lead_lag_sniping_signals{0};
     std::atomic<std::uint64_t> lead_lag_taker_ioc_fills_applied{0};
+    std::atomic<std::uint64_t> macro_divergence_sniping_signals{0};
+    std::atomic<std::uint64_t> macro_divergence_taker_ioc_fills_applied{0};
+    std::atomic<std::uint64_t> macro_structural_dislocation_blocked{0};
+    std::atomic<std::uint64_t> macro_basis_uninitialized_blocked{0};
+    std::atomic<std::uint64_t> macro_basis_insanity_blocked{0};
+    std::atomic<std::uint64_t> macro_edge_not_crossing_blocked{0};
+    std::atomic<std::uint64_t> taker_circuit_breaker_tripped{0};
+    std::atomic<std::int64_t> latest_ewma_fair_yes_tick{0};
+    std::atomic<std::int64_t> latest_ewma_basis_yes_tick{0};
     std::atomic<std::uint64_t> latest_lead_lag_side{0};
     std::atomic<std::int64_t> latest_lead_lag_edge_tick{0};
     std::atomic<std::int64_t> latest_lead_lag_price_tick{0};
     std::atomic<std::uint64_t> taker_ioc_signals{0};
     std::atomic<std::uint64_t> taker_ioc_fills_applied{0};
+    std::atomic<std::uint64_t> taker_ioc_yes_fills_applied{0};
+    std::atomic<std::uint64_t> taker_ioc_no_fills_applied{0};
     std::atomic<std::uint64_t> taker_ioc_fills_rejected{0};
     std::atomic<std::uint64_t> taker_ioc_cooldown_blocked{0};
     std::atomic<std::uint64_t> taker_ioc_inventory_blocked{0};
@@ -244,7 +268,19 @@ struct Stats {
     std::atomic<std::int64_t> latest_taker_ioc_qty_lots{0};
     std::atomic<std::int64_t> latest_taker_ioc_mid_tick{0};
     std::atomic<std::int64_t> latest_taker_ioc_mid_slippage_tick{0};
+    std::atomic<std::uint64_t> latest_taker_ioc_asset_side{0};
     std::atomic<std::uint64_t> latest_taker_ioc_source{0};
+    std::atomic<std::uint64_t> reduce_exit_quotes_submitted{0};
+    std::atomic<std::uint64_t> reduce_exit_passive_quotes{0};
+    std::atomic<std::uint64_t> reduce_exit_urgent_quotes{0};
+    std::atomic<std::uint64_t> reduce_exit_puke_quotes{0};
+    std::atomic<std::uint64_t> latest_reduce_exit_asset_side{0};
+    std::atomic<std::uint64_t> latest_reduce_exit_stage{0};
+    std::atomic<std::uint64_t> latest_reduce_exit_age_ms{0};
+    std::atomic<std::int64_t> latest_reduce_exit_excess_lots{0};
+    std::atomic<std::int64_t> latest_reduce_exit_pressure_bps{0};
+    std::atomic<std::int64_t> latest_reduce_exit_price_tick{0};
+    std::atomic<std::int64_t> latest_reduce_exit_qty_lots{0};
 
     std::atomic<std::uint64_t> decode_errors{0};
     std::atomic<std::uint64_t> state_errors{0};
@@ -277,6 +313,25 @@ struct RecentFill {
     std::int64_t markout_30s_tick = 0;
 };
 
+enum class ReduceExitStage : std::uint64_t {
+    None = 0,
+    Passive = 1,
+    Urgent = 2,
+    Puke = 3
+};
+
+struct ReduceQuoteState {
+    std::uint64_t quote_group_id = 0;
+    bool quote_active = false;
+    std::uint64_t excess_since_ns = 0;
+    ReduceExitStage latest_stage = ReduceExitStage::None;
+    std::uint64_t latest_age_ms = 0;
+    std::int64_t latest_excess_lots = 0;
+    std::int64_t latest_pressure_bps = 0;
+    std::int64_t latest_price_tick = 0;
+    std::int64_t latest_qty_lots = 0;
+};
+
 struct PnLAttribution {
     std::int64_t seed_position_lots = 0;
     std::int64_t seed_cost_basis_tick = 0;
@@ -284,19 +339,27 @@ struct PnLAttribution {
     std::uint64_t seed_sell_fill_count = 0;
     std::int64_t seed_complement_position_lots = 0;
     std::int64_t seed_complement_cost_basis_tick = 0;
+    std::int64_t seed_complement_realized_pnl_tick = 0;
 
     std::int64_t strategy_position_lots = 0;
     std::int64_t strategy_cost_basis_tick = 0;
+    std::int64_t strategy_complement_position_lots = 0;
+    std::int64_t strategy_complement_cost_basis_tick = 0;
     std::int64_t strategy_realized_pnl_tick = 0;
+    std::int64_t strategy_complement_realized_pnl_tick = 0;
     std::int64_t strategy_spread_capture_tick = 0;
     std::uint64_t strategy_buy_fill_count = 0;
     std::uint64_t strategy_sell_fill_count = 0;
+    std::uint64_t strategy_complement_buy_fill_count = 0;
+    std::uint64_t strategy_complement_sell_fill_count = 0;
 };
 
 struct RuntimeState {
     explicit RuntimeState(const Config& config)
         : ledger(config.starting_cash_tick),
           execution_adapter(execution_config(config)) {
+        primary_asset_id = config.asset_id;
+        complement_asset_id = config.complement_asset_id;
         pnl = pnl_engine.compute(
             ledger,
             std::span<const state::MarketDepthView>{},
@@ -422,6 +485,7 @@ struct RuntimeState {
     }
 
     void attribute_fill_side(
+        const std::string& asset_id,
         bool buy,
         std::int64_t qty_lots,
         std::int64_t fill_price_tick,
@@ -430,11 +494,39 @@ struct RuntimeState {
         if (qty_lots <= 0 || fill_price_tick <= 0) {
             return;
         }
+        const auto is_complement =
+            !complement_asset_id.empty() && asset_id == complement_asset_id;
+        auto& strategy_position =
+            is_complement ? attribution.strategy_complement_position_lots
+                          : attribution.strategy_position_lots;
+        auto& strategy_cost =
+            is_complement ? attribution.strategy_complement_cost_basis_tick
+                          : attribution.strategy_cost_basis_tick;
+        auto& strategy_realized =
+            is_complement ? attribution.strategy_complement_realized_pnl_tick
+                          : attribution.strategy_realized_pnl_tick;
+        auto& strategy_buy_count =
+            is_complement ? attribution.strategy_complement_buy_fill_count
+                          : attribution.strategy_buy_fill_count;
+        auto& strategy_sell_count =
+            is_complement ? attribution.strategy_complement_sell_fill_count
+                          : attribution.strategy_sell_fill_count;
+        auto& seed_position =
+            is_complement ? attribution.seed_complement_position_lots
+                          : attribution.seed_position_lots;
+        auto& seed_cost =
+            is_complement ? attribution.seed_complement_cost_basis_tick
+                          : attribution.seed_cost_basis_tick;
+        auto& seed_realized =
+            is_complement ? attribution.seed_complement_realized_pnl_tick
+                          : attribution.seed_realized_pnl_tick;
+        auto& seed_sell_count = attribution.seed_sell_fill_count;
+
         if (buy) {
             const auto notional = qty_lots * fill_price_tick;
-            attribution.strategy_position_lots += qty_lots;
-            attribution.strategy_cost_basis_tick += notional;
-            ++attribution.strategy_buy_fill_count;
+            strategy_position += qty_lots;
+            strategy_cost += notional;
+            ++strategy_buy_count;
             if (mark_at_fill_tick > 0) {
                 attribution.strategy_spread_capture_tick +=
                     (mark_at_fill_tick - fill_price_tick) * qty_lots;
@@ -443,31 +535,24 @@ struct RuntimeState {
         }
 
         auto remaining = qty_lots;
-        if (attribution.strategy_position_lots > 0 && remaining > 0) {
-            const auto qty =
-                std::min(remaining, attribution.strategy_position_lots);
-            const auto avg_cost =
-                attribution.strategy_cost_basis_tick /
-                attribution.strategy_position_lots;
-            attribution.strategy_realized_pnl_tick +=
+        if (strategy_position > 0 && remaining > 0) {
+            const auto qty = std::min(remaining, strategy_position);
+            const auto avg_cost = strategy_cost / strategy_position;
+            strategy_realized +=
                 (fill_price_tick - avg_cost) * qty;
-            attribution.strategy_position_lots -= qty;
-            attribution.strategy_cost_basis_tick -= avg_cost * qty;
+            strategy_position -= qty;
+            strategy_cost -= avg_cost * qty;
             remaining -= qty;
-            ++attribution.strategy_sell_fill_count;
+            ++strategy_sell_count;
         }
-        if (attribution.seed_position_lots > 0 && remaining > 0) {
-            const auto qty =
-                std::min(remaining, attribution.seed_position_lots);
-            const auto avg_cost =
-                attribution.seed_cost_basis_tick /
-                attribution.seed_position_lots;
-            attribution.seed_realized_pnl_tick +=
-                (fill_price_tick - avg_cost) * qty;
-            attribution.seed_position_lots -= qty;
-            attribution.seed_cost_basis_tick -= avg_cost * qty;
+        if (seed_position > 0 && remaining > 0) {
+            const auto qty = std::min(remaining, seed_position);
+            const auto avg_cost = seed_cost / seed_position;
+            seed_realized += (fill_price_tick - avg_cost) * qty;
+            seed_position -= qty;
+            seed_cost -= avg_cost * qty;
             remaining -= qty;
-            ++attribution.seed_sell_fill_count;
+            ++seed_sell_count;
         }
         if (mark_at_fill_tick > 0) {
             attribution.strategy_spread_capture_tick +=
@@ -480,6 +565,7 @@ struct RuntimeState {
         std::int64_t mark_at_fill_tick
     ) {
         attribute_fill_side(
+            report.asset_id,
             report.side == execution::QuoteSide::Bid,
             report.filled_qty_lots,
             report.avg_fill_price_tick,
@@ -492,6 +578,7 @@ struct RuntimeState {
         std::int64_t mark_at_fill_tick
     ) {
         attribute_fill_side(
+            fill.asset_id,
             fill.side == paper::Side::Buy,
             fill.qty_lots,
             fill.fill_price_tick,
@@ -519,11 +606,23 @@ struct RuntimeState {
     std::uint64_t fair_basis_updates = 0;
     std::uint64_t last_fair_basis_update_ns = 0;
     std::uint64_t last_lead_lag_signal_ns = 0;
+    std::uint64_t last_macro_divergence_signal_ns = 0;
     std::uint64_t last_locked_book_taker_ns = 0;
+    bool ewma_fair_initialized = false;
+    std::int64_t ewma_fair_yes_tick = 0;
+    bool basis_initialized = false;
+    double ewma_basis_yes_tick = 0.0;
+    std::int64_t macro_prev_yes_edge_tick = 0;
+    std::int64_t macro_prev_no_edge_tick = 0;
+    std::deque<std::uint64_t> taker_fill_timestamps_ns;
     std::uint64_t next_taker_ioc_report_id = 1;
+    ReduceQuoteState yes_reduce_quote;
+    ReduceQuoteState no_reduce_quote;
     std::uint64_t book_quarantine_until_ns = 0;
     std::vector<RecentFill> recent_fills;
     PnLAttribution attribution;
+    std::string primary_asset_id;
+    std::string complement_asset_id;
 };
 
 [[noreturn]] void fail(const std::string& message) {
@@ -919,9 +1018,17 @@ std::int64_t effective_locked_book_taker_min_edge_tick(
     );
 }
 
+std::int64_t complement_fair_tick(std::int64_t fair_tick) noexcept {
+    if (fair_tick <= 0 || fair_tick >= mm::kPriceOneTick) {
+        return 0;
+    }
+    return mm::kPriceOneTick - fair_tick;
+}
+
 struct LockedBookTakerOpportunity {
     bool active = false;
     bool blocked_by_mid_slippage = false;
+    bool complement_asset = false;
     std::int64_t edge_tick = 0;
     std::int64_t price_tick = 0;
     std::int64_t qty_lots = 0;
@@ -932,6 +1039,7 @@ struct LockedBookTakerOpportunity {
 struct LeadLagSnipingSignal {
     bool active = false;
     std::uint64_t side = 0;
+    bool complement_asset = false;
     std::int64_t edge_tick = 0;
     std::int64_t price_tick = 0;
 };
@@ -976,6 +1084,9 @@ void record_taker_mid_slippage_block(
     stats->latest_taker_ioc_mid_tick.store(opportunity.mid_tick);
     stats->latest_taker_ioc_mid_slippage_tick.store(
         opportunity.mid_slippage_tick
+    );
+    stats->latest_taker_ioc_asset_side.store(
+        opportunity.complement_asset ? 2 : 1
     );
     stats->latest_taker_ioc_source.store(source);
 }
@@ -1042,10 +1153,11 @@ LockedBookTakerOpportunity evaluate_lead_lag_taker_buy(
     std::int64_t current_position_lots
 ) noexcept {
     LockedBookTakerOpportunity out;
-    if (!config.lead_lag_sniping_enabled ||
+    out.complement_asset = signal.complement_asset;
+    if (!config.macro_divergence_taker_enabled ||
         !signal.active ||
-        signal.side != 1 ||
-        signal.edge_tick < config.lead_lag_min_stale_edge_tick ||
+        (signal.side != 1 && signal.side != 2) ||
+        signal.edge_tick < config.macro_shock_min_edge_tick ||
         depth.ask_count == 0 ||
         depth.asks[0].price_tick <= 0) {
         return out;
@@ -1064,7 +1176,7 @@ LockedBookTakerOpportunity evaluate_lead_lag_taker_buy(
             config.max_inventory_lots - current_position_lots
         );
     auto qty = std::min({
-        config.lead_lag_taker_size_lots,
+        config.macro_divergence_taker_size_lots,
         config.max_fill_qty_per_trade,
         top_ask_lots,
         inventory_capacity
@@ -1075,12 +1187,52 @@ LockedBookTakerOpportunity evaluate_lead_lag_taker_buy(
     return out;
 }
 
+LockedBookTakerOpportunity evaluate_locked_book_taker_buy_for_asset(
+    const Config& config,
+    const state::MarketDepthView& depth,
+    std::int64_t fair_tick,
+    const BtcOracleSnapshot& oracle,
+    bool bid_momentum_shutoff,
+    bool toxic_bid,
+    std::int64_t current_position_lots,
+    bool complement_asset
+) noexcept {
+    ExternalFairRuntime fair;
+    fair.tick = fair_tick;
+    auto out = evaluate_locked_book_taker_buy(
+        config,
+        depth,
+        fair,
+        oracle,
+        bid_momentum_shutoff,
+        toxic_bid,
+        current_position_lots
+    );
+    out.complement_asset = complement_asset;
+    return out;
+}
+
+LockedBookTakerOpportunity better_taker_opportunity(
+    LockedBookTakerOpportunity lhs,
+    LockedBookTakerOpportunity rhs
+) noexcept {
+    const auto lhs_usable = lhs.active || lhs.blocked_by_mid_slippage;
+    const auto rhs_usable = rhs.active || rhs.blocked_by_mid_slippage;
+    if (!lhs_usable) {
+        return rhs;
+    }
+    if (!rhs_usable) {
+        return lhs;
+    }
+    return rhs.edge_tick > lhs.edge_tick ? rhs : lhs;
+}
+
 const char* lead_lag_side_name(std::uint64_t side) noexcept {
     switch (side) {
         case 1:
-            return "buy_up";
+            return "buy_yes";
         case 2:
-            return "sell_up";
+            return "buy_no";
         default:
             return "none";
     }
@@ -1092,9 +1244,36 @@ const char* taker_ioc_source_name(std::uint64_t source) noexcept {
             return "locked_book";
         case 2:
             return "lead_lag";
+        case 3:
+            return "macro_divergence";
         default:
             return "none";
     }
+}
+
+const char* taker_asset_side_name(std::uint64_t side) noexcept {
+    switch (side) {
+        case 1:
+            return "yes";
+        case 2:
+            return "no";
+        default:
+            return "none";
+    }
+}
+
+const char* reduce_exit_stage_name(std::uint64_t stage) noexcept {
+    switch (static_cast<ReduceExitStage>(stage)) {
+        case ReduceExitStage::Passive:
+            return "passive";
+        case ReduceExitStage::Urgent:
+            return "urgent";
+        case ReduceExitStage::Puke:
+            return "puke";
+        case ReduceExitStage::None:
+            return "none";
+    }
+    return "none";
 }
 
 ExternalFairRuntime apply_existing_basis(
@@ -1171,48 +1350,205 @@ ExternalFairRuntime update_basis_and_apply(
     return apply_existing_basis(config, *runtime, fair);
 }
 
+void update_ewma_fair(
+    const Config& config,
+    RuntimeState* runtime,
+    std::int64_t current_yes_fair_tick
+) noexcept {
+    if (!runtime || !config.macro_divergence_taker_enabled ||
+        current_yes_fair_tick <= 0) {
+        return;
+    }
+    if (!runtime->ewma_fair_initialized) {
+        runtime->ewma_fair_yes_tick = current_yes_fair_tick;
+        runtime->ewma_fair_initialized = true;
+        return;
+    }
+    const auto alpha =
+        std::clamp(config.macro_divergence_ewma_alpha, 0.0, 1.0);
+    const auto smoothed =
+        alpha * static_cast<double>(current_yes_fair_tick) +
+        (1.0 - alpha) *
+            static_cast<double>(runtime->ewma_fair_yes_tick);
+    runtime->ewma_fair_yes_tick = std::clamp<std::int64_t>(
+        static_cast<std::int64_t>(std::llround(smoothed)),
+        1,
+        mm::kPriceOneTick - 1
+    );
+}
+
+void update_ewma_basis_yes(
+    const Config& config,
+    RuntimeState* runtime,
+    const state::MarketDepthView& depth,
+    std::int64_t external_fair_yes_tick
+) noexcept {
+    if (!runtime || !config.macro_divergence_taker_enabled ||
+        external_fair_yes_tick <= 0) {
+        return;
+    }
+    const auto best_bid =
+        depth.bid_count > 0 ? depth.bids[0].price_tick : 0;
+    const auto best_ask =
+        depth.ask_count > 0 ? depth.asks[0].price_tick : 0;
+    if (best_bid <= 0 || best_ask <= 0 || best_ask <= best_bid) {
+        return;
+    }
+    const auto spread = best_ask - best_bid;
+    if (config.max_allowed_spread_tick > 0 &&
+        spread > config.max_allowed_spread_tick) {
+        return;
+    }
+    const auto mid = (best_bid + best_ask) / 2;
+    const auto instant_basis =
+        static_cast<double>(mid) - static_cast<double>(external_fair_yes_tick);
+    if (!runtime->basis_initialized) {
+        runtime->ewma_basis_yes_tick = instant_basis;
+        runtime->basis_initialized = true;
+        return;
+    }
+    const auto alpha = std::clamp(config.basis_ewma_alpha, 0.0, 1.0);
+    runtime->ewma_basis_yes_tick =
+        alpha * instant_basis + (1.0 - alpha) * runtime->ewma_basis_yes_tick;
+}
+
+[[nodiscard]] bool macro_edge_crossed(
+    std::int64_t edge_tick,
+    std::int64_t min_edge_tick,
+    std::int64_t* previous_edge_tick
+) noexcept {
+    if (previous_edge_tick == nullptr) {
+        return false;
+    }
+    if (edge_tick < min_edge_tick) {
+        *previous_edge_tick = edge_tick;
+        return false;
+    }
+    const auto crossed = *previous_edge_tick < min_edge_tick;
+    *previous_edge_tick = edge_tick;
+    return crossed;
+}
+
 LeadLagSnipingSignal evaluate_lead_lag_sniping(
     const Config& config,
     const BtcOracleSnapshot& oracle,
-    const ExternalFairRuntime& fair,
-    const state::MarketDepthView& depth
+    std::int64_t ewma_fair_yes_tick,
+    const state::MarketDepthView& depth,
+    const state::MarketDepthView* complement_depth,
+    RuntimeState* runtime,
+    Stats* stats
 ) {
     LeadLagSnipingSignal out;
-    if (!config.lead_lag_sniping_enabled || oracle.stale ||
-        !oracle.has_spot || fair.tick <= 0) {
+    if (!config.macro_divergence_taker_enabled || runtime == nullptr ||
+        oracle.stale || !oracle.has_spot || ewma_fair_yes_tick <= 0) {
         return out;
     }
-    const auto require_momentum =
-        config.lead_lag_min_move_500ms_bps > 0.0;
-    if (require_momentum &&
-        std::fabs(oracle.move_500ms_bps) <
-            config.lead_lag_min_move_500ms_bps) {
+
+    if (!runtime->basis_initialized) {
+        if (stats != nullptr) {
+            stats->macro_basis_uninitialized_blocked.fetch_add(1);
+        }
         return out;
     }
-    if ((!require_momentum || oracle.move_500ms_bps > 0.0) &&
-        depth.ask_count > 0 &&
-        depth.asks[0].price_tick > 0) {
-        const auto edge = fair.tick - depth.asks[0].price_tick;
-        if (edge >= config.lead_lag_min_stale_edge_tick) {
+    if (config.max_allowed_basis_tick > 0 &&
+        std::llabs(runtime->ewma_basis_yes_tick) >
+            static_cast<double>(config.max_allowed_basis_tick)) {
+        if (stats != nullptr) {
+            stats->macro_basis_insanity_blocked.fetch_add(1);
+        }
+        return out;
+    }
+    const auto basis_tick = static_cast<std::int64_t>(
+        std::llround(runtime->ewma_basis_yes_tick)
+    );
+    const auto adjusted_fair_yes =
+        std::clamp<std::int64_t>(
+            ewma_fair_yes_tick + basis_tick,
+            1,
+            mm::kPriceOneTick - 1
+        );
+    const auto adjusted_fair_no =
+        std::clamp<std::int64_t>(
+            complement_fair_tick(ewma_fair_yes_tick) - basis_tick,
+            1,
+            mm::kPriceOneTick - 1
+        );
+
+    if (depth.ask_count > 0 && depth.asks[0].price_tick > 0) {
+        const auto edge = adjusted_fair_yes - depth.asks[0].price_tick;
+        if (macro_edge_crossed(
+                edge,
+                config.macro_shock_min_edge_tick,
+                &runtime->macro_prev_yes_edge_tick)) {
             out.active = true;
             out.side = 1;
             out.edge_tick = edge;
             out.price_tick = depth.asks[0].price_tick;
+        } else if (edge >= config.macro_shock_min_edge_tick &&
+                   stats != nullptr) {
+            stats->macro_edge_not_crossing_blocked.fetch_add(1);
         }
-        return out;
     }
-    if (require_momentum &&
-        oracle.move_500ms_bps < 0.0 && depth.bid_count > 0 &&
-        depth.bids[0].price_tick > 0) {
-        const auto edge = depth.bids[0].price_tick - fair.tick;
-        if (edge >= config.lead_lag_min_stale_edge_tick) {
+
+    if (complement_depth != nullptr &&
+        complement_depth->ask_count > 0 &&
+        complement_depth->asks[0].price_tick > 0) {
+        const auto edge =
+            adjusted_fair_no - complement_depth->asks[0].price_tick;
+        if (macro_edge_crossed(
+                edge,
+                config.macro_shock_min_edge_tick,
+                &runtime->macro_prev_no_edge_tick) &&
+            (!out.active || edge > out.edge_tick)) {
             out.active = true;
             out.side = 2;
+            out.complement_asset = true;
             out.edge_tick = edge;
-            out.price_tick = depth.bids[0].price_tick;
+            out.price_tick = complement_depth->asks[0].price_tick;
+        } else if (edge >= config.macro_shock_min_edge_tick &&
+                   stats != nullptr) {
+            stats->macro_edge_not_crossing_blocked.fetch_add(1);
         }
     }
     return out;
+}
+
+void prune_taker_fill_window(
+    RuntimeState* runtime,
+    std::uint64_t now
+) noexcept {
+    if (runtime == nullptr) {
+        return;
+    }
+    constexpr auto window_ns = 60'000'000'000ULL;
+    while (!runtime->taker_fill_timestamps_ns.empty() &&
+           runtime->taker_fill_timestamps_ns.front() + window_ns <= now) {
+        runtime->taker_fill_timestamps_ns.pop_front();
+    }
+}
+
+void enforce_taker_fill_circuit_breaker(
+    const Config& config,
+    RuntimeState* runtime,
+    Stats* stats,
+    std::uint64_t now
+) {
+    if (config.max_taker_fills_per_minute == 0 || runtime == nullptr) {
+        return;
+    }
+    prune_taker_fill_window(runtime, now);
+    if (runtime->taker_fill_timestamps_ns.size() >=
+        config.max_taker_fills_per_minute) {
+        if (stats != nullptr) {
+            stats->taker_circuit_breaker_tripped.fetch_add(1);
+        }
+        fail(
+            "FATAL: taker fill circuit breaker tripped: " +
+            std::to_string(runtime->taker_fill_timestamps_ns.size()) +
+            " fills in the last 60s (limit=" +
+            std::to_string(config.max_taker_fills_per_minute) + ")"
+        );
+    }
 }
 
 std::int64_t markout_tick(
@@ -1548,6 +1884,35 @@ Config parse_args(int argc, char** argv) {
                 std::stoll(value("--fair-basis-max-tick"));
         } else if (arg == "--disable-lead-lag-sniping") {
             config.lead_lag_sniping_enabled = false;
+        } else if (arg == "--enable-lead-lag-sniping") {
+            config.lead_lag_sniping_enabled = true;
+        } else if (arg == "--disable-macro-divergence-taker") {
+            config.macro_divergence_taker_enabled = false;
+        } else if (arg == "--enable-macro-divergence-taker") {
+            config.macro_divergence_taker_enabled = true;
+        } else if (arg == "--macro-divergence-ewma-alpha") {
+            config.macro_divergence_ewma_alpha =
+                std::stod(value("--macro-divergence-ewma-alpha"));
+        } else if (arg == "--basis-ewma-alpha") {
+            config.basis_ewma_alpha = std::stod(value("--basis-ewma-alpha"));
+        } else if (arg == "--macro-shock-min-edge-tick") {
+            config.macro_shock_min_edge_tick =
+                std::stoll(value("--macro-shock-min-edge-tick"));
+        } else if (arg == "--max-allowed-spread-tick") {
+            config.max_allowed_spread_tick =
+                std::stoll(value("--max-allowed-spread-tick"));
+        } else if (arg == "--max-allowed-basis-tick") {
+            config.max_allowed_basis_tick =
+                std::stoll(value("--max-allowed-basis-tick"));
+        } else if (arg == "--macro-divergence-cooldown-ms") {
+            config.macro_divergence_cooldown_ms =
+                std::stoull(value("--macro-divergence-cooldown-ms"));
+        } else if (arg == "--macro-divergence-taker-size-lots") {
+            config.macro_divergence_taker_size_lots =
+                std::stoll(value("--macro-divergence-taker-size-lots"));
+        } else if (arg == "--max-taker-fills-per-minute") {
+            config.max_taker_fills_per_minute =
+                std::stoull(value("--max-taker-fills-per-minute"));
         } else if (arg == "--lead-lag-min-move-500ms-bps") {
             config.lead_lag_min_move_500ms_bps =
                 std::stod(value("--lead-lag-min-move-500ms-bps"));
@@ -1716,6 +2081,18 @@ Config parse_args(int argc, char** argv) {
         } else if (arg == "--urgent-unwind-aggression-tick") {
             config.urgent_unwind_aggression_tick =
                 std::stoll(value("--urgent-unwind-aggression-tick"));
+        } else if (arg == "--urgent-reduce-age-ms") {
+            config.urgent_reduce_age_ms =
+                std::stoull(value("--urgent-reduce-age-ms"));
+        } else if (arg == "--puke-reduce-age-ms") {
+            config.puke_reduce_age_ms =
+                std::stoull(value("--puke-reduce-age-ms"));
+        } else if (arg == "--urgent-reduce-pressure-bps") {
+            config.urgent_reduce_pressure_bps =
+                std::stoll(value("--urgent-reduce-pressure-bps"));
+        } else if (arg == "--puke-reduce-pressure-bps") {
+            config.puke_reduce_pressure_bps =
+                std::stoll(value("--puke-reduce-pressure-bps"));
         } else if (arg == "--reduce-only-to-target") {
             config.reduce_only_quote_to_target = true;
         } else if (arg == "--reduce-to-min-inventory") {
@@ -1750,6 +2127,8 @@ Config parse_args(int argc, char** argv) {
                 << "[--starting-cash 1000] [--fill-mode book-cross] "
                 << "[--passive-reduce-excess-lots 20] "
                 << "[--urgent-reduce-excess-lots 50] "
+                << "[--urgent-reduce-age-ms 10000] "
+                << "[--puke-reduce-age-ms 30000] "
                 << "[--inventory-skew-exponent 2.0] "
                 << "[--taker-max-entry-mid-slippage-tick 1000]\n";
             std::exit(0);
@@ -1832,6 +2211,32 @@ Config parse_args(int argc, char** argv) {
     }
     if (config.lead_lag_taker_size_lots <= 0) {
         fail("--lead-lag-taker-size-lots must be > 0");
+    }
+    if (config.macro_divergence_ewma_alpha < 0.0 ||
+        config.macro_divergence_ewma_alpha > 1.0) {
+        fail("--macro-divergence-ewma-alpha must be in [0, 1]");
+    }
+    if (config.basis_ewma_alpha < 0.0 || config.basis_ewma_alpha > 1.0) {
+        fail("--basis-ewma-alpha must be in [0, 1]");
+    }
+    if (config.macro_shock_min_edge_tick < 0) {
+        fail("--macro-shock-min-edge-tick must be >= 0");
+    }
+    if (config.max_allowed_spread_tick < 0) {
+        fail("--max-allowed-spread-tick must be >= 0");
+    }
+    if (config.max_allowed_basis_tick < 0) {
+        fail("--max-allowed-basis-tick must be >= 0");
+    }
+    if (config.macro_divergence_cooldown_ms > 60'000) {
+        fail("--macro-divergence-cooldown-ms must be <= 60000");
+    }
+    if (config.macro_divergence_taker_enabled &&
+        config.macro_divergence_taker_size_lots <= 0) {
+        fail("--macro-divergence-taker-size-lots must be > 0");
+    }
+    if (config.max_taker_fills_per_minute > 600) {
+        fail("--max-taker-fills-per-minute must be <= 600");
     }
     if (config.taker_max_entry_mid_slippage_tick < -1) {
         fail("--taker-max-entry-mid-slippage-tick must be >= -1");
@@ -1941,6 +2346,18 @@ Config parse_args(int argc, char** argv) {
     }
     if (config.urgent_unwind_aggression_tick < 0) {
         fail("--urgent-unwind-aggression-tick must be >= 0");
+    }
+    if (config.puke_reduce_age_ms < config.urgent_reduce_age_ms) {
+        fail("--puke-reduce-age-ms must be >= --urgent-reduce-age-ms");
+    }
+    if (config.urgent_reduce_pressure_bps < 0 ||
+        config.urgent_reduce_pressure_bps > 10'000) {
+        fail("--urgent-reduce-pressure-bps must be in [0, 10000]");
+    }
+    if (config.puke_reduce_pressure_bps < 0 ||
+        config.puke_reduce_pressure_bps > 10'000 ||
+        config.puke_reduce_pressure_bps < config.urgent_reduce_pressure_bps) {
+        fail("--puke-reduce-pressure-bps must be in [urgent, 10000]");
     }
     if (config.assumed_latency_ms < 0.0 ||
         config.assumed_latency_ms > 10'000.0) {
@@ -2229,6 +2646,9 @@ bool apply_taker_ioc_buy(
     stats->latest_taker_ioc_mid_slippage_tick.store(
         opportunity.mid_slippage_tick
     );
+    stats->latest_taker_ioc_asset_side.store(
+        opportunity.complement_asset ? 2 : 1
+    );
     stats->latest_taker_ioc_source.store(source);
 
     if (opportunity.qty_lots <= 0) {
@@ -2236,9 +2656,12 @@ bool apply_taker_ioc_buy(
         return false;
     }
 
+    enforce_taker_fill_circuit_breaker(config, runtime, stats, now);
+
     const auto cooldown_ms =
-        source == 2 ? config.lead_lag_cooldown_ms
-                    : config.locked_book_taker_cooldown_ms;
+        source == 3 ? config.macro_divergence_cooldown_ms
+        : source == 2 ? config.lead_lag_cooldown_ms
+                      : config.locked_book_taker_cooldown_ms;
     if (runtime->last_locked_book_taker_ns != 0 &&
         now < runtime->last_locked_book_taker_ns +
                   cooldown_ms * 1'000'000ULL) {
@@ -2262,7 +2685,9 @@ bool apply_taker_ioc_buy(
     fill.approved_quote_id = 0;
     fill.quote_group_id = 0;
     fill.asset_index = depth.asset_index;
-    fill.asset_id = config.asset_id;
+    fill.asset_id = opportunity.complement_asset
+        ? config.complement_asset_id
+        : config.asset_id;
     fill.side = paper::Side::Buy;
     fill.liquidity_role = execution::FillLiquidityRole::Taker;
     fill.qty_lots = opportunity.qty_lots;
@@ -2279,9 +2704,18 @@ bool apply_taker_ioc_buy(
     }
 
     runtime->last_locked_book_taker_ns = now;
+    runtime->taker_fill_timestamps_ns.push_back(now);
     stats->taker_ioc_fills_applied.fetch_add(1);
+    if (opportunity.complement_asset) {
+        stats->taker_ioc_no_fills_applied.fetch_add(1);
+    } else {
+        stats->taker_ioc_yes_fills_applied.fetch_add(1);
+    }
     if (source == 2) {
         stats->lead_lag_taker_ioc_fills_applied.fetch_add(1);
+    }
+    if (source == 3) {
+        stats->macro_divergence_taker_ioc_fills_applied.fetch_add(1);
     }
     stats->gross_fill_notional_tick.fetch_add(
         static_cast<std::uint64_t>(std::max<std::int64_t>(0, notional))
@@ -2316,6 +2750,382 @@ bool apply_taker_ioc_buy(
         opportunity.edge_tick
     );
     return true;
+}
+
+std::int64_t reduce_target_lots(const Config& config) noexcept {
+    return config.reduce_only_quote_to_target
+        ? config.target_position_lots
+        : config.min_inventory_lots;
+}
+
+std::uint64_t reduce_quote_group_id(
+    const Config& config,
+    std::uint32_t asset_index,
+    bool complement_asset
+) noexcept {
+    auto hash = 14695981039346656037ULL;
+    hash = mm::fnv1a_mix(hash, 0x7265647563655f71ULL);
+    hash = mm::fnv1a_mix(hash, config.enable_as_model ? 1ULL : 0ULL);
+    hash = mm::fnv1a_mix(hash, asset_index);
+    hash = mm::fnv1a_mix(hash, complement_asset ? 1ULL : 0ULL);
+    return hash;
+}
+
+std::int64_t reduce_pressure_bps(
+    const Config& config,
+    std::int64_t excess_lots
+) noexcept {
+    const auto target = reduce_target_lots(config);
+    const auto capacity =
+        std::max<std::int64_t>(1, config.max_inventory_lots - target);
+    return std::clamp<std::int64_t>(
+        excess_lots * 10'000 / capacity,
+        0,
+        10'000
+    );
+}
+
+ReduceExitStage reduce_exit_stage(
+    const Config& config,
+    std::int64_t excess_lots,
+    std::uint64_t age_ms,
+    std::int64_t pressure_bps
+) noexcept {
+    if (excess_lots <= 0) {
+        return ReduceExitStage::None;
+    }
+    if (config.passive_reduce_excess_lots > 0 &&
+        excess_lots < config.passive_reduce_excess_lots) {
+        return ReduceExitStage::None;
+    }
+    if ((config.puke_reduce_age_ms > 0 &&
+         age_ms >= config.puke_reduce_age_ms) ||
+        (config.puke_reduce_pressure_bps > 0 &&
+         pressure_bps >= config.puke_reduce_pressure_bps)) {
+        return ReduceExitStage::Puke;
+    }
+    if ((config.urgent_reduce_excess_lots > 0 &&
+         excess_lots >= config.urgent_reduce_excess_lots) ||
+        (config.urgent_reduce_age_ms > 0 &&
+         age_ms >= config.urgent_reduce_age_ms) ||
+        (config.urgent_reduce_pressure_bps > 0 &&
+         pressure_bps >= config.urgent_reduce_pressure_bps)) {
+        return ReduceExitStage::Urgent;
+    }
+    return ReduceExitStage::Passive;
+}
+
+std::int64_t reduce_exit_price_tick(
+    const Config& config,
+    const state::MarketDepthView& depth,
+    ReduceExitStage stage,
+    std::uint64_t age_ms
+) noexcept {
+    if (depth.ask_count == 0 || depth.asks[0].price_tick <= 0) {
+        return 0;
+    }
+    const auto top_ask = depth.asks[0].price_tick;
+    const auto top_bid =
+        depth.bid_count > 0 && depth.bids[0].price_tick > 0
+            ? depth.bids[0].price_tick
+            : 0;
+    const auto join_tick =
+        std::max<std::int64_t>(1, config.passive_reduce_join_tick);
+    const auto passive_price =
+        std::max<std::int64_t>(1, top_ask - join_tick);
+    if (stage == ReduceExitStage::Passive || top_bid <= 0) {
+        return passive_price;
+    }
+
+    if (stage == ReduceExitStage::Puke) {
+        return std::clamp<std::int64_t>(
+            top_bid - config.urgent_unwind_aggression_tick,
+            1,
+            mm::kPriceOneTick - 1
+        );
+    }
+
+    const auto mid = midpoint_tick(depth);
+    const auto age_extra =
+        static_cast<std::int64_t>(std::min<std::uint64_t>(
+            age_ms / 1'000,
+            60
+        )) * join_tick;
+    const auto urgent_candidate = mid > 0
+        ? std::min(passive_price, mid - age_extra)
+        : passive_price - age_extra;
+    const auto post_only_floor =
+        std::min<std::int64_t>(top_ask - 1, top_bid + join_tick);
+    return std::clamp<std::int64_t>(
+        std::max<std::int64_t>(post_only_floor, urgent_candidate),
+        1,
+        mm::kPriceOneTick - 1
+    );
+}
+
+risk::ApprovedQuote make_reduce_ask_quote(
+    const Config& config,
+    const state::MarketDepthView& depth,
+    const std::string& asset_id,
+    std::int64_t position_lots,
+    std::int64_t fair_tick,
+    bool complement_asset,
+    ReduceQuoteState* reduce_state,
+    std::uint64_t now
+) {
+    risk::ApprovedQuote approved;
+    if (asset_id.empty() || reduce_state == nullptr ||
+        depth.ask_count == 0 || depth.asks[0].price_tick <= 0) {
+        return approved;
+    }
+
+    const auto target = reduce_target_lots(config);
+    if (position_lots <= target) {
+        return approved;
+    }
+    const auto reducible = position_lots - target;
+    if (reduce_state->excess_since_ns == 0) {
+        reduce_state->excess_since_ns = now;
+    }
+    const auto age_ms =
+        now >= reduce_state->excess_since_ns
+            ? (now - reduce_state->excess_since_ns) / 1'000'000ULL
+            : 0;
+    const auto pressure_bps = reduce_pressure_bps(config, reducible);
+    const auto stage =
+        reduce_exit_stage(config, reducible, age_ms, pressure_bps);
+    const auto ask_price =
+        reduce_exit_price_tick(config, depth, stage, age_ms);
+    const auto base_qty =
+        stage == ReduceExitStage::Passive
+            ? config.quote_size_lots
+            : config.max_fill_qty_per_trade;
+    const auto qty = std::min({
+        std::max<std::int64_t>(1, base_qty),
+        std::max<std::int64_t>(1, config.max_fill_qty_per_trade),
+        reducible
+    });
+    if (qty <= 0 || ask_price <= 0) {
+        return approved;
+    }
+
+    mm::QuoteLeg ask;
+    ask.market_id = config.market_id;
+    ask.asset_id = asset_id;
+    ask.market_index = 1;
+    ask.asset_index = depth.asset_index;
+    ask.side = mm::QuoteSide::Ask;
+    ask.price_tick = ask_price;
+    ask.quantity_lots = qty;
+    ask.fair_value_tick = fair_tick;
+    if (ask.fair_value_tick <= 0) {
+        ask.fair_value_tick = midpoint_tick(depth);
+    }
+    ask.edge_to_fair_tick =
+        ask.fair_value_tick > 0 ? ask.price_tick - ask.fair_value_tick : 0;
+    ask.risk_reducing = true;
+    ask.allow_fair_deviation_exemption = true;
+    ask.allow_spread_exemption = true;
+    ask.book_version = depth.book_version;
+    ask.snapshot_version_hash = depth.snapshot_version_hash;
+
+    approved.quote_intent_id = mm::compute_quote_leg_hash(ask);
+    approved.quote_group_id =
+        reduce_quote_group_id(config, depth.asset_index, complement_asset);
+    approved.has_ask = true;
+    approved.ask = ask;
+    approved.approved_ts_ns = now;
+    approved.expires_at_ns = now + 250'000'000ULL;
+    approved.snapshot_version_hash = depth.snapshot_version_hash;
+    approved.idempotency_hash = mm::compute_quote_leg_hash(ask);
+    approved.approved_quote_id = risk::compute_approved_quote_hash(approved);
+
+    reduce_state->latest_stage = stage;
+    reduce_state->latest_age_ms = age_ms;
+    reduce_state->latest_excess_lots = reducible;
+    reduce_state->latest_pressure_bps = pressure_bps;
+    reduce_state->latest_price_tick = ask_price;
+    reduce_state->latest_qty_lots = qty;
+    return approved;
+}
+
+void observe_reduce_exit_quote(
+    const risk::ApprovedQuote& quote,
+    const ReduceQuoteState& state,
+    bool complement_asset,
+    Stats* stats
+) {
+    stats->reduce_exit_quotes_submitted.fetch_add(1);
+    switch (state.latest_stage) {
+        case ReduceExitStage::Passive:
+            stats->reduce_exit_passive_quotes.fetch_add(1);
+            break;
+        case ReduceExitStage::Urgent:
+            stats->reduce_exit_urgent_quotes.fetch_add(1);
+            break;
+        case ReduceExitStage::Puke:
+            stats->reduce_exit_puke_quotes.fetch_add(1);
+            break;
+        case ReduceExitStage::None:
+            break;
+    }
+    stats->latest_reduce_exit_asset_side.store(complement_asset ? 2 : 1);
+    stats->latest_reduce_exit_stage.store(
+        static_cast<std::uint64_t>(state.latest_stage)
+    );
+    stats->latest_reduce_exit_age_ms.store(state.latest_age_ms);
+    stats->latest_reduce_exit_excess_lots.store(state.latest_excess_lots);
+    stats->latest_reduce_exit_pressure_bps.store(state.latest_pressure_bps);
+    stats->latest_reduce_exit_price_tick.store(quote.ask.price_tick);
+    stats->latest_reduce_exit_qty_lots.store(quote.ask.quantity_lots);
+}
+
+bool reduce_quote_group_matches(
+    const RuntimeState& runtime,
+    std::uint64_t quote_group_id
+) noexcept {
+    return quote_group_id != 0 &&
+           (quote_group_id == runtime.yes_reduce_quote.quote_group_id ||
+            quote_group_id == runtime.no_reduce_quote.quote_group_id);
+}
+
+void mark_reduce_quote_inactive(
+    RuntimeState* runtime,
+    std::uint64_t quote_group_id
+) noexcept {
+    if (quote_group_id == runtime->yes_reduce_quote.quote_group_id) {
+        runtime->yes_reduce_quote.quote_active = false;
+    }
+    if (quote_group_id == runtime->no_reduce_quote.quote_group_id) {
+        runtime->no_reduce_quote.quote_active = false;
+    }
+}
+
+void consume_maker_reports(
+    const Config& config,
+    mm::MarketMakingEngine* engine,
+    Stats* stats,
+    RuntimeState* runtime,
+    const std::vector<execution::MakerExecutionReport>& reports
+) {
+    for (const auto& report : reports) {
+        stats->maker_reports.fetch_add(1);
+        const auto observed = runtime->event_adapter.observe(report);
+        if (!observed.has_paper_fill) {
+            continue;
+        }
+        const auto applied = runtime->ledger.apply_fill(observed.paper_fill);
+        if (applied.applied) {
+            (void)engine->remove_active_quote(report.asset_index);
+            if (reduce_quote_group_matches(*runtime, report.quote_group_id) &&
+                report.status == execution::MakerQuoteStatus::Filled) {
+                mark_reduce_quote_inactive(runtime, report.quote_group_id);
+            }
+            stats->maker_fills_applied.fetch_add(1);
+            const auto mark_at_fill =
+                mark_tick_for_asset(config, *runtime, report.asset_id);
+            runtime->attribute_fill(report, mark_at_fill);
+            const auto notional =
+                static_cast<std::uint64_t>(
+                    std::max<std::int64_t>(0, report.filled_qty_lots) *
+                    std::max<std::int64_t>(0, report.avg_fill_price_tick)
+                );
+            stats->gross_fill_notional_tick.fetch_add(notional);
+            append_recent_fill(
+                runtime,
+                report,
+                mark_at_fill
+            );
+        } else {
+            stats->maker_fills_rejected.fetch_add(1);
+        }
+    }
+}
+
+void update_reduce_quote(
+    const Config& config,
+    const state::MarketDepthView* depth,
+    const std::string& asset_id,
+    std::int64_t fair_tick,
+    bool complement_asset,
+    ReduceQuoteState* reduce_state,
+    Stats* stats,
+    RuntimeState* runtime,
+    std::uint64_t now
+) {
+    if (depth == nullptr || asset_id.empty() || reduce_state == nullptr) {
+        return;
+    }
+    reduce_state->quote_group_id =
+        reduce_quote_group_id(config, depth->asset_index, complement_asset);
+    const auto position = runtime->ledger.position_ledger().lots(asset_id);
+    if (position <= reduce_target_lots(config)) {
+        reduce_state->excess_since_ns = 0;
+        reduce_state->latest_stage = ReduceExitStage::None;
+        reduce_state->latest_age_ms = 0;
+        reduce_state->latest_excess_lots = 0;
+        reduce_state->latest_pressure_bps = 0;
+        reduce_state->latest_price_tick = 0;
+        reduce_state->latest_qty_lots = 0;
+        if (reduce_state->quote_active) {
+            const auto cancelled =
+                runtime->execution_adapter.cancel_quote_group(
+                    reduce_state->quote_group_id,
+                    now
+                );
+            if (cancelled.ok) {
+                stats->cancelled_quotes.fetch_add(1);
+                reduce_state->quote_active = false;
+            }
+        }
+        return;
+    }
+
+    auto approved =
+        make_reduce_ask_quote(
+            config,
+            *depth,
+            asset_id,
+            position,
+            fair_tick,
+            complement_asset,
+            reduce_state,
+            now
+        );
+    if (!approved.has_ask) {
+        if (reduce_state->quote_active) {
+            const auto cancelled =
+                runtime->execution_adapter.cancel_quote_group(
+                    reduce_state->quote_group_id,
+                    now
+                );
+            if (cancelled.ok) {
+                stats->cancelled_quotes.fetch_add(1);
+                reduce_state->quote_active = false;
+            }
+        }
+        return;
+    }
+    const auto submitted =
+        runtime->execution_adapter.submit_approved_quote(approved, now);
+    if (submitted.ok) {
+        stats->submitted_quotes.fetch_add(1);
+        reduce_state->quote_active = true;
+        observe_reduce_exit_quote(
+            approved,
+            *reduce_state,
+            complement_asset,
+            stats
+        );
+        if (submitted.replaced) {
+            stats->replaced_quotes.fetch_add(1);
+        }
+        if (submitted.duplicate_ignored) {
+            stats->duplicate_ignored.fetch_add(1);
+        }
+    } else {
+        stats->submit_errors.fetch_add(1);
+    }
 }
 
 std::string dashboard_json_unlocked(
@@ -2392,6 +3202,7 @@ std::string dashboard_json_unlocked(
         );
     const auto seed_total_pnl_mid_tick =
         runtime.attribution.seed_realized_pnl_tick +
+        runtime.attribution.seed_complement_realized_pnl_tick +
         seed_unrealized_mid_tick +
         seed_complement_unrealized_mid_tick;
     const auto strategy_unrealized_mid_tick = attributed_unrealized_tick(
@@ -2399,9 +3210,17 @@ std::string dashboard_json_unlocked(
         runtime.attribution.strategy_cost_basis_tick,
         attribution_mark_tick
     );
+    const auto strategy_complement_unrealized_mid_tick =
+        attributed_unrealized_tick(
+            runtime.attribution.strategy_complement_position_lots,
+            runtime.attribution.strategy_complement_cost_basis_tick,
+            attribution_complement_mark_tick
+        );
     const auto strategy_total_pnl_mid_tick =
         runtime.attribution.strategy_realized_pnl_tick +
-        strategy_unrealized_mid_tick;
+        runtime.attribution.strategy_complement_realized_pnl_tick +
+        strategy_unrealized_mid_tick +
+        strategy_complement_unrealized_mid_tick;
     const auto attributed_total_pnl_mid_tick =
         seed_total_pnl_mid_tick + strategy_total_pnl_mid_tick;
     const auto aggregate_total_pnl_mid_tick =
@@ -2643,6 +3462,38 @@ std::string dashboard_json_unlocked(
         << oracle_snapshot.transport_errors
         << ",\"lead_lag_sniping_enabled\":"
         << (config.lead_lag_sniping_enabled ? "true" : "false")
+        << ",\"macro_divergence_taker_enabled\":"
+        << (config.macro_divergence_taker_enabled ? "true" : "false")
+        << ",\"macro_divergence_ewma_alpha\":"
+        << config.macro_divergence_ewma_alpha
+        << ",\"basis_ewma_alpha\":"
+        << config.basis_ewma_alpha
+        << ",\"macro_shock_min_edge_tick\":"
+        << config.macro_shock_min_edge_tick
+        << ",\"max_allowed_spread_tick\":"
+        << config.max_allowed_spread_tick
+        << ",\"max_allowed_basis_tick\":"
+        << config.max_allowed_basis_tick
+        << ",\"macro_divergence_cooldown_ms\":"
+        << config.macro_divergence_cooldown_ms
+        << ",\"max_taker_fills_per_minute\":"
+        << config.max_taker_fills_per_minute
+        << ",\"macro_divergence_taker_size_lots\":"
+        << config.macro_divergence_taker_size_lots
+        << ",\"latest_ewma_fair_yes_tick\":"
+        << stats.latest_ewma_fair_yes_tick.load()
+        << ",\"latest_ewma_basis_yes_tick\":"
+        << stats.latest_ewma_basis_yes_tick.load()
+        << ",\"macro_structural_dislocation_blocked\":"
+        << stats.macro_structural_dislocation_blocked.load()
+        << ",\"macro_basis_uninitialized_blocked\":"
+        << stats.macro_basis_uninitialized_blocked.load()
+        << ",\"macro_basis_insanity_blocked\":"
+        << stats.macro_basis_insanity_blocked.load()
+        << ",\"macro_edge_not_crossing_blocked\":"
+        << stats.macro_edge_not_crossing_blocked.load()
+        << ",\"taker_circuit_breaker_tripped\":"
+        << stats.taker_circuit_breaker_tripped.load()
         << ",\"lead_lag_min_move_500ms_bps\":"
         << config.lead_lag_min_move_500ms_bps
         << ",\"lead_lag_min_stale_edge_tick\":"
@@ -2651,6 +3502,10 @@ std::string dashboard_json_unlocked(
         << config.lead_lag_taker_size_lots
         << ",\"taker_max_entry_mid_slippage_tick\":"
         << config.taker_max_entry_mid_slippage_tick
+        << ",\"macro_divergence_sniping_signals\":"
+        << stats.macro_divergence_sniping_signals.load()
+        << ",\"macro_divergence_taker_ioc_fills_applied\":"
+        << stats.macro_divergence_taker_ioc_fills_applied.load()
         << ",\"lead_lag_sniping_signals\":"
         << stats.lead_lag_sniping_signals.load()
         << ",\"lead_lag_taker_ioc_fills_applied\":"
@@ -2675,6 +3530,10 @@ std::string dashboard_json_unlocked(
         << stats.taker_ioc_signals.load()
         << ",\"taker_ioc_fills_applied\":"
         << stats.taker_ioc_fills_applied.load()
+        << ",\"taker_ioc_yes_fills_applied\":"
+        << stats.taker_ioc_yes_fills_applied.load()
+        << ",\"taker_ioc_no_fills_applied\":"
+        << stats.taker_ioc_no_fills_applied.load()
         << ",\"taker_ioc_fills_rejected\":"
         << stats.taker_ioc_fills_rejected.load()
         << ",\"taker_ioc_cooldown_blocked\":"
@@ -2699,9 +3558,45 @@ std::string dashboard_json_unlocked(
         << stats.latest_taker_ioc_mid_tick.load()
         << ",\"latest_taker_ioc_mid_slippage_tick\":"
         << stats.latest_taker_ioc_mid_slippage_tick.load()
+        << ",\"latest_taker_ioc_asset_side\":\""
+        << taker_asset_side_name(stats.latest_taker_ioc_asset_side.load())
+        << "\""
         << ",\"latest_taker_ioc_source\":\""
         << taker_ioc_source_name(stats.latest_taker_ioc_source.load())
         << "\""
+        << ",\"reduce_exit_quotes_submitted\":"
+        << stats.reduce_exit_quotes_submitted.load()
+        << ",\"reduce_exit_passive_quotes\":"
+        << stats.reduce_exit_passive_quotes.load()
+        << ",\"reduce_exit_urgent_quotes\":"
+        << stats.reduce_exit_urgent_quotes.load()
+        << ",\"reduce_exit_puke_quotes\":"
+        << stats.reduce_exit_puke_quotes.load()
+        << ",\"latest_reduce_exit_asset_side\":\""
+        << taker_asset_side_name(
+               stats.latest_reduce_exit_asset_side.load()
+           ) << "\""
+        << ",\"latest_reduce_exit_stage\":\""
+        << reduce_exit_stage_name(stats.latest_reduce_exit_stage.load())
+        << "\""
+        << ",\"latest_reduce_exit_age_ms\":"
+        << stats.latest_reduce_exit_age_ms.load()
+        << ",\"latest_reduce_exit_excess_lots\":"
+        << stats.latest_reduce_exit_excess_lots.load()
+        << ",\"latest_reduce_exit_pressure_bps\":"
+        << stats.latest_reduce_exit_pressure_bps.load()
+        << ",\"latest_reduce_exit_price_tick\":"
+        << stats.latest_reduce_exit_price_tick.load()
+        << ",\"latest_reduce_exit_qty_lots\":"
+        << stats.latest_reduce_exit_qty_lots.load()
+        << ",\"urgent_reduce_age_ms\":"
+        << config.urgent_reduce_age_ms
+        << ",\"puke_reduce_age_ms\":"
+        << config.puke_reduce_age_ms
+        << ",\"urgent_reduce_pressure_bps\":"
+        << config.urgent_reduce_pressure_bps
+        << ",\"puke_reduce_pressure_bps\":"
+        << config.puke_reduce_pressure_bps
         << ",\"as_model_enabled\":"
         << (config.enable_as_model ? "true" : "false")
         << ",\"as_model_ok\":"
@@ -2747,10 +3642,18 @@ std::string dashboard_json_unlocked(
         << runtime.attribution.strategy_position_lots
         << ",\"strategy_cost_basis_tick\":"
         << runtime.attribution.strategy_cost_basis_tick
+        << ",\"strategy_complement_position_lots\":"
+        << runtime.attribution.strategy_complement_position_lots
+        << ",\"strategy_complement_cost_basis_tick\":"
+        << runtime.attribution.strategy_complement_cost_basis_tick
         << ",\"strategy_realized_pnl_tick\":"
-        << runtime.attribution.strategy_realized_pnl_tick
+        << runtime.attribution.strategy_realized_pnl_tick +
+               runtime.attribution.strategy_complement_realized_pnl_tick
         << ",\"strategy_unrealized_pnl_mid_tick\":"
-        << strategy_unrealized_mid_tick
+        << strategy_unrealized_mid_tick +
+               strategy_complement_unrealized_mid_tick
+        << ",\"strategy_complement_unrealized_pnl_mid_tick\":"
+        << strategy_complement_unrealized_mid_tick
         << ",\"strategy_total_pnl_mid_tick\":"
         << strategy_total_pnl_mid_tick
         << ",\"strategy_spread_capture_tick\":"
@@ -2983,6 +3886,7 @@ void write_summary_json(
             );
         const auto seed_total_pnl_mid_tick =
             runtime->attribution.seed_realized_pnl_tick +
+            runtime->attribution.seed_complement_realized_pnl_tick +
             seed_unrealized_mid_tick +
             seed_complement_unrealized_mid_tick;
         const auto strategy_unrealized_mid_tick = attributed_unrealized_tick(
@@ -2990,9 +3894,17 @@ void write_summary_json(
             runtime->attribution.strategy_cost_basis_tick,
             attribution_mark_tick
         );
+        const auto strategy_complement_unrealized_mid_tick =
+            attributed_unrealized_tick(
+                runtime->attribution.strategy_complement_position_lots,
+                runtime->attribution.strategy_complement_cost_basis_tick,
+                attribution_complement_mark_tick
+            );
         const auto strategy_total_pnl_mid_tick =
             runtime->attribution.strategy_realized_pnl_tick +
-            strategy_unrealized_mid_tick;
+            runtime->attribution.strategy_complement_realized_pnl_tick +
+            strategy_unrealized_mid_tick +
+            strategy_complement_unrealized_mid_tick;
         const auto attributed_total_pnl_mid_tick =
             seed_total_pnl_mid_tick + strategy_total_pnl_mid_tick;
         const auto aggregate_total_pnl_mid_tick =
@@ -3158,6 +4070,39 @@ void write_summary_json(
             << "  \"lead_lag_sniping_enabled\": "
             << (config.lead_lag_sniping_enabled ? "true" : "false")
             << ",\n"
+            << "  \"macro_divergence_taker_enabled\": "
+            << (config.macro_divergence_taker_enabled ? "true" : "false")
+            << ",\n"
+            << "  \"macro_divergence_ewma_alpha\": "
+            << config.macro_divergence_ewma_alpha << ",\n"
+            << "  \"basis_ewma_alpha\": "
+            << config.basis_ewma_alpha << ",\n"
+            << "  \"macro_shock_min_edge_tick\": "
+            << config.macro_shock_min_edge_tick << ",\n"
+            << "  \"max_allowed_spread_tick\": "
+            << config.max_allowed_spread_tick << ",\n"
+            << "  \"max_allowed_basis_tick\": "
+            << config.max_allowed_basis_tick << ",\n"
+            << "  \"macro_divergence_cooldown_ms\": "
+            << config.macro_divergence_cooldown_ms << ",\n"
+            << "  \"max_taker_fills_per_minute\": "
+            << config.max_taker_fills_per_minute << ",\n"
+            << "  \"macro_divergence_taker_size_lots\": "
+            << config.macro_divergence_taker_size_lots << ",\n"
+            << "  \"latest_ewma_fair_yes_tick\": "
+            << stats.latest_ewma_fair_yes_tick.load() << ",\n"
+            << "  \"latest_ewma_basis_yes_tick\": "
+            << stats.latest_ewma_basis_yes_tick.load() << ",\n"
+            << "  \"macro_structural_dislocation_blocked\": "
+            << stats.macro_structural_dislocation_blocked.load() << ",\n"
+            << "  \"macro_basis_uninitialized_blocked\": "
+            << stats.macro_basis_uninitialized_blocked.load() << ",\n"
+            << "  \"macro_basis_insanity_blocked\": "
+            << stats.macro_basis_insanity_blocked.load() << ",\n"
+            << "  \"macro_edge_not_crossing_blocked\": "
+            << stats.macro_edge_not_crossing_blocked.load() << ",\n"
+            << "  \"taker_circuit_breaker_tripped\": "
+            << stats.taker_circuit_breaker_tripped.load() << ",\n"
             << "  \"lead_lag_min_move_500ms_bps\": "
             << config.lead_lag_min_move_500ms_bps << ",\n"
             << "  \"lead_lag_min_stale_edge_tick\": "
@@ -3166,6 +4111,11 @@ void write_summary_json(
             << config.lead_lag_taker_size_lots << ",\n"
             << "  \"taker_max_entry_mid_slippage_tick\": "
             << config.taker_max_entry_mid_slippage_tick << ",\n"
+            << "  \"macro_divergence_sniping_signals\": "
+            << stats.macro_divergence_sniping_signals.load() << ",\n"
+            << "  \"macro_divergence_taker_ioc_fills_applied\": "
+            << stats.macro_divergence_taker_ioc_fills_applied.load()
+            << ",\n"
             << "  \"lead_lag_sniping_signals\": "
             << stats.lead_lag_sniping_signals.load() << ",\n"
             << "  \"lead_lag_taker_ioc_fills_applied\": "
@@ -3192,6 +4142,10 @@ void write_summary_json(
             << stats.taker_ioc_signals.load() << ",\n"
             << "  \"taker_ioc_fills_applied\": "
             << stats.taker_ioc_fills_applied.load() << ",\n"
+            << "  \"taker_ioc_yes_fills_applied\": "
+            << stats.taker_ioc_yes_fills_applied.load() << ",\n"
+            << "  \"taker_ioc_no_fills_applied\": "
+            << stats.taker_ioc_no_fills_applied.load() << ",\n"
             << "  \"taker_ioc_fills_rejected\": "
             << stats.taker_ioc_fills_rejected.load() << ",\n"
             << "  \"taker_ioc_cooldown_blocked\": "
@@ -3216,9 +4170,46 @@ void write_summary_json(
             << stats.latest_taker_ioc_mid_tick.load() << ",\n"
             << "  \"latest_taker_ioc_mid_slippage_tick\": "
             << stats.latest_taker_ioc_mid_slippage_tick.load() << ",\n"
+            << "  \"latest_taker_ioc_asset_side\": \""
+            << taker_asset_side_name(stats.latest_taker_ioc_asset_side.load())
+            << "\",\n"
             << "  \"latest_taker_ioc_source\": \""
             << taker_ioc_source_name(stats.latest_taker_ioc_source.load())
             << "\",\n"
+            << "  \"reduce_exit_quotes_submitted\": "
+            << stats.reduce_exit_quotes_submitted.load() << ",\n"
+            << "  \"reduce_exit_passive_quotes\": "
+            << stats.reduce_exit_passive_quotes.load() << ",\n"
+            << "  \"reduce_exit_urgent_quotes\": "
+            << stats.reduce_exit_urgent_quotes.load() << ",\n"
+            << "  \"reduce_exit_puke_quotes\": "
+            << stats.reduce_exit_puke_quotes.load() << ",\n"
+            << "  \"latest_reduce_exit_asset_side\": \""
+            << taker_asset_side_name(
+                   stats.latest_reduce_exit_asset_side.load()
+               ) << "\",\n"
+            << "  \"latest_reduce_exit_stage\": \""
+            << reduce_exit_stage_name(
+                   stats.latest_reduce_exit_stage.load()
+               ) << "\",\n"
+            << "  \"latest_reduce_exit_age_ms\": "
+            << stats.latest_reduce_exit_age_ms.load() << ",\n"
+            << "  \"latest_reduce_exit_excess_lots\": "
+            << stats.latest_reduce_exit_excess_lots.load() << ",\n"
+            << "  \"latest_reduce_exit_pressure_bps\": "
+            << stats.latest_reduce_exit_pressure_bps.load() << ",\n"
+            << "  \"latest_reduce_exit_price_tick\": "
+            << stats.latest_reduce_exit_price_tick.load() << ",\n"
+            << "  \"latest_reduce_exit_qty_lots\": "
+            << stats.latest_reduce_exit_qty_lots.load() << ",\n"
+            << "  \"urgent_reduce_age_ms\": "
+            << config.urgent_reduce_age_ms << ",\n"
+            << "  \"puke_reduce_age_ms\": "
+            << config.puke_reduce_age_ms << ",\n"
+            << "  \"urgent_reduce_pressure_bps\": "
+            << config.urgent_reduce_pressure_bps << ",\n"
+            << "  \"puke_reduce_pressure_bps\": "
+            << config.puke_reduce_pressure_bps << ",\n"
             << "  \"as_model_enabled\": "
             << (config.enable_as_model ? "true" : "false") << ",\n"
             << "  \"as_model_ok\": "
@@ -3275,10 +4266,20 @@ void write_summary_json(
             << runtime->attribution.strategy_position_lots << ",\n"
             << "  \"strategy_cost_basis_tick\": "
             << runtime->attribution.strategy_cost_basis_tick << ",\n"
+            << "  \"strategy_complement_position_lots\": "
+            << runtime->attribution.strategy_complement_position_lots << ",\n"
+            << "  \"strategy_complement_cost_basis_tick\": "
+            << runtime->attribution.strategy_complement_cost_basis_tick
+            << ",\n"
             << "  \"strategy_realized_pnl_tick\": "
-            << runtime->attribution.strategy_realized_pnl_tick << ",\n"
+            << runtime->attribution.strategy_realized_pnl_tick +
+                   runtime->attribution.strategy_complement_realized_pnl_tick
+            << ",\n"
             << "  \"strategy_unrealized_pnl_mid_tick\": "
-            << strategy_unrealized_mid_tick << ",\n"
+            << strategy_unrealized_mid_tick +
+                   strategy_complement_unrealized_mid_tick << ",\n"
+            << "  \"strategy_complement_unrealized_pnl_mid_tick\": "
+            << strategy_complement_unrealized_mid_tick << ",\n"
             << "  \"strategy_total_pnl_mid_tick\": "
             << strategy_total_pnl_mid_tick << ",\n"
             << "  \"strategy_spread_capture_tick\": "
@@ -3392,6 +4393,12 @@ void process_depth_update(
     stats->latest_external_fair_raw_tick.store(external_fair.raw_tick);
     stats->latest_external_fair_adjusted_tick.store(external_fair.tick);
     stats->latest_fair_basis_tick.store(external_fair.basis_tick);
+    update_ewma_fair(config, runtime, external_fair.tick);
+    update_ewma_basis_yes(config, runtime, depth, external_fair.tick);
+    stats->latest_ewma_fair_yes_tick.store(runtime->ewma_fair_yes_tick);
+    stats->latest_ewma_basis_yes_tick.store(
+        static_cast<std::int64_t>(std::llround(runtime->ewma_basis_yes_tick))
+    );
     const auto dynamic_quote =
         dynamic_quote_runtime(config, external_fair, oracle_snapshot);
     const auto bid_momentum_shutoff =
@@ -3412,25 +4419,52 @@ void process_depth_update(
         runtime->book_quarantine_until_ns > now;
     if (quarantine_active) {
         stats->depth_updates_quarantined.fetch_add(1);
-        const auto pre_taker_position =
+        const auto pre_taker_yes_position =
             runtime->ledger.position_ledger().lots(config.asset_id);
-        const auto locked_book_taker =
-            evaluate_locked_book_taker_buy(
+        const auto locked_book_yes =
+            evaluate_locked_book_taker_buy_for_asset(
                 config,
                 depth,
-                external_fair,
+                external_fair.tick,
                 oracle_snapshot,
                 bid_momentum_shutoff,
                 dynamic_quote.toxic_bid,
-                pre_taker_position
+                pre_taker_yes_position,
+                false
             );
+        LockedBookTakerOpportunity locked_book_no;
+        if (complement_depth != nullptr) {
+            const auto fair_no_tick = complement_fair_tick(external_fair.tick);
+            const auto pre_taker_no_position =
+                runtime->ledger.position_ledger().lots(
+                    config.complement_asset_id
+                );
+            locked_book_no = evaluate_locked_book_taker_buy_for_asset(
+                config,
+                *complement_depth,
+                fair_no_tick,
+                oracle_snapshot,
+                bid_momentum_shutoff,
+                dynamic_quote.toxic_bid,
+                pre_taker_no_position,
+                true
+            );
+        }
+        const auto locked_book_taker =
+            better_taker_opportunity(locked_book_yes, locked_book_no);
+        const auto& locked_book_depth =
+            locked_book_taker.complement_asset && complement_depth != nullptr
+                ? *complement_depth
+                : depth;
         record_taker_mid_slippage_block(locked_book_taker, 1, stats);
         (void)apply_taker_ioc_buy(
             config,
-            depth,
+            locked_book_depth,
             locked_book_taker,
             1,
-            "locked_book_taker_ioc_buy",
+            locked_book_taker.complement_asset
+                ? "locked_book_taker_ioc_buy_no"
+                : "locked_book_taker_ioc_buy_yes",
             stats,
             runtime,
             now
@@ -3489,6 +4523,44 @@ void process_depth_update(
                 stats->cancel_errors.fetch_add(1);
             }
         }
+        if (config.pure_taker_mode) {
+            update_reduce_quote(
+                config,
+                &depth,
+                config.asset_id,
+                external_fair.tick,
+                false,
+                &runtime->yes_reduce_quote,
+                stats,
+                runtime,
+                now
+            );
+        }
+        if (complement_depth != nullptr) {
+            const execution::PaperMakerMarketEvent complement_event{
+                .ts_ns = now,
+                .asset_index = complement_depth->asset_index,
+                .depth = complement_depth
+            };
+            consume_maker_reports(
+                config,
+                engine,
+                stats,
+                runtime,
+                runtime->execution_adapter.on_market_event(complement_event)
+            );
+            update_reduce_quote(
+                config,
+                complement_depth,
+                config.complement_asset_id,
+                complement_fair_tick(external_fair.tick),
+                true,
+                &runtime->no_reduce_quote,
+                stats,
+                runtime,
+                now
+            );
+        }
         update_pnl_snapshot_unlocked(config, runtime, depth, now);
         return;
     }
@@ -3498,70 +4570,101 @@ void process_depth_update(
         .asset_index = depth.asset_index,
         .depth = &depth
     };
-    const auto reports = runtime->execution_adapter.on_market_event(market_event);
-    for (const auto& report : reports) {
-        stats->maker_reports.fetch_add(1);
-        const auto observed = runtime->event_adapter.observe(report);
-        if (!observed.has_paper_fill) {
-            continue;
-        }
-        const auto applied = runtime->ledger.apply_fill(observed.paper_fill);
-        if (applied.applied) {
-            (void)engine->remove_active_quote(report.asset_index);
-            stats->maker_fills_applied.fetch_add(1);
-            const auto mark_at_fill =
-                mark_tick_for_asset(config, *runtime, report.asset_id);
-            runtime->attribute_fill(report, mark_at_fill);
-            const auto notional =
-                static_cast<std::uint64_t>(
-                    std::max<std::int64_t>(0, report.filled_qty_lots) *
-                    std::max<std::int64_t>(0, report.avg_fill_price_tick)
-                );
-            stats->gross_fill_notional_tick.fetch_add(notional);
-            append_recent_fill(
-                runtime,
-                report,
-                mark_at_fill
-            );
-        } else {
-            stats->maker_fills_rejected.fetch_add(1);
-        }
+    consume_maker_reports(
+        config,
+        engine,
+        stats,
+        runtime,
+        runtime->execution_adapter.on_market_event(market_event)
+    );
+    if (complement_depth != nullptr) {
+        const execution::PaperMakerMarketEvent complement_event{
+            .ts_ns = now,
+            .asset_index = complement_depth->asset_index,
+            .depth = complement_depth
+        };
+        consume_maker_reports(
+            config,
+            engine,
+            stats,
+            runtime,
+            runtime->execution_adapter.on_market_event(complement_event)
+        );
     }
 
     const auto current_position =
         runtime->ledger.position_ledger().lots(config.asset_id);
-    const auto lead_lag =
+    const auto macro_divergence =
         evaluate_lead_lag_sniping(
             config,
             oracle_snapshot,
-            external_fair,
-            depth
+            runtime->ewma_fair_yes_tick,
+            depth,
+            complement_depth,
+            runtime,
+            stats
         );
-    if (lead_lag.active) {
-        runtime->last_lead_lag_signal_ns = now;
-        stats->lead_lag_sniping_signals.fetch_add(1);
-        stats->latest_lead_lag_side.store(lead_lag.side);
-        stats->latest_lead_lag_edge_tick.store(lead_lag.edge_tick);
-        stats->latest_lead_lag_price_tick.store(lead_lag.price_tick);
-        const auto lead_lag_taker =
+    if (macro_divergence.active) {
+        runtime->last_macro_divergence_signal_ns = now;
+        stats->macro_divergence_sniping_signals.fetch_add(1);
+        stats->latest_lead_lag_side.store(macro_divergence.side);
+        stats->latest_lead_lag_edge_tick.store(macro_divergence.edge_tick);
+        stats->latest_lead_lag_price_tick.store(macro_divergence.price_tick);
+        const auto& macro_depth =
+            macro_divergence.complement_asset && complement_depth != nullptr
+                ? *complement_depth
+                : depth;
+        const auto macro_position =
+            runtime->ledger.position_ledger().lots(
+                macro_divergence.complement_asset
+                    ? config.complement_asset_id
+                    : config.asset_id
+            );
+        const auto macro_taker =
             evaluate_lead_lag_taker_buy(
                 config,
-                depth,
-                lead_lag,
-                current_position
+                macro_depth,
+                macro_divergence,
+                macro_position
             );
-        record_taker_mid_slippage_block(lead_lag_taker, 2, stats);
+        record_taker_mid_slippage_block(macro_taker, 3, stats);
         (void)apply_taker_ioc_buy(
             config,
-            depth,
-            lead_lag_taker,
-            2,
-            "lead_lag_taker_ioc_buy",
+            macro_depth,
+            macro_taker,
+            3,
+            macro_taker.complement_asset
+                ? "macro_divergence_taker_ioc_buy_no"
+                : "macro_divergence_taker_ioc_buy_yes",
             stats,
             runtime,
             now
         );
     }
+    if (config.pure_taker_mode) {
+        update_reduce_quote(
+            config,
+            &depth,
+            config.asset_id,
+            external_fair.tick,
+            false,
+            &runtime->yes_reduce_quote,
+            stats,
+            runtime,
+            now
+        );
+    }
+    update_reduce_quote(
+        config,
+        complement_depth,
+        config.complement_asset_id,
+        complement_fair_tick(external_fair.tick),
+        true,
+        &runtime->no_reduce_quote,
+        stats,
+        runtime,
+        now
+    );
     const auto post_taker_position =
         runtime->ledger.position_ledger().lots(config.asset_id);
     const auto mm_result = engine->on_market_update(mm::MarketMakingInput{
@@ -3580,10 +4683,8 @@ void process_depth_update(
         .disable_bid_quotes = config.pure_taker_mode ||
                               dynamic_quote.toxic_bid ||
                               bid_momentum_shutoff,
-        .disable_ask_quotes =
-            dynamic_quote.toxic_ask ||
-            (config.pure_taker_mode &&
-             post_taker_position <= config.target_position_lots),
+        .disable_ask_quotes = dynamic_quote.toxic_ask ||
+                              config.pure_taker_mode,
         .now_ns = now,
         .time_to_expiry_ns = tte_ns
     });
@@ -3972,6 +5073,7 @@ int run(const Config& config) {
         );
     const auto seed_total_pnl_mid_tick =
         runtime.attribution.seed_realized_pnl_tick +
+        runtime.attribution.seed_complement_realized_pnl_tick +
         seed_unrealized_mid_tick +
         seed_complement_unrealized_mid_tick;
     const auto strategy_unrealized_mid_tick = attributed_unrealized_tick(
@@ -3979,9 +5081,17 @@ int run(const Config& config) {
         runtime.attribution.strategy_cost_basis_tick,
         attribution_mark_tick
     );
+    const auto strategy_complement_unrealized_mid_tick =
+        attributed_unrealized_tick(
+            runtime.attribution.strategy_complement_position_lots,
+            runtime.attribution.strategy_complement_cost_basis_tick,
+            attribution_complement_mark_tick
+        );
     const auto strategy_total_pnl_mid_tick =
         runtime.attribution.strategy_realized_pnl_tick +
-        strategy_unrealized_mid_tick;
+        runtime.attribution.strategy_complement_realized_pnl_tick +
+        strategy_unrealized_mid_tick +
+        strategy_complement_unrealized_mid_tick;
     const auto final_bid_momentum_shutoff =
         momentum_bid_shutoff(config, final_oracle_snapshot);
     std::cout << "market_maker_dashboard_live:\n"
@@ -4066,6 +5176,38 @@ int run(const Config& config) {
               << "  lead_lag_sniping_enabled: "
               << (config.lead_lag_sniping_enabled ? "true" : "false")
               << "\n"
+              << "  macro_divergence_taker_enabled: "
+              << (config.macro_divergence_taker_enabled ? "true" : "false")
+              << "\n"
+              << "  macro_divergence_ewma_alpha: "
+              << config.macro_divergence_ewma_alpha << "\n"
+              << "  basis_ewma_alpha: "
+              << config.basis_ewma_alpha << "\n"
+              << "  macro_shock_min_edge_tick: "
+              << config.macro_shock_min_edge_tick << "\n"
+              << "  max_allowed_spread_tick: "
+              << config.max_allowed_spread_tick << "\n"
+              << "  max_allowed_basis_tick: "
+              << config.max_allowed_basis_tick << "\n"
+              << "  max_taker_fills_per_minute: "
+              << config.max_taker_fills_per_minute << "\n"
+              << "  latest_ewma_fair_yes_tick: "
+              << stats.latest_ewma_fair_yes_tick.load() << "\n"
+              << "  latest_ewma_basis_yes_tick: "
+              << stats.latest_ewma_basis_yes_tick.load() << "\n"
+              << "  macro_structural_dislocation_blocked: "
+              << stats.macro_structural_dislocation_blocked.load() << "\n"
+              << "  macro_basis_uninitialized_blocked: "
+              << stats.macro_basis_uninitialized_blocked.load() << "\n"
+              << "  macro_basis_insanity_blocked: "
+              << stats.macro_basis_insanity_blocked.load() << "\n"
+              << "  macro_edge_not_crossing_blocked: "
+              << stats.macro_edge_not_crossing_blocked.load() << "\n"
+              << "  macro_divergence_sniping_signals: "
+              << stats.macro_divergence_sniping_signals.load() << "\n"
+              << "  macro_divergence_taker_ioc_fills_applied: "
+              << stats.macro_divergence_taker_ioc_fills_applied.load()
+              << "\n"
               << "  lead_lag_sniping_signals: "
               << stats.lead_lag_sniping_signals.load() << "\n"
               << "  lead_lag_taker_ioc_fills_applied: "
@@ -4090,6 +5232,10 @@ int run(const Config& config) {
               << stats.taker_ioc_signals.load() << "\n"
               << "  taker_ioc_fills_applied: "
               << stats.taker_ioc_fills_applied.load() << "\n"
+              << "  taker_ioc_yes_fills_applied: "
+              << stats.taker_ioc_yes_fills_applied.load() << "\n"
+              << "  taker_ioc_no_fills_applied: "
+              << stats.taker_ioc_no_fills_applied.load() << "\n"
               << "  taker_ioc_fills_rejected: "
               << stats.taker_ioc_fills_rejected.load() << "\n"
               << "  taker_ioc_cooldown_blocked: "
@@ -4114,9 +5260,38 @@ int run(const Config& config) {
               << stats.latest_taker_ioc_mid_tick.load() << "\n"
               << "  latest_taker_ioc_mid_slippage_tick: "
               << stats.latest_taker_ioc_mid_slippage_tick.load() << "\n"
+              << "  latest_taker_ioc_asset_side: "
+              << taker_asset_side_name(stats.latest_taker_ioc_asset_side.load())
+              << "\n"
               << "  latest_taker_ioc_source: "
               << taker_ioc_source_name(stats.latest_taker_ioc_source.load())
               << "\n"
+              << "  reduce_exit_quotes_submitted: "
+              << stats.reduce_exit_quotes_submitted.load() << "\n"
+              << "  reduce_exit_passive_quotes: "
+              << stats.reduce_exit_passive_quotes.load() << "\n"
+              << "  reduce_exit_urgent_quotes: "
+              << stats.reduce_exit_urgent_quotes.load() << "\n"
+              << "  reduce_exit_puke_quotes: "
+              << stats.reduce_exit_puke_quotes.load() << "\n"
+              << "  latest_reduce_exit_asset_side: "
+              << taker_asset_side_name(
+                     stats.latest_reduce_exit_asset_side.load()
+                 ) << "\n"
+              << "  latest_reduce_exit_stage: "
+              << reduce_exit_stage_name(
+                     stats.latest_reduce_exit_stage.load()
+                 ) << "\n"
+              << "  latest_reduce_exit_age_ms: "
+              << stats.latest_reduce_exit_age_ms.load() << "\n"
+              << "  latest_reduce_exit_excess_lots: "
+              << stats.latest_reduce_exit_excess_lots.load() << "\n"
+              << "  latest_reduce_exit_pressure_bps: "
+              << stats.latest_reduce_exit_pressure_bps.load() << "\n"
+              << "  latest_reduce_exit_price_tick: "
+              << stats.latest_reduce_exit_price_tick.load() << "\n"
+              << "  latest_reduce_exit_qty_lots: "
+              << stats.latest_reduce_exit_qty_lots.load() << "\n"
               << "  as_model_enabled: "
               << (config.enable_as_model ? "true" : "false") << "\n"
               << "  as_model_ok: "

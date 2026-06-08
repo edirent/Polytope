@@ -1,5 +1,6 @@
 #pragma once
 
+#include "engine/reward/public/RewardTypes.h"
 #include "engine/state/view/MarketDepthView.h"
 
 #include <cstdint>
@@ -21,6 +22,7 @@ struct MarketMakingInput {
     std::int64_t dynamic_max_inventory_skew_tick = 0;
     bool disable_bid_quotes = false;
     bool disable_ask_quotes = false;
+    const reward::RewardConfigSnapshot* reward_config = nullptr;
     std::uint64_t now_ns = 0;
     std::uint64_t time_to_expiry_ns = 0;
 };

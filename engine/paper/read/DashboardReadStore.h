@@ -1,5 +1,6 @@
 #pragma once
 
+#include "engine/paper/pnl/RewardPnLTypes.h"
 #include "engine/paper/public/PaperAccount.h"
 #include "engine/paper/public/PerformanceSnapshot.h"
 #include "engine/paper/read/RuntimeSnapshotRing.h"
@@ -42,6 +43,16 @@ struct ExecutionDashboardSnapshot {
     std::uint64_t plans_filled = 0;
     std::uint64_t plans_failed = 0;
     std::uint64_t output_hash = 0;
+};
+
+struct RewardDashboardSnapshot {
+    std::int64_t reward_daily_rate_tick = 0;
+    std::uint64_t eligible_quote_seconds = 0;
+    std::int64_t reward_accrued_tick_estimate = 0;
+    std::int64_t reward_reconciled_tick = 0;
+    std::uint64_t reward_config_age_ms = 0;
+    std::string reward_source_quality = "unknown";
+    std::uint32_t reward_eligible_market_count = 0;
 };
 
 struct PaperFilledOrderSnapshot {
@@ -106,10 +117,15 @@ struct DashboardSnapshot {
     SignalDashboardSnapshot signal;
     RiskDashboardSnapshot risk;
     ExecutionDashboardSnapshot execution;
+    RewardDashboardSnapshot reward;
 
     std::vector<PaperFilledOrderSnapshot> filled_orders;
     std::vector<PaperTerminalPnLSnapshot> terminal_pnl;
 };
+
+[[nodiscard]] RewardDashboardSnapshot reward_dashboard_from_pnl(
+    const RewardPnLSnapshot& snapshot
+);
 
 class DashboardReadStore {
 public:

@@ -7,6 +7,7 @@ add_library(engine_strategy_market_making STATIC
     public/MarketMakingResult.cpp
     public/QuoteIntent.cpp
     quote/QuoteEngine.cpp
+    quote/RewardAwareQuoteConstraint.cpp
     refresh/QuoteRefreshPolicy.cpp
     state/QuoteBook.cpp
 )

@@ -27,6 +27,11 @@ struct QuoteRiskPolicy {
 
     bool allow_bid_quotes = true;
     bool allow_ask_quotes = true;
+
+    bool reward_eligibility_required = false;
+    std::int64_t reward_max_spread_tick = 0;
+    std::int64_t reward_min_quote_size_lots = 0;
+    bool allow_reward_exemption_for_reduce_only = true;
 };
 
 struct RiskPolicySnapshot {
@@ -136,6 +141,13 @@ inline void mix_double(std::uint64_t* hash, double value) noexcept {
     detail::mix_u32(&hash, policy.quote_risk.max_active_quotes_per_asset);
     detail::mix_bool(&hash, policy.quote_risk.allow_bid_quotes);
     detail::mix_bool(&hash, policy.quote_risk.allow_ask_quotes);
+    detail::mix_bool(&hash, policy.quote_risk.reward_eligibility_required);
+    detail::mix_i64(&hash, policy.quote_risk.reward_max_spread_tick);
+    detail::mix_i64(&hash, policy.quote_risk.reward_min_quote_size_lots);
+    detail::mix_bool(
+        &hash,
+        policy.quote_risk.allow_reward_exemption_for_reduce_only
+    );
     return hash;
 }
 

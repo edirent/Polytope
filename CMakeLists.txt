@@ -48,6 +48,7 @@ add_subdirectory(oracle)
 add_subdirectory(engine/signal)
 add_subdirectory(engine/order_decision)
 add_subdirectory(engine/strategy)
+add_subdirectory(engine/reward)
 add_subdirectory(engine/risk)
 target_link_libraries(verify_market_making_workflow PRIVATE engine_risk)
 add_subdirectory(engine/execution)
@@ -72,6 +73,48 @@ foreach(test_case
 endforeach()
 
 add_subdirectory(engine/paper)
+
+add_executable(verify_reward_market_making_workflow
+    engine/reward/tools/verify_reward_market_making_workflow.cpp
+)
+target_compile_features(verify_reward_market_making_workflow PRIVATE cxx_std_20)
+target_link_libraries(verify_reward_market_making_workflow PRIVATE
+    engine_reward
+    engine_risk
+    engine_execution
+    engine_paper
+    market_making_tools
+)
+set_target_properties(verify_reward_market_making_workflow PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+add_executable(reward_market_making_tests
+    tests/unit/reward/reward_market_making_test.cpp
+)
+target_compile_features(reward_market_making_tests PRIVATE cxx_std_20)
+target_link_libraries(reward_market_making_tests PRIVATE
+    engine_reward
+    engine_risk
+    engine_paper
+    market_making_tools
+)
+
+foreach(test_case
+    RewardNormalizer_NormalizesFixture
+    RewardUniverseStore_LookupByConditionAndToken
+    RewardMarketFilter_KeepsEligibleFeature
+    QuoteEngine_RewardConstraintAdjustsQuote
+    QuoteRisk_RewardMissingConfigRejected
+    QuoteRisk_RewardSizeTooSmallRejected
+    RewardPnLEngine_ComputesSeparateAccrualAndDashboard
+)
+    add_test(NAME ${test_case} COMMAND reward_market_making_tests ${test_case})
+endforeach()
+
+add_test(NAME VerifyRewardMarketMakingWorkflow
+    COMMAND verify_reward_market_making_workflow
+)
 add_subdirectory(engine/decision_fastpath)
 add_subdirectory(apps/paper_backend)
 

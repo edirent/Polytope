@@ -53,6 +53,18 @@ std::uint64_t compute_quote_intent_hash(const QuoteIntent& intent) noexcept {
         hash,
         static_cast<std::uint64_t>(intent.current_position_lots)
     );
+    hash = fnv1a_mix(hash, intent.reward_config_present ? 1ULL : 0ULL);
+    hash = fnv1a_mix(hash, intent.reward_eligible ? 1ULL : 0ULL);
+    hash = stable_hash_string(hash, intent.reward_condition_id);
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(intent.reward_max_spread_tick)
+    );
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(intent.reward_min_size_lots)
+    );
+    hash = stable_hash_string(hash, intent.reward_reason);
     hash = fnv1a_mix(hash, intent.created_ts_ns);
     hash = fnv1a_mix(hash, intent.expires_at_ns);
     hash = fnv1a_mix(hash, intent.snapshot_version_hash);

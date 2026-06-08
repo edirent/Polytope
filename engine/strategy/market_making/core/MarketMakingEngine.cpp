@@ -138,6 +138,7 @@ MarketMakingResult MarketMakingEngine::on_market_update(
             .fair_value = fair,
             .spread = spread,
             .size = size,
+            .reward_config = input.reward_config,
             .inventory_skew_tick = skew,
             .current_position_lots = input.current_position_lots,
             .now_ns = input.now_ns,

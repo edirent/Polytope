@@ -1,5 +1,6 @@
 #pragma once
 
+#include "engine/reward/public/RewardTypes.h"
 #include "engine/state/view/MarketDepthView.h"
 #include "engine/strategy/market_making/fair/FairValueModel.h"
 #include "engine/strategy/market_making/public/MarketMakingConfig.h"
@@ -23,6 +24,7 @@ struct QuoteBuildInput {
     FairValueResult fair_value;
     SpreadResult spread;
     QuoteSizeResult size;
+    const reward::RewardConfigSnapshot* reward_config = nullptr;
     std::int64_t inventory_skew_tick = 0;
     std::int64_t current_position_lots = 0;
     std::uint64_t now_ns = 0;

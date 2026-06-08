@@ -22,10 +22,13 @@ enum class QuoteRiskDecisionType : std::uint8_t {
     RejectUnsupportedSide,
     RejectSpreadTooTight,
     RejectSpreadTooWide,
-    RejectFairValueDeviation
+    RejectFairValueDeviation,
+    RejectRewardConfigMissing,
+    RejectRewardSpreadTooWide,
+    RejectRewardSizeTooSmall
 };
 
-inline constexpr std::size_t kQuoteRiskDecisionTypeCount = 16;
+inline constexpr std::size_t kQuoteRiskDecisionTypeCount = 19;
 
 [[nodiscard]] inline const char* quote_risk_decision_type_name(
     QuoteRiskDecisionType decision
@@ -63,6 +66,12 @@ inline constexpr std::size_t kQuoteRiskDecisionTypeCount = 16;
             return "reject_spread_too_wide";
         case QuoteRiskDecisionType::RejectFairValueDeviation:
             return "reject_fair_value_deviation";
+        case QuoteRiskDecisionType::RejectRewardConfigMissing:
+            return "reject_reward_config_missing";
+        case QuoteRiskDecisionType::RejectRewardSpreadTooWide:
+            return "reject_reward_spread_too_wide";
+        case QuoteRiskDecisionType::RejectRewardSizeTooSmall:
+            return "reject_reward_size_too_small";
     }
     return "unknown";
 }

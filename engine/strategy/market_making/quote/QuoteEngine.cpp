@@ -1,6 +1,7 @@
 #include "engine/strategy/market_making/quote/QuoteEngine.h"
 
 #include "engine/strategy/market_making/quote/QuotePriceClamp.h"
+#include "engine/strategy/market_making/quote/RewardAwareQuoteConstraint.h"
 
 #include <algorithm>
 
@@ -463,6 +464,15 @@ QuoteBuildResult QuoteEngine::build(const QuoteBuildInput& input) const {
     }
     if (!quote.has_bid && !quote.has_ask) {
         result.reason = "no quote sides";
+        return result;
+    }
+    RewardAwareQuoteConstraint reward_constraint;
+    if (!reward_constraint.apply(&quote, *input.config, input.reward_config)) {
+        result.reason = "reward quote constraint failed";
+        return result;
+    }
+    if (!resolve_self_crossed_mixed_quote(&quote)) {
+        result.reason = "crossed or invalid quote prices";
         return result;
     }
 

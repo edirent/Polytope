@@ -12,6 +12,7 @@ add_library(engine_paper STATIC
     pnl/MarkPriceProvider.cpp
     pnl/MakerPnLEngine.cpp
     pnl/PaperPnLEngine.cpp
+    pnl/RewardPnLEngine.cpp
     portfolio/PaperPortfolio.cpp
     public/PaperModule.cpp
     read/DashboardReadStore.cpp
@@ -30,6 +31,7 @@ target_link_libraries(engine_paper PUBLIC
     engine_signal
     engine_risk
     engine_execution
+    engine_reward
 )
 
 add_library(paper_tools STATIC

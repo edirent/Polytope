@@ -53,6 +53,13 @@ struct QuoteIntent {
     std::int64_t target_position_lots = 0;
     std::int64_t current_position_lots = 0;
 
+    bool reward_config_present = false;
+    bool reward_eligible = false;
+    std::string reward_condition_id;
+    std::int64_t reward_max_spread_tick = 0;
+    std::int64_t reward_min_size_lots = 0;
+    std::string reward_reason;
+
     std::uint64_t created_ts_ns = 0;
     std::uint64_t expires_at_ns = 0;
 

@@ -214,6 +214,34 @@ namespace {
            quote.type == mm::QuoteIntentType::ForcedUnwind;
 }
 
+[[nodiscard]] bool reward_gate_exempt(
+    const QuoteRiskPolicy& policy,
+    const mm::QuoteIntent& quote
+) noexcept {
+    return policy.allow_reward_exemption_for_reduce_only &&
+           (quote.risk_mode == mm::QuoteIntentRiskMode::ReduceOnly ||
+            quote.risk_mode == mm::QuoteIntentRiskMode::ForcedReduce ||
+            is_unwind_quote(quote));
+}
+
+[[nodiscard]] bool opening_side_below_reward_min_size(
+    const mm::QuoteIntent& quote,
+    std::int64_t min_size_lots
+) noexcept {
+    if (min_size_lots <= 0) {
+        return false;
+    }
+    if (quote.has_bid && !quote.bid.risk_reducing &&
+        quote.bid.quantity_lots < min_size_lots) {
+        return true;
+    }
+    if (quote.has_ask && !quote.ask.risk_reducing &&
+        quote.ask.quantity_lots < min_size_lots) {
+        return true;
+    }
+    return false;
+}
+
 [[nodiscard]] std::int64_t spread_bps(
     std::int64_t spread_tick,
     std::int64_t fair_value_tick
@@ -441,6 +469,48 @@ QuoteRiskResult QuoteRiskEvaluator::evaluate(const QuoteRiskInput& input) const 
             bid_notional,
             ask_notional
         );
+    }
+
+    if (policy->reward_eligibility_required &&
+        !reward_gate_exempt(*policy, *quote)) {
+        if (!quote->reward_config_present) {
+            return reject(
+                input,
+                QuoteRiskDecisionType::RejectRewardConfigMissing,
+                "reward config required but missing",
+                bid_notional,
+                ask_notional
+            );
+        }
+        const auto reward_spread_limit =
+            policy->reward_max_spread_tick > 0
+                ? policy->reward_max_spread_tick
+                : quote->reward_max_spread_tick;
+        if (quote->has_bid && quote->has_ask &&
+            reward_spread_limit > 0 &&
+            quote->ask.price_tick - quote->bid.price_tick >
+                reward_spread_limit) {
+            return reject(
+                input,
+                QuoteRiskDecisionType::RejectRewardSpreadTooWide,
+                "quote spread exceeds reward spread cap",
+                bid_notional,
+                ask_notional
+            );
+        }
+        const auto reward_min_size =
+            policy->reward_min_quote_size_lots > 0
+                ? policy->reward_min_quote_size_lots
+                : quote->reward_min_size_lots;
+        if (opening_side_below_reward_min_size(*quote, reward_min_size)) {
+            return reject(
+                input,
+                QuoteRiskDecisionType::RejectRewardSizeTooSmall,
+                "quote size below reward minimum",
+                bid_notional,
+                ask_notional
+            );
+        }
     }
 
     if (policy->min_book_spread_tick > 0 &&

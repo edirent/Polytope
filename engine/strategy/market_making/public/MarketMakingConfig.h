@@ -63,6 +63,11 @@ struct MarketMakingConfig {
     std::int64_t urgent_unwind_aggression_tick = 0;
     bool reduce_only_quote_to_target = true;
 
+    bool reward_aware_quotes_enabled = false;
+    std::int64_t reward_min_size_lots_floor = 0;
+    std::int64_t reward_max_spread_tick_buffer = 0;
+    bool reward_allow_unwind_exemption = true;
+
     std::uint64_t quote_ttl_ns = 5'000'000'000ULL;
     std::int64_t requote_threshold_tick = 1'000;
     std::int64_t min_quote_price_change_tick = 0;

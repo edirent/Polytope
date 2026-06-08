@@ -49,7 +49,6 @@ markets:
       external_fair_weight_bps: 10000
       require_external_fair: true
       exclude_5m_updown: true
-      taker_max_entry_mid_slippage_tick: 1000
       book_quarantine_ms: 75
       queue_min_rest_ms: 750
       momentum_bid_shutoff:
@@ -58,15 +57,25 @@ markets:
         move_1s_bps: 2.0
       locked_book_taker_hunter:
         enabled: true
-        min_edge_tick: 10000
+        min_edge_tick: 5000
         cooldown_ms: 250
         size_lots: 5
-      lead_lag_sniping:
+      lead_lag_taker:
+        enabled: false
+      macro_divergence_taker:
         enabled: true
-        min_move_500ms_bps: 0.0
-        min_stale_edge_tick: 10000
-        cooldown_ms: 250
-        taker_size_lots: 5
+        ewma_alpha: 0.01
+        min_edge_tick: 25000
+        max_local_oracle_divergence_tick: 50000
+        cooldown_ms: 60000
+        taker_size_lots: 10
+      circuit_breaker:
+        max_taker_fills_per_minute: 10
+      entry_filter:
+        taker_max_entry_mid_slippage_tick: 2000
+      inventory:
+        urgent_exit_age_ms: 30000
+        puke_exit_age_ms: 120000
     paper_seed:
       complete_set: true
       initial_position_lots: 25
