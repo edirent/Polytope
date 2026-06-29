@@ -1,13 +1,23 @@
 add_library(engine_strategy_market_making STATIC
     core/MarketMakingEngine.cpp
+    fair/BarrierTouchFairModel.cpp
     fair/DigitalOptionFairModel.cpp
+    fair/ExternalFairModel.cpp
+    fair/ExternalFairRuntime.cpp
     fair/FairValueModel.cpp
+    fair/MarketImpliedFairModel.cpp
+    fair/TradableFairBuilder.cpp
+    inventory/DynamicInventoryTargeter.cpp
     metrics/MarketMakingMetrics.cpp
     public/CancelQuoteIntent.cpp
     public/MarketMakingResult.cpp
     public/QuoteIntent.cpp
     quote/QuoteEngine.cpp
     quote/RewardAwareQuoteConstraint.cpp
+    research/CanonicalQuoteResearchLogger.cpp
+    research/ExternalFairBasisLogger.cpp
+    research/MarkoutAttributionEngine.cpp
+    risk/PortfolioTouchRiskManager.cpp
     refresh/QuoteRefreshPolicy.cpp
     state/QuoteBook.cpp
 )
@@ -83,6 +93,7 @@ add_executable(market_making_fair_value_tests
 )
 target_link_libraries(market_making_fair_value_tests PRIVATE
     market_making_tools
+    engine_execution
 )
 
 foreach(test_case
@@ -99,6 +110,24 @@ foreach(test_case
     FairValueModel_RejectsMissingBidAsk
     FairValueModel_RejectsCrossedBook
     FairValueModel_RejectsStaleBook
+    BarrierTouchFairModel_UpTouchAlreadyTouchedReturnsOne
+    BarrierTouchFairModel_DownTouchAlreadyTouchedReturnsOne
+    BarrierTouchFairModel_UpTouchProbabilityIsReasonable
+    BarrierTouchFairModel_DownTouchProbabilityIsReasonable
+    BarrierTouchFairModel_FarDownTouchProbabilityLowerThanNearDownTouch
+    BarrierTouchFairModel_InvalidInputsReject
+    ExternalFairRuntime_StaleSpotRejects
+    ExternalFairRuntime_StaleVolRejects
+    ExternalFairRuntime_VolOutOfBoundsRejects
+    ExternalFairRuntime_YesTokenFairEqualsModelFair
+    ExternalFairRuntime_NoTokenMapsToOneMinusYesFair
+    CanonicalPriceMapper_InvertsNoBook
+    CanonicalExposureMapper_NoAssetFlipsSign
+    TradableFairBuilder_BlendsTowardExternal
+    DynamicInventoryTargeter_UsesEdgeBuckets
+    PortfolioTouchRiskManager_RejectsUpsideCap
+    SyntheticCompleteSetExecutor_PaperDetectsRichNo
+    MarkoutAttributionEngine_ComputesBuyMarkout
 )
     add_test(NAME ${test_case} COMMAND market_making_fair_value_tests ${test_case})
 endforeach()

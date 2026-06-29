@@ -18,6 +18,11 @@ struct QuoteRiskPolicy {
     std::int64_t max_book_spread_bps = 0;
     std::int64_t max_quote_fair_deviation_tick = 0;
     std::int64_t max_quote_fair_deviation_bps = 0;
+    std::int64_t max_canonical_yes_exposure_lots = 0;
+    std::int64_t max_portfolio_touch_exposure_lots = 0;
+    std::uint64_t max_spot_age_ms = 1'500;
+    std::uint64_t max_vol_age_ms = 60'000;
+    std::int64_t min_external_confidence_bps = 0;
 
     std::uint64_t max_quote_age_ns = 1'000'000'000ULL;
     std::uint64_t max_book_age_ns = 1'000'000'000ULL;
@@ -135,6 +140,11 @@ inline void mix_double(std::uint64_t* hash, double value) noexcept {
     detail::mix_i64(&hash, policy.quote_risk.max_book_spread_bps);
     detail::mix_i64(&hash, policy.quote_risk.max_quote_fair_deviation_tick);
     detail::mix_i64(&hash, policy.quote_risk.max_quote_fair_deviation_bps);
+    detail::mix_i64(&hash, policy.quote_risk.max_canonical_yes_exposure_lots);
+    detail::mix_i64(&hash, policy.quote_risk.max_portfolio_touch_exposure_lots);
+    detail::mix_u64(&hash, policy.quote_risk.max_spot_age_ms);
+    detail::mix_u64(&hash, policy.quote_risk.max_vol_age_ms);
+    detail::mix_i64(&hash, policy.quote_risk.min_external_confidence_bps);
     detail::mix_u64(&hash, policy.quote_risk.max_quote_age_ns);
     detail::mix_u64(&hash, policy.quote_risk.max_book_age_ns);
     detail::mix_u64(&hash, policy.quote_risk.min_replace_interval_ns);

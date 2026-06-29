@@ -81,6 +81,16 @@ MarketMakingResult MarketMakingEngine::on_market_update(
         effective_config.external_fair_value_tick =
             input.external_fair_value_tick;
     }
+    if (input.dynamic_target_position_lots != 0 ||
+        input.dynamic_min_inventory_lots != 0 ||
+        input.dynamic_max_inventory_lots != 0) {
+        effective_config.target_position_lots =
+            input.dynamic_target_position_lots;
+        effective_config.min_inventory_lots =
+            input.dynamic_min_inventory_lots;
+        effective_config.max_inventory_lots =
+            input.dynamic_max_inventory_lots;
+    }
     if (input.dynamic_half_spread_tick > 0) {
         effective_config.min_half_spread_tick =
             input.dynamic_half_spread_tick;
@@ -140,6 +150,9 @@ MarketMakingResult MarketMakingEngine::on_market_update(
             .size = size,
             .reward_config = input.reward_config,
             .inventory_skew_tick = skew,
+            .canonical_yes_fair_tick = input.canonical_yes_fair_value_tick,
+            .canonical_yes_position_lots = input.canonical_yes_position_lots,
+            .target_canonical_yes_lots = input.target_canonical_yes_lots,
             .current_position_lots = input.current_position_lots,
             .now_ns = input.now_ns,
             .intent_type = active ? QuoteIntentType::ReplaceQuote

@@ -420,6 +420,36 @@ void ApprovedQuote_IsNotOrder() {
     expect_equal(approved.has_ask, false, "default ask");
 }
 
+void QuoteRiskEvaluator_RejectsStaleSpot() {
+    auto q = quote();
+    const auto d = depth();
+    auto p = policy();
+    p.max_spot_age_ms = 1500;
+    auto in = input(&q, &d, &p);
+    in.spot_age_ms = 2000;
+    expect_decision(in, QuoteRiskDecisionType::RejectStaleSpot);
+}
+
+void QuoteRiskEvaluator_RejectsCanonicalExposureLimit() {
+    auto q = quote();
+    const auto d = depth();
+    auto p = policy();
+    p.max_canonical_yes_exposure_lots = 5;
+    auto in = input(&q, &d, &p);
+    in.projected_canonical_yes_position_lots = 6;
+    expect_decision(in, QuoteRiskDecisionType::RejectCanonicalExposureLimit);
+}
+
+void QuoteRiskEvaluator_RejectsLowExternalConfidence() {
+    auto q = quote();
+    const auto d = depth();
+    auto p = policy();
+    p.min_external_confidence_bps = 8000;
+    auto in = input(&q, &d, &p);
+    in.external_confidence_bps = 5000;
+    expect_decision(in, QuoteRiskDecisionType::RejectLowExternalConfidence);
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -447,6 +477,9 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {"QuoteRiskEvaluator_RejectsReduceOnlyAskAboveReducibleInventory", &QuoteRiskEvaluator_RejectsReduceOnlyAskAboveReducibleInventory},
         {"QuoteRiskEvaluator_RejectsUnsupportedSideIfConfigured", &QuoteRiskEvaluator_RejectsUnsupportedSideIfConfigured},
         {"QuoteRiskEvaluator_KillSwitchRejectsAll", &QuoteRiskEvaluator_KillSwitchRejectsAll},
+        {"QuoteRiskEvaluator_RejectsStaleSpot", &QuoteRiskEvaluator_RejectsStaleSpot},
+        {"QuoteRiskEvaluator_RejectsCanonicalExposureLimit", &QuoteRiskEvaluator_RejectsCanonicalExposureLimit},
+        {"QuoteRiskEvaluator_RejectsLowExternalConfidence", &QuoteRiskEvaluator_RejectsLowExternalConfidence},
         {"ApprovedQuote_PreservesQuoteFields", &ApprovedQuote_PreservesQuoteFields},
         {"ApprovedQuote_IsNotOrder", &ApprovedQuote_IsNotOrder}
     };

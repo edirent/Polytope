@@ -18,6 +18,7 @@ add_library(engine_execution STATIC
     state/FillTracker.cpp
     state/ActivePaperQuoteBook.cpp
     state/PartialFillPolicy.cpp
+    synthetic/SyntheticCompleteSetExecutor.cpp
     cancel/CancelManager.cpp
     metrics/ExecutionMetrics.cpp
     publish/HashOnlyExecutionPublisher.cpp

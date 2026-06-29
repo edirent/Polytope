@@ -25,10 +25,15 @@ enum class QuoteRiskDecisionType : std::uint8_t {
     RejectFairValueDeviation,
     RejectRewardConfigMissing,
     RejectRewardSpreadTooWide,
-    RejectRewardSizeTooSmall
+    RejectRewardSizeTooSmall,
+    RejectStaleSpot,
+    RejectStaleVol,
+    RejectLowExternalConfidence,
+    RejectCanonicalExposureLimit,
+    RejectPortfolioTouchLimit
 };
 
-inline constexpr std::size_t kQuoteRiskDecisionTypeCount = 19;
+inline constexpr std::size_t kQuoteRiskDecisionTypeCount = 24;
 
 [[nodiscard]] inline const char* quote_risk_decision_type_name(
     QuoteRiskDecisionType decision
@@ -72,6 +77,16 @@ inline constexpr std::size_t kQuoteRiskDecisionTypeCount = 19;
             return "reject_reward_spread_too_wide";
         case QuoteRiskDecisionType::RejectRewardSizeTooSmall:
             return "reject_reward_size_too_small";
+        case QuoteRiskDecisionType::RejectStaleSpot:
+            return "reject_stale_spot";
+        case QuoteRiskDecisionType::RejectStaleVol:
+            return "reject_stale_vol";
+        case QuoteRiskDecisionType::RejectLowExternalConfidence:
+            return "reject_low_external_confidence";
+        case QuoteRiskDecisionType::RejectCanonicalExposureLimit:
+            return "reject_canonical_exposure_limit";
+        case QuoteRiskDecisionType::RejectPortfolioTouchLimit:
+            return "reject_portfolio_touch_limit";
     }
     return "unknown";
 }
@@ -84,6 +99,8 @@ inline constexpr std::uint8_t kQuoteRiskExposureBreachReasonCode = 3;
     switch (decision) {
         case QuoteRiskDecisionType::RejectInventoryLimit:
         case QuoteRiskDecisionType::RejectExposureLimit:
+        case QuoteRiskDecisionType::RejectCanonicalExposureLimit:
+        case QuoteRiskDecisionType::RejectPortfolioTouchLimit:
             return kQuoteRiskExposureBreachReasonCode;
         default:
             return 0;

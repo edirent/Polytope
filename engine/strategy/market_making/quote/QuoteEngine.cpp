@@ -301,6 +301,13 @@ QuoteBuildResult QuoteEngine::build(const QuoteBuildInput& input) const {
     quote.market_index = input.market_index;
     quote.asset_index = input.asset_index;
     quote.fair_value_tick = input.fair_value.fair_value_tick;
+    quote.asset_fair_tick = input.fair_value.fair_value_tick;
+    quote.canonical_yes_fair_tick = input.canonical_yes_fair_tick;
+    quote.canonical_yes_position_lots = input.canonical_yes_position_lots;
+    quote.target_canonical_yes_lots = input.target_canonical_yes_lots;
+    quote.edge_tick = input.canonical_yes_fair_tick > 0
+        ? input.canonical_yes_fair_tick - input.fair_value.fair_value_tick
+        : 0;
     quote.half_spread_tick = input.spread.half_spread_tick;
     quote.inventory_skew_tick = input.inventory_skew_tick;
     quote.target_position_lots = input.config->target_position_lots;

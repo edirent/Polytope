@@ -323,6 +323,59 @@ QuoteRiskResult QuoteRiskEvaluator::evaluate(const QuoteRiskInput& input) const 
         );
     }
 
+    if (policy->max_spot_age_ms > 0 &&
+        input.spot_age_ms > static_cast<std::int64_t>(policy->max_spot_age_ms)) {
+        return reject(
+            input,
+            QuoteRiskDecisionType::RejectStaleSpot,
+            "stale spot",
+            bid_notional,
+            ask_notional
+        );
+    }
+    if (policy->max_vol_age_ms > 0 &&
+        input.vol_age_ms > static_cast<std::int64_t>(policy->max_vol_age_ms)) {
+        return reject(
+            input,
+            QuoteRiskDecisionType::RejectStaleVol,
+            "stale vol",
+            bid_notional,
+            ask_notional
+        );
+    }
+    if (policy->min_external_confidence_bps > 0 &&
+        input.external_confidence_bps < policy->min_external_confidence_bps) {
+        return reject(
+            input,
+            QuoteRiskDecisionType::RejectLowExternalConfidence,
+            "external fair confidence below policy minimum",
+            bid_notional,
+            ask_notional
+        );
+    }
+    if (policy->max_canonical_yes_exposure_lots > 0 &&
+        std::llabs(input.projected_canonical_yes_position_lots) >
+            policy->max_canonical_yes_exposure_lots) {
+        return reject(
+            input,
+            QuoteRiskDecisionType::RejectCanonicalExposureLimit,
+            "canonical yes exposure limit exceeded",
+            bid_notional,
+            ask_notional
+        );
+    }
+    if (policy->max_portfolio_touch_exposure_lots > 0 &&
+        std::llabs(input.portfolio_touch_exposure_lots) >
+            policy->max_portfolio_touch_exposure_lots) {
+        return reject(
+            input,
+            QuoteRiskDecisionType::RejectPortfolioTouchLimit,
+            "portfolio touch exposure limit exceeded",
+            bid_notional,
+            ask_notional
+        );
+    }
+
     if (quote->expires_at_ns <= input.now_ns) {
         return reject(
             input,

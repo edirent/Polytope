@@ -26,6 +26,9 @@ struct QuoteBuildInput {
     QuoteSizeResult size;
     const reward::RewardConfigSnapshot* reward_config = nullptr;
     std::int64_t inventory_skew_tick = 0;
+    std::int64_t canonical_yes_fair_tick = 0;
+    std::int64_t canonical_yes_position_lots = 0;
+    std::int64_t target_canonical_yes_lots = 0;
     std::int64_t current_position_lots = 0;
     std::uint64_t now_ns = 0;
     QuoteIntentType intent_type = QuoteIntentType::PlaceQuote;

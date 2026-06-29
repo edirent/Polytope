@@ -808,6 +808,9 @@ foreach(test_case
     QuoteRiskEvaluator_RejectsReduceOnlyAskAboveReducibleInventory
     QuoteRiskEvaluator_RejectsUnsupportedSideIfConfigured
     QuoteRiskEvaluator_KillSwitchRejectsAll
+    QuoteRiskEvaluator_RejectsStaleSpot
+    QuoteRiskEvaluator_RejectsCanonicalExposureLimit
+    QuoteRiskEvaluator_RejectsLowExternalConfidence
     ApprovedQuote_PreservesQuoteFields
     ApprovedQuote_IsNotOrder
 )

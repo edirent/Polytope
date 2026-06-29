@@ -1,5 +1,16 @@
+#include "engine/strategy/market_making/fair/BarrierTouchFairModel.h"
+#include "engine/execution/synthetic/SyntheticCompleteSetExecutor.h"
+#include "engine/strategy/market_making/canonical/CanonicalExposureMapper.h"
+#include "engine/strategy/market_making/canonical/CanonicalPriceMapper.h"
 #include "engine/strategy/market_making/fair/DigitalOptionFairModel.h"
+#include "engine/strategy/market_making/fair/ExternalFairRuntime.h"
 #include "engine/strategy/market_making/fair/FairValueModel.h"
+#include "engine/strategy/market_making/fair/FixedVolProvider.h"
+#include "engine/strategy/market_making/fair/InMemorySpotOracle.h"
+#include "engine/strategy/market_making/fair/TradableFairBuilder.h"
+#include "engine/strategy/market_making/inventory/DynamicInventoryTargeter.h"
+#include "engine/strategy/market_making/research/MarkoutAttributionEngine.h"
+#include "engine/strategy/market_making/risk/PortfolioTouchRiskManager.h"
 #include "engine/strategy/market_making/tools/MarketMakingTools.h"
 
 #include <exception>
@@ -218,6 +229,325 @@ void FairValueModel_RejectsStaleBook() {
     expect_equal(result.quality, FairValueQuality::StaleBook, "quality");
 }
 
+void BarrierTouchFairModel_UpTouchAlreadyTouchedReturnsOne() {
+    const auto result = BarrierTouchFairModel{}.compute(
+        BarrierTouchFairInput{
+            .spot = 91.0,
+            .barrier = 90.0,
+            .annualized_vol = 0.90,
+            .tte_years = 30.0 / 365.25,
+            .event_type = ExternalFairEventType::UpTouch,
+            .price_scale_tick = 10'000
+        }
+    );
+    expect_true(result.ok, "ok");
+    expect_equal(result.yes_probability, 1.0, "probability");
+    expect_equal(result.fair_value_tick, 10'000LL, "fair");
+}
+
+void BarrierTouchFairModel_DownTouchAlreadyTouchedReturnsOne() {
+    const auto result = BarrierTouchFairModel{}.compute(
+        BarrierTouchFairInput{
+            .spot = 59.0,
+            .barrier = 60.0,
+            .annualized_vol = 0.90,
+            .tte_years = 30.0 / 365.25,
+            .event_type = ExternalFairEventType::DownTouch,
+            .price_scale_tick = 10'000
+        }
+    );
+    expect_true(result.ok, "ok");
+    expect_equal(result.yes_probability, 1.0, "probability");
+    expect_equal(result.fair_value_tick, 10'000LL, "fair");
+}
+
+void BarrierTouchFairModel_UpTouchProbabilityIsReasonable() {
+    const auto result = BarrierTouchFairModel{}.compute(
+        BarrierTouchFairInput{
+            .spot = 72.0,
+            .barrier = 90.0,
+            .annualized_vol = 0.90,
+            .tte_years = 22.0 / 365.25,
+            .event_type = ExternalFairEventType::UpTouch,
+            .price_scale_tick = 10'000
+        }
+    );
+    expect_true(result.ok, "ok");
+    expect_true(result.yes_probability > 0.25, "probability lower");
+    expect_true(result.yes_probability < 0.40, "probability upper");
+}
+
+void BarrierTouchFairModel_DownTouchProbabilityIsReasonable() {
+    const auto result = BarrierTouchFairModel{}.compute(
+        BarrierTouchFairInput{
+            .spot = 72.0,
+            .barrier = 60.0,
+            .annualized_vol = 0.90,
+            .tte_years = 22.0 / 365.25,
+            .event_type = ExternalFairEventType::DownTouch,
+            .price_scale_tick = 10'000
+        }
+    );
+    expect_true(result.ok, "ok");
+    expect_true(result.yes_probability > 0.35, "probability lower");
+    expect_true(result.yes_probability < 0.50, "probability upper");
+}
+
+void BarrierTouchFairModel_FarDownTouchProbabilityLowerThanNearDownTouch() {
+    BarrierTouchFairInput near_input{
+        .spot = 72.0,
+        .barrier = 60.0,
+        .annualized_vol = 0.90,
+        .tte_years = 22.0 / 365.25,
+        .event_type = ExternalFairEventType::DownTouch,
+        .price_scale_tick = 10'000
+    };
+    auto far_input = near_input;
+    far_input.barrier = 50.0;
+
+    const auto near_result = BarrierTouchFairModel{}.compute(near_input);
+    const auto far_result = BarrierTouchFairModel{}.compute(far_input);
+    expect_true(near_result.ok, "near ok");
+    expect_true(far_result.ok, "far ok");
+    expect_true(
+        near_result.yes_probability > far_result.yes_probability,
+        "near greater than far"
+    );
+}
+
+void BarrierTouchFairModel_InvalidInputsReject() {
+    const auto result = BarrierTouchFairModel{}.compute(
+        BarrierTouchFairInput{
+            .spot = 0.0,
+            .barrier = 90.0,
+            .annualized_vol = 0.90,
+            .tte_years = 22.0 / 365.25,
+            .event_type = ExternalFairEventType::UpTouch,
+            .price_scale_tick = 10'000
+        }
+    );
+    expect_false(result.ok, "ok");
+}
+
+ExternalFairMarketSpec make_runtime_spec(
+    OutcomeSide side = OutcomeSide::Yes,
+    std::int64_t now_ms = 1'000'000
+) {
+    ExternalFairMarketSpec spec;
+    spec.market_id = "sol_june_below60";
+    spec.token_id = side == OutcomeSide::Yes ? "yes" : "no";
+    spec.symbol = ExternalFairSymbol::SOL;
+    spec.event_type = ExternalFairEventType::DownTouch;
+    spec.outcome_side = side;
+    spec.barrier_price = 60.0;
+    spec.expiry_unix_ms = now_ms + 22LL * 24 * 60 * 60 * 1000;
+    spec.price_scale_tick = 10'000;
+    return spec;
+}
+
+void ExternalFairRuntime_StaleSpotRejects() {
+    constexpr std::int64_t now_ms = 1'000'000;
+    InMemorySpotOracle spot_oracle;
+    spot_oracle.update_sol_book_ticker(71.9, 72.1, now_ms - 2'000, now_ms - 2'000);
+    FixedVolProvider vol_provider(0.90, now_ms);
+    const auto result =
+        ExternalFairRuntime{spot_oracle, vol_provider}.compute(
+            make_runtime_spec(OutcomeSide::Yes, now_ms),
+            now_ms
+        );
+    expect_false(result.ok, "ok");
+    expect_equal(result.reject_reason, std::string{"stale_spot"}, "reason");
+}
+
+void ExternalFairRuntime_StaleVolRejects() {
+    constexpr std::int64_t now_ms = 1'000'000;
+    InMemorySpotOracle spot_oracle;
+    spot_oracle.update_sol_book_ticker(71.9, 72.1, now_ms, now_ms);
+    FixedVolProvider vol_provider(0.90, now_ms - 61'000);
+    const auto result =
+        ExternalFairRuntime{spot_oracle, vol_provider}.compute(
+            make_runtime_spec(OutcomeSide::Yes, now_ms),
+            now_ms
+        );
+    expect_false(result.ok, "ok");
+    expect_equal(result.reject_reason, std::string{"stale_vol"}, "reason");
+}
+
+void ExternalFairRuntime_VolOutOfBoundsRejects() {
+    constexpr std::int64_t now_ms = 1'000'000;
+    InMemorySpotOracle spot_oracle;
+    spot_oracle.update_sol_book_ticker(71.9, 72.1, now_ms, now_ms);
+    FixedVolProvider vol_provider(0.05, now_ms);
+    const auto result =
+        ExternalFairRuntime{spot_oracle, vol_provider}.compute(
+            make_runtime_spec(OutcomeSide::Yes, now_ms),
+            now_ms
+        );
+    expect_false(result.ok, "ok");
+    expect_equal(result.reject_reason, std::string{"vol_out_of_bounds"}, "reason");
+}
+
+void ExternalFairRuntime_YesTokenFairEqualsModelFair() {
+    constexpr std::int64_t now_ms = 1'000'000;
+    InMemorySpotOracle spot_oracle;
+    spot_oracle.update_sol_book_ticker(71.9, 72.1, now_ms, now_ms);
+    FixedVolProvider vol_provider(0.90, now_ms);
+    const auto result =
+        ExternalFairRuntime{spot_oracle, vol_provider}.compute(
+            make_runtime_spec(OutcomeSide::Yes, now_ms),
+            now_ms
+        );
+    expect_true(result.ok, "ok");
+    const auto model = BarrierTouchFairModel{}.compute(
+        BarrierTouchFairInput{
+            .spot = 72.0,
+            .barrier = 60.0,
+            .annualized_vol = 0.90,
+            .tte_years = 22.0 / 365.25,
+            .event_type = ExternalFairEventType::DownTouch,
+            .price_scale_tick = 10'000
+        }
+    );
+    expect_true(model.ok, "model ok");
+    expect_equal(result.fair_value_tick, model.fair_value_tick, "fair");
+}
+
+void ExternalFairRuntime_NoTokenMapsToOneMinusYesFair() {
+    constexpr std::int64_t now_ms = 1'000'000;
+    InMemorySpotOracle spot_oracle;
+    spot_oracle.update_sol_book_ticker(71.9, 72.1, now_ms, now_ms);
+    FixedVolProvider vol_provider(0.90, now_ms);
+    ExternalFairRuntime runtime{spot_oracle, vol_provider};
+    const auto yes = runtime.compute(
+        make_runtime_spec(OutcomeSide::Yes, now_ms),
+        now_ms
+    );
+    const auto no = runtime.compute(
+        make_runtime_spec(OutcomeSide::No, now_ms),
+        now_ms
+    );
+    expect_true(yes.ok, "yes ok");
+    expect_true(no.ok, "no ok");
+    expect_equal(no.fair_value_tick, 10'000LL - yes.fair_value_tick, "no fair");
+}
+
+void CanonicalPriceMapper_InvertsNoBook() {
+    const auto yes = canonical_yes_top_of_book(
+        OutcomeSide::No,
+        380'000,
+        390'000,
+        kPriceOneTick
+    );
+    expect_equal(yes.bid_tick, 610'000LL, "yes bid");
+    expect_equal(yes.ask_tick, 620'000LL, "yes ask");
+    expect_equal(yes.mid_tick, 615'000LL, "yes mid");
+    expect_equal(
+        canonical_yes_to_asset_tick(OutcomeSide::No, 615'000, kPriceOneTick),
+        385'000LL,
+        "asset mid"
+    );
+}
+
+void CanonicalExposureMapper_NoAssetFlipsSign() {
+    expect_equal(
+        to_canonical_yes_exposure(OutcomeSide::No, 12),
+        -12LL,
+        "long no"
+    );
+    expect_equal(
+        canonical_yes_delta_for_asset_fill(OutcomeSide::No, false, 5),
+        5LL,
+        "sell no"
+    );
+}
+
+void TradableFairBuilder_BlendsTowardExternal() {
+    TradableFairBuilder builder;
+    const auto out = builder.build(TradableFairInput{
+        .asset_side = OutcomeSide::Yes,
+        .price_scale_tick = kPriceOneTick,
+        .lambda = 0.20,
+        .shadow_only = false,
+        .external = ExternalFairOutput{
+            .ok = true,
+            .canonical_yes_raw_fair_tick = 700'000,
+            .asset_raw_fair_tick = 700'000,
+            .confidence_bps = 10'000
+        },
+        .market = MarketImpliedFairOutput{
+            .ok = true,
+            .canonical_yes_market_mid_tick = 500'000,
+            .implied_fair_tick = 500'000,
+            .confidence_bps = 10'000
+        }
+    });
+    expect_true(out.ok, "tradable ok");
+    expect_equal(out.canonical_yes_tradable_fair_tick, 540'000LL, "blend");
+}
+
+void DynamicInventoryTargeter_UsesEdgeBuckets() {
+    DynamicInventoryTargeter targeter;
+    const auto out = targeter.compute(InventoryTargetInput{
+        .event_type = ExternalFairEventType::DownTouch,
+        .canonical_yes_market_mid_tick = 400'000,
+        .canonical_yes_tradable_fair_tick = 435'000,
+        .confidence_bps = 10'000,
+        .current_canonical_yes_position_lots = 0
+    });
+    expect_equal(out.target_canonical_yes_lots, 15LL, "target lots");
+}
+
+void PortfolioTouchRiskManager_RejectsUpsideCap() {
+    PortfolioTouchRiskManager manager;
+    const auto out = manager.evaluate(PortfolioTouchRiskInput{
+        .event_type = ExternalFairEventType::UpTouch,
+        .current_canonical_yes_position_lots = 20,
+        .proposed_canonical_yes_delta_lots = 10,
+        .max_total_touch_yes_lots = 75,
+        .max_upside_touch_lots = 25,
+        .max_downside_touch_lots = 50
+    });
+    expect_false(out.ok, "risk ok");
+    expect_equal(out.reason, std::string{"max_upside_touch_lots"}, "reason");
+}
+
+void SyntheticCompleteSetExecutor_PaperDetectsRichNo() {
+    trading_engine::execution::synthetic::SyntheticCompleteSetExecutor exec;
+    const auto out = exec.evaluate_paper(
+        trading_engine::execution::synthetic::SyntheticCompleteSetInput{
+            .rich_leg_side = OutcomeSide::No,
+            .rich_leg_bid_tick = 850'000,
+            .rich_leg_tradable_fair_tick = 820'000,
+            .cheap_leg_tradable_fair_tick = 180'000,
+            .residual_inventory_lots = 0,
+            .target_residual_inventory_lots = 10,
+            .available_cash_tick = 10'000'000,
+            .min_edge_tick = 10'000,
+            .min_exit_depth_lots = 1,
+            .exit_depth_lots = 5,
+            .tte_ns = 3'600'000'000'000LL
+        }
+    );
+    expect_true(out.should_mint_and_sell_rich_leg, "synthetic decision");
+}
+
+void MarkoutAttributionEngine_ComputesBuyMarkout() {
+    trading_engine::strategy::market_making::research::MarkoutAttributionEngine
+        engine;
+    const auto out = engine.attribute(
+        trading_engine::strategy::market_making::research::FillAttributionInput{
+            .fill_price_tick = 500'000,
+            .fair_at_fill_tick = 510'000,
+            .mid_at_fill_tick = 505'000,
+            .future_mid_tick = 520'000,
+            .future_fair_tick = 530'000,
+            .buy = true
+        }
+    );
+    expect_equal(out.markout_tick, 20'000LL, "markout");
+    expect_equal(out.spread_capture_tick, 5'000LL, "spread capture");
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -234,7 +564,25 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {"FairValueModel_RejectsWideSpread", &FairValueModel_RejectsWideSpread},
         {"FairValueModel_RejectsMissingBidAsk", &FairValueModel_RejectsMissingBidAsk},
         {"FairValueModel_RejectsCrossedBook", &FairValueModel_RejectsCrossedBook},
-        {"FairValueModel_RejectsStaleBook", &FairValueModel_RejectsStaleBook}
+        {"FairValueModel_RejectsStaleBook", &FairValueModel_RejectsStaleBook},
+        {"BarrierTouchFairModel_UpTouchAlreadyTouchedReturnsOne", &BarrierTouchFairModel_UpTouchAlreadyTouchedReturnsOne},
+        {"BarrierTouchFairModel_DownTouchAlreadyTouchedReturnsOne", &BarrierTouchFairModel_DownTouchAlreadyTouchedReturnsOne},
+        {"BarrierTouchFairModel_UpTouchProbabilityIsReasonable", &BarrierTouchFairModel_UpTouchProbabilityIsReasonable},
+        {"BarrierTouchFairModel_DownTouchProbabilityIsReasonable", &BarrierTouchFairModel_DownTouchProbabilityIsReasonable},
+        {"BarrierTouchFairModel_FarDownTouchProbabilityLowerThanNearDownTouch", &BarrierTouchFairModel_FarDownTouchProbabilityLowerThanNearDownTouch},
+        {"BarrierTouchFairModel_InvalidInputsReject", &BarrierTouchFairModel_InvalidInputsReject},
+        {"ExternalFairRuntime_StaleSpotRejects", &ExternalFairRuntime_StaleSpotRejects},
+        {"ExternalFairRuntime_StaleVolRejects", &ExternalFairRuntime_StaleVolRejects},
+        {"ExternalFairRuntime_VolOutOfBoundsRejects", &ExternalFairRuntime_VolOutOfBoundsRejects},
+        {"ExternalFairRuntime_YesTokenFairEqualsModelFair", &ExternalFairRuntime_YesTokenFairEqualsModelFair},
+        {"ExternalFairRuntime_NoTokenMapsToOneMinusYesFair", &ExternalFairRuntime_NoTokenMapsToOneMinusYesFair},
+        {"CanonicalPriceMapper_InvertsNoBook", &CanonicalPriceMapper_InvertsNoBook},
+        {"CanonicalExposureMapper_NoAssetFlipsSign", &CanonicalExposureMapper_NoAssetFlipsSign},
+        {"TradableFairBuilder_BlendsTowardExternal", &TradableFairBuilder_BlendsTowardExternal},
+        {"DynamicInventoryTargeter_UsesEdgeBuckets", &DynamicInventoryTargeter_UsesEdgeBuckets},
+        {"PortfolioTouchRiskManager_RejectsUpsideCap", &PortfolioTouchRiskManager_RejectsUpsideCap},
+        {"SyntheticCompleteSetExecutor_PaperDetectsRichNo", &SyntheticCompleteSetExecutor_PaperDetectsRichNo},
+        {"MarkoutAttributionEngine_ComputesBuyMarkout", &MarkoutAttributionEngine_ComputesBuyMarkout}
     };
     return map;
 }

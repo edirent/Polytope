@@ -20,6 +20,12 @@ struct QuoteRiskInput {
 
     std::int64_t current_position_lots = 0;
     std::int64_t current_asset_exposure_tick = 0;
+    std::int64_t current_canonical_yes_position_lots = 0;
+    std::int64_t projected_canonical_yes_position_lots = 0;
+    std::int64_t portfolio_touch_exposure_lots = 0;
+    std::int64_t spot_age_ms = 0;
+    std::int64_t vol_age_ms = 0;
+    std::int64_t external_confidence_bps = 0;
     std::uint32_t active_quotes_for_asset = 0;
     std::uint64_t last_replace_ts_ns = 0;
 

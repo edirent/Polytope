@@ -9,12 +9,26 @@
 #include "engine/paper/pnl/MakerPnLEngine.h"
 #include "engine/risk/quote/QuoteRiskEvaluator.h"
 #include "engine/risk/public/RiskPolicySnapshot.h"
+#include "engine/strategy/market_making/canonical/CanonicalExposureMapper.h"
+#include "engine/strategy/market_making/canonical/CanonicalMarketState.h"
+#include "engine/strategy/market_making/canonical/CanonicalPriceMapper.h"
 #include "engine/strategy/market_making/core/MarketMakingEngine.h"
 #include "engine/strategy/market_making/fair/DigitalOptionFairModel.h"
+#include "engine/strategy/market_making/fair/ExternalFairModel.h"
+#include "engine/strategy/market_making/fair/ExternalFairRuntime.h"
+#include "engine/strategy/market_making/fair/FixedVolProvider.h"
+#include "engine/strategy/market_making/fair/InMemorySpotOracle.h"
+#include "engine/strategy/market_making/fair/MarketImpliedFairModel.h"
+#include "engine/strategy/market_making/fair/TradableFairBuilder.h"
+#include "engine/strategy/market_making/inventory/DynamicInventoryTargeter.h"
 #include "engine/strategy/market_making/public/MarketMakingConfig.h"
+#include "engine/strategy/market_making/research/CanonicalQuoteResearchLogger.h"
+#include "engine/strategy/market_making/research/ExternalFairBasisLogger.h"
+#include "engine/strategy/market_making/risk/PortfolioTouchRiskManager.h"
 #include "feed/decode/DecodeInputAdapter.h"
 #include "feed/raw_ingest/RawPacket.h"
 #include "feed/source_runtime/WebSocketClient.h"
+#include "state/book/DepthPrefix.h"
 #include "state/MarketStateView.h"
 #include "state/core/MarketStateEventAdapter.h"
 #include "state/core/MarketStateStore.h"
@@ -41,6 +55,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -50,6 +65,7 @@ namespace decode = trading_engine::decode;
 namespace execution = trading_engine::execution;
 namespace feed = trading_engine::feed;
 namespace mm = trading_engine::strategy::market_making;
+namespace mm_research = trading_engine::strategy::market_making::research;
 namespace paper = trading_engine::paper;
 namespace risk = trading_engine::risk;
 namespace state = trading_engine::state;
@@ -149,6 +165,22 @@ struct Config {
     std::uint64_t btc_realized_vol_window_seconds = 300;
     double btc_min_realized_vol_annual_bps = 1'000.0;
     double btc_max_realized_vol_annual_bps = 20'000.0;
+    bool sol_external_fair_enabled = true;
+    bool external_fair_basis_log = false;
+    bool canonical_quote_research_log = false;
+    bool external_fair_shadow_only = false;
+    double external_fair_tradable_lambda = 0.20;
+    bool dynamic_inventory_targeter_enabled = true;
+    bool portfolio_touch_risk_enabled = true;
+    double sol_fixed_vol_annualized = 0.90;
+    double sol_spot_bid = 0.0;
+    double sol_spot_ask = 0.0;
+    std::string sol_spot_feed{"manual"};
+    std::string sol_spot_feed_endpoint{
+        "wss://data-stream.binance.vision/ws/solusdt@bookTicker"
+    };
+    double sol_spot_max_spread_bps = 20.0;
+    std::string sol_external_fair_outcome_side{"yes"};
     bool enable_as_model = false;
     double as_risk_aversion = 0.05;
     double as_order_arrival_k = 0.02;
@@ -636,11 +668,110 @@ std::uint64_t now_ns() {
     );
 }
 
+std::int64_t current_unix_ms() {
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    return static_cast<std::int64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(now).count()
+    );
+}
+
 std::uint64_t elapsed_ns(Clock::time_point start, Clock::time_point end) {
     return static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
             .count()
     );
+}
+
+bool contains_fragment(
+    const std::string& value,
+    const std::string_view fragment
+) {
+    return value.find(fragment) != std::string::npos;
+}
+
+mm::OutcomeSide parse_outcome_side(const std::string& value) {
+    if (value == "no" || value == "NO" || value == "No") {
+        return mm::OutcomeSide::No;
+    }
+    return mm::OutcomeSide::Yes;
+}
+
+mm::OutcomeSide opposite_outcome_side(mm::OutcomeSide side) {
+    return side == mm::OutcomeSide::Yes ? mm::OutcomeSide::No
+                                        : mm::OutcomeSide::Yes;
+}
+
+bool populate_sol_external_fair_spec(
+    const Config& config,
+    const std::string& token_id,
+    mm::OutcomeSide outcome_side,
+    mm::ExternalFairMarketSpec* spec
+) {
+    if (!config.sol_external_fair_enabled || token_id.empty() ||
+        config.window_end_unix_seconds == 0 || spec == nullptr) {
+        return false;
+    }
+
+    mm::ExternalFairEventType event_type = mm::ExternalFairEventType::Unknown;
+    double barrier = 0.0;
+    if (contains_fragment(config.market_id, "reach-90") ||
+        contains_fragment(config.market_id, "above-90")) {
+        event_type = mm::ExternalFairEventType::UpTouch;
+        barrier = 90.0;
+    } else if (contains_fragment(config.market_id, "dip-to-60") ||
+               contains_fragment(config.market_id, "below-60") ||
+               contains_fragment(config.market_id, "below60")) {
+        event_type = mm::ExternalFairEventType::DownTouch;
+        barrier = 60.0;
+    } else if (contains_fragment(config.market_id, "dip-to-50") ||
+               contains_fragment(config.market_id, "below-50") ||
+               contains_fragment(config.market_id, "below50")) {
+        event_type = mm::ExternalFairEventType::DownTouch;
+        barrier = 50.0;
+    } else {
+        return false;
+    }
+
+    spec->market_id = config.market_id;
+    spec->token_id = token_id;
+    spec->symbol = mm::ExternalFairSymbol::SOL;
+    spec->event_type = event_type;
+    spec->outcome_side = outcome_side;
+    spec->barrier_price = barrier;
+    spec->expiry_unix_ms =
+        static_cast<std::int64_t>(config.window_end_unix_seconds) * 1000LL;
+    spec->price_scale_tick = mm::kPriceOneTick;
+    return true;
+}
+
+std::filesystem::path external_fair_basis_log_path(const Config& config) {
+    std::filesystem::path run_dir;
+    if (!config.dashboard_file.empty() &&
+        !config.dashboard_file.parent_path().empty()) {
+        run_dir = config.dashboard_file.parent_path();
+    } else if (!config.out_json.empty() &&
+               !config.out_json.parent_path().empty()) {
+        run_dir = config.out_json.parent_path();
+    } else {
+        run_dir = std::filesystem::current_path();
+    }
+    return run_dir / "external_fair_basis_snapshots.csv";
+}
+
+std::filesystem::path canonical_quote_research_log_path(
+    const Config& config
+) {
+    std::filesystem::path run_dir;
+    if (!config.dashboard_file.empty() &&
+        !config.dashboard_file.parent_path().empty()) {
+        run_dir = config.dashboard_file.parent_path();
+    } else if (!config.out_json.empty() &&
+               !config.out_json.parent_path().empty()) {
+        run_dir = config.out_json.parent_path();
+    } else {
+        run_dir = std::filesystem::current_path();
+    }
+    return run_dir / "canonical_quote_research.csv";
 }
 
 std::uint64_t now_unix_seconds() {
@@ -1678,6 +1809,119 @@ bool parse_binance_trade_price(
     return false;
 }
 
+bool parse_json_double(
+    const boost::json::value& value,
+    double* out_value
+) {
+    if (!out_value) {
+        return false;
+    }
+    try {
+        if (value.is_string()) {
+            const auto& text = value.as_string();
+            *out_value =
+                std::stod(std::string(text.data(), text.size()));
+            return *out_value > 0.0 && std::isfinite(*out_value);
+        }
+        if (value.is_double()) {
+            *out_value = value.as_double();
+            return *out_value > 0.0 && std::isfinite(*out_value);
+        }
+        if (value.is_int64()) {
+            *out_value = static_cast<double>(value.as_int64());
+            return *out_value > 0.0 && std::isfinite(*out_value);
+        }
+        if (value.is_uint64()) {
+            *out_value = static_cast<double>(value.as_uint64());
+            return *out_value > 0.0 && std::isfinite(*out_value);
+        }
+    } catch (...) {
+        return false;
+    }
+    return false;
+}
+
+bool parse_binance_book_ticker(
+    const std::string& payload,
+    double* out_bid,
+    double* out_ask,
+    std::int64_t* out_exchange_ts_ms
+) {
+    if (!out_bid || !out_ask) {
+        return false;
+    }
+    boost::json::error_code error;
+    const auto parsed = boost::json::parse(payload, error);
+    if (error || !parsed.is_object()) {
+        return false;
+    }
+
+    const boost::json::object* object = &parsed.as_object();
+    if (const auto it = object->find("data");
+        it != object->end() && it->value().is_object()) {
+        object = &it->value().as_object();
+    }
+
+    const auto bid_it = object->find("b");
+    const auto ask_it = object->find("a");
+    if (bid_it == object->end() || ask_it == object->end()) {
+        return false;
+    }
+    if (!parse_json_double(bid_it->value(), out_bid) ||
+        !parse_json_double(ask_it->value(), out_ask)) {
+        return false;
+    }
+
+    if (out_exchange_ts_ms != nullptr) {
+        *out_exchange_ts_ms = 0;
+        for (const char* key : {"E", "T"}) {
+            const auto ts_it = object->find(key);
+            if (ts_it == object->end()) {
+                continue;
+            }
+            try {
+                if (ts_it->value().is_int64()) {
+                    *out_exchange_ts_ms = ts_it->value().as_int64();
+                    break;
+                }
+                if (ts_it->value().is_uint64()) {
+                    *out_exchange_ts_ms = static_cast<std::int64_t>(
+                        ts_it->value().as_uint64()
+                    );
+                    break;
+                }
+                if (ts_it->value().is_string()) {
+                    const auto& text = ts_it->value().as_string();
+                    *out_exchange_ts_ms = std::stoll(
+                        std::string(text.data(), text.size())
+                    );
+                    break;
+                }
+            } catch (...) {
+                continue;
+            }
+        }
+    }
+
+    return *out_bid > 0.0 && *out_ask > 0.0 && *out_ask >= *out_bid;
+}
+
+bool sol_book_ticker_spread_ok(
+    double bid,
+    double ask,
+    double max_spread_bps
+) {
+    if (bid <= 0.0 || ask <= 0.0 || ask < bid || max_spread_bps <= 0.0) {
+        return false;
+    }
+    const double mid = 0.5 * (bid + ask);
+    if (mid <= 0.0) {
+        return false;
+    }
+    const double spread_bps = (ask - bid) / mid * 10'000.0;
+    return spread_bps <= max_spread_bps;
+}
+
 bool targets_other_asset(
     const decode::NormalizedEvent& event,
     const Config& config
@@ -1777,8 +2021,8 @@ Config parse_args(int argc, char** argv) {
             return argv[++index];
         };
 
-        if (arg == "--seconds") {
-            config.seconds = std::stoull(value("--seconds"));
+        if (arg == "--seconds" || arg == "--duration-seconds") {
+            config.seconds = std::stoull(value(arg.c_str()));
         } else if (arg == "--asset-id") {
             config.asset_id = value("--asset-id");
         } else if (arg == "--complement-asset-id") {
@@ -2035,6 +2279,41 @@ Config parse_args(int argc, char** argv) {
         } else if (arg == "--btc-max-realized-vol-annual-bps") {
             config.btc_max_realized_vol_annual_bps =
                 std::stod(value("--btc-max-realized-vol-annual-bps"));
+        } else if (arg == "--disable-sol-external-fair") {
+            config.sol_external_fair_enabled = false;
+        } else if (arg == "--external-fair-basis-log") {
+            config.external_fair_basis_log = true;
+            config.canonical_quote_research_log = true;
+        } else if (arg == "--canonical-quote-research-log") {
+            config.canonical_quote_research_log = true;
+        } else if (arg == "--external-fair-shadow-only") {
+            config.external_fair_shadow_only = true;
+        } else if (arg == "--external-fair-tradable-lambda") {
+            config.external_fair_tradable_lambda =
+                std::stod(value("--external-fair-tradable-lambda"));
+        } else if (arg == "--enable-dynamic-inventory-targeter") {
+            config.dynamic_inventory_targeter_enabled = true;
+        } else if (arg == "--disable-dynamic-inventory-targeter") {
+            config.dynamic_inventory_targeter_enabled = false;
+        } else if (arg == "--enable-portfolio-touch-risk") {
+            config.portfolio_touch_risk_enabled = true;
+        } else if (arg == "--disable-portfolio-touch-risk") {
+            config.portfolio_touch_risk_enabled = false;
+        } else if (arg == "--sol-fixed-vol-annualized") {
+            config.sol_fixed_vol_annualized =
+                std::stod(value("--sol-fixed-vol-annualized"));
+        } else if (arg == "--sol-spot") {
+            config.sol_spot_bid = std::stod(value("--sol-spot"));
+            config.sol_spot_ask = config.sol_spot_bid;
+        } else if (arg == "--sol-spot-bid") {
+            config.sol_spot_bid = std::stod(value("--sol-spot-bid"));
+        } else if (arg == "--sol-spot-ask") {
+            config.sol_spot_ask = std::stod(value("--sol-spot-ask"));
+        } else if (arg == "--sol-spot-feed") {
+            config.sol_spot_feed = value("--sol-spot-feed");
+        } else if (arg == "--sol-external-fair-outcome-side") {
+            config.sol_external_fair_outcome_side =
+                value("--sol-external-fair-outcome-side");
         } else if (arg == "--enable-as-model") {
             config.enable_as_model = true;
         } else if (arg == "--as-risk-aversion") {
@@ -2122,7 +2401,8 @@ Config parse_args(int argc, char** argv) {
         } else if (arg == "--help" || arg == "-h") {
             std::cout
                 << "usage: run_market_maker_dashboard_live "
-                << "[--seconds 1800] [--asset-id ASSET] "
+                << "[--seconds 1800|--duration-seconds 1800] "
+                << "[--asset-id ASSET] "
                 << "[--dashboard-file PATH] [--out-json PATH] "
                 << "[--starting-cash 1000] [--fill-mode book-cross] "
                 << "[--passive-reduce-excess-lots 20] "
@@ -2264,9 +2544,42 @@ Config parse_args(int argc, char** argv) {
         config.external_fair_weight_bps > 10'000) {
         fail("--external-fair-weight-bps must be in [0, 10000]");
     }
+    if (config.external_fair_tradable_lambda < 0.0 ||
+        config.external_fair_tradable_lambda > 1.0) {
+        fail("--external-fair-tradable-lambda must be in [0, 1]");
+    }
     if (config.external_fair_value_tick < 0 ||
         config.external_fair_value_tick >= mm::kPriceOneTick) {
         fail("--external-fair-tick must be in [0, 999999]");
+    }
+    if (config.sol_fixed_vol_annualized <= 0.0 ||
+        config.sol_fixed_vol_annualized > 10.0) {
+        fail("--sol-fixed-vol-annualized must be in (0, 10]");
+    }
+    if (config.sol_spot_feed != "manual" &&
+        config.sol_spot_feed != "binance_book_ticker") {
+        fail("--sol-spot-feed must be manual or binance_book_ticker");
+    }
+    if ((config.sol_spot_bid > 0.0 || config.sol_spot_ask > 0.0) &&
+        (config.sol_spot_bid <= 0.0 ||
+         config.sol_spot_ask <= 0.0 ||
+         config.sol_spot_ask < config.sol_spot_bid)) {
+        fail("SOL spot bid/ask must be positive with ask >= bid");
+    }
+    if (config.sol_spot_feed == "binance_book_ticker" &&
+        config.sol_spot_feed_endpoint.empty()) {
+        fail("SOL binance book ticker endpoint must not be empty");
+    }
+    if (config.sol_spot_max_spread_bps <= 0.0) {
+        fail("SOL spot max spread bps must be positive");
+    }
+    if (config.sol_external_fair_outcome_side != "yes" &&
+        config.sol_external_fair_outcome_side != "Yes" &&
+        config.sol_external_fair_outcome_side != "YES" &&
+        config.sol_external_fair_outcome_side != "no" &&
+        config.sol_external_fair_outcome_side != "No" &&
+        config.sol_external_fair_outcome_side != "NO") {
+        fail("--sol-external-fair-outcome-side must be yes or no");
     }
     if ((config.btc_spot > 0.0 || config.btc_threshold > 0.0 ||
          config.btc_vol_annual_bps > 0.0 ||
@@ -2454,6 +2767,14 @@ risk::QuoteRiskPolicy quote_risk_policy(const Config& input) {
     policy.max_quote_fair_deviation_tick =
         input.max_quote_fair_deviation_tick;
     policy.max_quote_fair_deviation_bps = input.max_quote_fair_deviation_bps;
+    policy.max_canonical_yes_exposure_lots = input.max_inventory_lots;
+    policy.max_portfolio_touch_exposure_lots =
+        input.portfolio_touch_risk_enabled ? input.max_inventory_lots * 2 : 0;
+    policy.max_spot_age_ms = 1'500;
+    policy.max_vol_age_ms = 60'000;
+    policy.min_external_confidence_bps = input.sol_external_fair_enabled
+        ? 1
+        : 0;
     policy.max_book_age_ns = 1'000'000'000ULL;
     policy.min_replace_interval_ns =
         input.min_requote_interval_ms * 1'000'000ULL;
@@ -3775,6 +4096,14 @@ void write_dashboard_snapshot(
         std::lock_guard<std::mutex> lock(runtime->mutex);
         ++runtime->dashboard_seq_no;
         ++runtime->dashboard_samples;
+        if (runtime->has_depth) {
+            update_pnl_snapshot_unlocked(
+                config,
+                runtime,
+                runtime->last_depth,
+                now_ns()
+            );
+        }
         const auto body =
             dashboard_json_unlocked(
                 config,
@@ -4359,6 +4688,13 @@ void process_depth_update(
     const state::MarketDepthView& depth,
     const state::MarketDepthView* complement_depth,
     const BtcOracleSnapshot& oracle_snapshot,
+    const mm::ExternalFairRuntime* sol_external_fair_runtime,
+    const std::unordered_map<std::string, mm::ExternalFairMarketSpec>*
+        sol_external_fair_specs_by_token_id,
+    mm::InMemorySpotOracle* sol_spot_oracle,
+    mm::FixedVolProvider* sol_vol_provider,
+    mm_research::ExternalFairBasisLogger* external_fair_basis_logger,
+    mm_research::CanonicalQuoteResearchLogger* canonical_quote_logger,
     mm::MarketMakingEngine* engine,
     risk::QuoteRiskEvaluator* risk_evaluator,
     const risk::QuoteRiskPolicy& policy,
@@ -4366,6 +4702,21 @@ void process_depth_update(
     RuntimeState* runtime
 ) {
     const auto now = now_ns();
+    const auto unix_ms = current_unix_ms();
+    if (sol_spot_oracle != nullptr &&
+        config.sol_spot_feed == "manual" &&
+        config.sol_spot_bid > 0.0 &&
+        config.sol_spot_ask > 0.0) {
+        sol_spot_oracle->update_sol_book_ticker(
+            config.sol_spot_bid,
+            config.sol_spot_ask,
+            unix_ms,
+            unix_ms
+        );
+    }
+    if (sol_vol_provider != nullptr) {
+        sol_vol_provider->update(config.sol_fixed_vol_annualized, unix_ms);
+    }
 
     std::lock_guard<std::mutex> lock(runtime->mutex);
     runtime->last_depth = depth;
@@ -4667,6 +5018,258 @@ void process_depth_update(
     );
     const auto post_taker_position =
         runtime->ledger.position_ledger().lots(config.asset_id);
+    auto market_making_external_fair_tick = external_fair.tick;
+    const mm::ExternalFairMarketSpec* active_external_fair_spec = nullptr;
+    mm::ExternalFairResult active_external_fair_result;
+    if (sol_external_fair_runtime != nullptr &&
+        sol_external_fair_specs_by_token_id != nullptr) {
+        const auto spec_it =
+            sol_external_fair_specs_by_token_id->find(config.asset_id);
+        if (spec_it != sol_external_fair_specs_by_token_id->end()) {
+            active_external_fair_spec = &spec_it->second;
+            active_external_fair_result =
+                sol_external_fair_runtime->compute(spec_it->second, unix_ms);
+            if (active_external_fair_result.ok) {
+                market_making_external_fair_tick =
+                    active_external_fair_result.fair_value_tick;
+            } else if (config.require_external_fair_for_opening_quotes) {
+                market_making_external_fair_tick = 0;
+            }
+        }
+    }
+    mm::CanonicalMarketState canonical_state;
+    mm::ExternalFairOutput external_fair_output;
+    mm::MarketImpliedFairOutput market_implied_output;
+    mm::TradableFairOutput tradable_fair_output;
+    mm::InventoryTargetOutput inventory_target;
+    std::int64_t canonical_yes_position_lots = 0;
+    std::int64_t target_asset_position_lots = config.target_position_lots;
+    std::int64_t dynamic_min_asset_lots = config.min_inventory_lots;
+    std::int64_t dynamic_max_asset_lots = config.max_inventory_lots;
+    std::int64_t spot_age_for_risk_ms = 0;
+    std::int64_t vol_age_for_risk_ms = 0;
+    std::int64_t external_confidence_for_risk_bps = 10'000;
+    if (active_external_fair_spec != nullptr &&
+        depth.bid_count > 0 &&
+        depth.ask_count > 0 &&
+        depth.bids[0].price_tick > 0 &&
+        depth.asks[0].price_tick > 0 &&
+        depth.asks[0].price_tick >= depth.bids[0].price_tick) {
+        const auto best_bid_tick = depth.bids[0].price_tick;
+        const auto best_ask_tick = depth.asks[0].price_tick;
+        const auto canonical_book = mm::canonical_yes_top_of_book(
+            active_external_fair_spec->outcome_side,
+            best_bid_tick,
+            best_ask_tick,
+            active_external_fair_spec->price_scale_tick
+        );
+        const auto spot_snapshot =
+            sol_spot_oracle != nullptr
+                ? sol_spot_oracle->latest(active_external_fair_spec->symbol)
+                : mm::SpotSnapshot{};
+        const auto vol_snapshot =
+            sol_vol_provider != nullptr
+                ? sol_vol_provider->latest(active_external_fair_spec->symbol)
+                : mm::VolSnapshot{};
+        canonical_yes_position_lots = mm::to_canonical_yes_exposure(
+            active_external_fair_spec->outcome_side,
+            post_taker_position
+        );
+        canonical_state.market_id = active_external_fair_spec->market_id;
+        canonical_state.token_id = active_external_fair_spec->token_id;
+        canonical_state.complement_token_id = config.complement_asset_id;
+        canonical_state.event_type = active_external_fair_spec->event_type;
+        canonical_state.asset_side = active_external_fair_spec->outcome_side;
+        canonical_state.book_bid_tick = best_bid_tick;
+        canonical_state.book_ask_tick = best_ask_tick;
+        canonical_state.book_mid_tick = (best_bid_tick + best_ask_tick) / 2;
+        canonical_state.spread_tick = best_ask_tick - best_bid_tick;
+        canonical_state.canonical_yes_bid_tick = canonical_book.bid_tick;
+        canonical_state.canonical_yes_ask_tick = canonical_book.ask_tick;
+        canonical_state.canonical_yes_mid_tick = canonical_book.mid_tick;
+        canonical_state.asset_mid_tick = canonical_state.book_mid_tick;
+        canonical_state.spot = spot_snapshot.spot;
+        canonical_state.annualized_vol = vol_snapshot.annualized_vol;
+        canonical_state.tte_ns = static_cast<std::int64_t>(tte_ns);
+        canonical_state.book_age_ms =
+            depth.last_ws_recv_ns > 0 && now > depth.last_ws_recv_ns
+                ? static_cast<std::int64_t>(
+                      (now - depth.last_ws_recv_ns) / 1'000'000ULL
+                  )
+                : 0;
+        canonical_state.spot_age_ms = spot_snapshot.local_recv_ts_ms > 0
+            ? unix_ms - spot_snapshot.local_recv_ts_ms
+            : 0;
+        canonical_state.vol_age_ms = vol_snapshot.update_ts_ms > 0
+            ? unix_ms - vol_snapshot.update_ts_ms
+            : 0;
+        canonical_state.current_asset_position_lots = post_taker_position;
+        canonical_state.current_canonical_yes_position_lots =
+            canonical_yes_position_lots;
+
+        mm::ExternalFairModel external_fair_model;
+        external_fair_output = external_fair_model.compute(
+            *sol_external_fair_runtime,
+            *active_external_fair_spec,
+            unix_ms,
+            spot_snapshot,
+            vol_snapshot
+        );
+        mm::MarketImpliedFairModel market_implied_model;
+        market_implied_output = market_implied_model.compute(canonical_state);
+        mm::TradableFairBuilder tradable_fair_builder;
+        tradable_fair_output = tradable_fair_builder.build(mm::TradableFairInput{
+            .asset_side = active_external_fair_spec->outcome_side,
+            .price_scale_tick = active_external_fair_spec->price_scale_tick,
+            .lambda = config.external_fair_tradable_lambda,
+            .shadow_only = config.external_fair_shadow_only,
+            .external = external_fair_output,
+            .market = market_implied_output
+        });
+        if (tradable_fair_output.ok) {
+            canonical_state.asset_external_fair_tick =
+                external_fair_output.asset_raw_fair_tick;
+            canonical_state.asset_tradable_fair_tick =
+                tradable_fair_output.asset_tradable_fair_tick;
+            canonical_state.canonical_yes_external_fair_tick =
+                external_fair_output.canonical_yes_raw_fair_tick;
+            canonical_state.canonical_yes_tradable_fair_tick =
+                tradable_fair_output.canonical_yes_tradable_fair_tick;
+            market_making_external_fair_tick =
+                tradable_fair_output.asset_tradable_fair_tick;
+        }
+        if (config.dynamic_inventory_targeter_enabled &&
+            tradable_fair_output.ok) {
+            mm::DynamicInventoryTargeter targeter;
+            const auto top_depth =
+                state::depth_prefix_level_size_lots(depth.bids[0]) +
+                state::depth_prefix_level_size_lots(depth.asks[0]);
+            inventory_target = targeter.compute(mm::InventoryTargetInput{
+                .event_type = active_external_fair_spec->event_type,
+                .canonical_yes_market_mid_tick =
+                    market_implied_output.canonical_yes_market_mid_tick,
+                .canonical_yes_external_fair_tick =
+                    external_fair_output.canonical_yes_raw_fair_tick,
+                .canonical_yes_tradable_fair_tick =
+                    tradable_fair_output.canonical_yes_tradable_fair_tick,
+                .spread_tick = canonical_state.spread_tick,
+                .book_depth_lots = top_depth,
+                .tte_ns = canonical_state.tte_ns,
+                .confidence_bps = tradable_fair_output.confidence_bps,
+                .implied_vol = market_implied_output.implied_vol,
+                .realized_vol = 0.0,
+                .current_canonical_yes_position_lots =
+                    canonical_yes_position_lots,
+                .portfolio_touch_exposure_lots =
+                    std::llabs(canonical_yes_position_lots)
+            });
+            target_asset_position_lots =
+                mm::canonical_yes_target_to_asset_position(
+                    active_external_fair_spec->outcome_side,
+                    inventory_target.target_canonical_yes_lots
+                );
+            dynamic_min_asset_lots =
+                mm::canonical_yes_target_to_asset_position(
+                    active_external_fair_spec->outcome_side,
+                    inventory_target.max_canonical_yes_lots
+                );
+            dynamic_max_asset_lots =
+                mm::canonical_yes_target_to_asset_position(
+                    active_external_fair_spec->outcome_side,
+                    inventory_target.min_canonical_yes_lots
+                );
+            if (dynamic_min_asset_lots > dynamic_max_asset_lots) {
+                std::swap(dynamic_min_asset_lots, dynamic_max_asset_lots);
+            }
+        }
+        spot_age_for_risk_ms = canonical_state.spot_age_ms;
+        vol_age_for_risk_ms = canonical_state.vol_age_ms;
+        external_confidence_for_risk_bps = tradable_fair_output.confidence_bps;
+    }
+    if (external_fair_basis_logger != nullptr &&
+        active_external_fair_spec != nullptr &&
+        active_external_fair_result.ok &&
+        depth.bid_count > 0 &&
+        depth.ask_count > 0) {
+        const auto best_bid_tick = depth.bids[0].price_tick;
+        const auto best_ask_tick = depth.asks[0].price_tick;
+        const auto bid_size =
+            state::depth_prefix_level_size_lots(depth.bids[0]);
+        const auto ask_size =
+            state::depth_prefix_level_size_lots(depth.asks[0]);
+        const auto size_sum = bid_size + ask_size;
+        const auto external_tick = active_external_fair_result.fair_value_tick;
+        if (best_bid_tick > 0 &&
+            best_ask_tick > 0 &&
+            best_ask_tick >= best_bid_tick &&
+            size_sum > 0 &&
+            external_tick >= 0 &&
+            external_tick <= active_external_fair_spec->price_scale_tick) {
+            const auto book_mid_tick = (best_bid_tick + best_ask_tick) / 2;
+            const auto book_micro_tick = static_cast<std::int64_t>(
+                (static_cast<__int128>(best_ask_tick) * bid_size +
+                 static_cast<__int128>(best_bid_tick) * ask_size) /
+                size_sum
+            );
+            const auto spread_tick = best_ask_tick - best_bid_tick;
+            const auto spot_snapshot =
+                sol_spot_oracle != nullptr
+                    ? sol_spot_oracle->latest(active_external_fair_spec->symbol)
+                    : mm::SpotSnapshot{};
+            const auto vol_snapshot =
+                sol_vol_provider != nullptr
+                    ? sol_vol_provider->latest(active_external_fair_spec->symbol)
+                    : mm::VolSnapshot{};
+            const auto tte_ms =
+                active_external_fair_spec->expiry_unix_ms - unix_ms;
+            const auto spot_age_ms = spot_snapshot.local_recv_ts_ms > 0
+                ? unix_ms - spot_snapshot.local_recv_ts_ms
+                : 0;
+            if (spot_age_ms <= 1500) {
+            const auto tte_years = static_cast<double>(tte_ms) /
+                (1000.0 * kSecondsPerYear);
+            external_fair_basis_logger->log(
+                mm_research::ExternalFairBasisSnapshot{
+                    .ts_ms = unix_ms,
+                    .market_id = active_external_fair_spec->market_id,
+                    .token_id = active_external_fair_spec->token_id,
+                    .symbol = active_external_fair_spec->symbol,
+                    .event_type = active_external_fair_spec->event_type,
+                    .barrier_price = active_external_fair_spec->barrier_price,
+                    .outcome_side = active_external_fair_spec->outcome_side,
+                    .spot = spot_snapshot.spot,
+                    .annualized_vol = vol_snapshot.annualized_vol,
+                    .tte_years = tte_years,
+                    .external_fair_tick = external_tick,
+                    .yes_probability =
+                        active_external_fair_result.yes_probability,
+                    .best_bid_tick = best_bid_tick,
+                    .best_ask_tick = best_ask_tick,
+                    .bid_size = bid_size,
+                    .ask_size = ask_size,
+                    .book_mid_tick = book_mid_tick,
+                    .book_micro_tick = book_micro_tick,
+                    .spread_tick = spread_tick,
+                    .mid_basis_tick = book_mid_tick - external_tick,
+                    .micro_basis_tick = book_micro_tick - external_tick,
+                    .buy_edge_tick = external_tick - best_ask_tick,
+                    .sell_edge_tick = best_bid_tick - external_tick,
+                    .book_age_ms =
+                        depth.last_ws_recv_ns > 0 && now > depth.last_ws_recv_ns
+                            ? static_cast<std::int64_t>(
+                                  (now - depth.last_ws_recv_ns) / 1'000'000ULL
+                              )
+                            : 0,
+                    .spot_age_ms = spot_age_ms,
+                    .vol_age_ms = vol_snapshot.update_ts_ms > 0
+                        ? unix_ms - vol_snapshot.update_ts_ms
+                        : 0,
+                    .spot_source = config.sol_spot_feed
+                }
+            );
+            }
+        }
+    }
     const auto mm_result = engine->on_market_update(mm::MarketMakingInput{
         .market_id = config.market_id,
         .asset_id = config.asset_id,
@@ -4675,7 +5278,15 @@ void process_depth_update(
         .depth = &depth,
         .complement_depth = complement_depth,
         .current_position_lots = post_taker_position,
-        .external_fair_value_tick = external_fair.tick,
+        .external_fair_value_tick = market_making_external_fair_tick,
+        .dynamic_target_position_lots = target_asset_position_lots,
+        .dynamic_min_inventory_lots = dynamic_min_asset_lots,
+        .dynamic_max_inventory_lots = dynamic_max_asset_lots,
+        .canonical_yes_fair_value_tick =
+            tradable_fair_output.canonical_yes_tradable_fair_tick,
+        .canonical_yes_position_lots = canonical_yes_position_lots,
+        .target_canonical_yes_lots =
+            inventory_target.target_canonical_yes_lots,
         .dynamic_half_spread_tick =
             dynamic_quote.half_spread_tick,
         .dynamic_max_inventory_skew_tick =
@@ -4702,6 +5313,46 @@ void process_depth_update(
     stats->latest_fair_value_tick.store(mm_result.fair_value_tick);
     if (mm_result.rejected_no_quote > 0) {
         observe_no_quote_reason(stats, mm_result.no_quote_reason);
+        if (canonical_quote_logger != nullptr && tradable_fair_output.ok) {
+            canonical_quote_logger->log(mm_research::CanonicalQuoteResearchRow{
+                .ts_ms = unix_ms,
+                .state = canonical_state,
+                .canonical_yes_market_mid_tick =
+                    market_implied_output.canonical_yes_market_mid_tick,
+                .canonical_yes_external_raw_tick =
+                    external_fair_output.canonical_yes_raw_fair_tick,
+                .canonical_yes_tradable_fair_tick =
+                    tradable_fair_output.canonical_yes_tradable_fair_tick,
+                .asset_external_raw_tick =
+                    external_fair_output.asset_raw_fair_tick,
+                .asset_tradable_fair_tick =
+                    tradable_fair_output.asset_tradable_fair_tick,
+                .basis_raw_tick =
+                    external_fair_output.canonical_yes_raw_fair_tick -
+                    market_implied_output.canonical_yes_market_mid_tick,
+                .basis_tradable_tick =
+                    tradable_fair_output.canonical_yes_tradable_fair_tick -
+                    market_implied_output.canonical_yes_market_mid_tick,
+                .buy_edge_tick =
+                    tradable_fair_output.asset_tradable_fair_tick -
+                    canonical_state.book_ask_tick,
+                .sell_edge_tick =
+                    canonical_state.book_bid_tick -
+                    tradable_fair_output.asset_tradable_fair_tick,
+                .current_inventory_asset = post_taker_position,
+                .current_inventory_canonical_yes = canonical_yes_position_lots,
+                .target_inventory_canonical_yes =
+                    inventory_target.target_canonical_yes_lots,
+                .portfolio_touch_exposure =
+                    std::llabs(canonical_yes_position_lots),
+                .quote_side = "none",
+                .quote_reason =
+                    mm::no_quote_reason_name(mm_result.no_quote_reason),
+                .risk_decision = "no_quote",
+                .risk_reject_reason =
+                    mm::no_quote_reason_name(mm_result.no_quote_reason)
+            });
+        }
     }
 
     for (std::uint16_t i = 0; i < mm_result.cancel_count; ++i) {
@@ -4726,6 +5377,16 @@ void process_depth_update(
             .policy = &policy,
             .current_position_lots = post_taker_position,
             .current_asset_exposure_tick = 0,
+            .current_canonical_yes_position_lots = canonical_yes_position_lots,
+            .projected_canonical_yes_position_lots =
+                quote.target_canonical_yes_lots != 0
+                    ? quote.target_canonical_yes_lots
+                    : canonical_yes_position_lots,
+            .portfolio_touch_exposure_lots =
+                std::llabs(canonical_yes_position_lots),
+            .spot_age_ms = spot_age_for_risk_ms,
+            .vol_age_ms = vol_age_for_risk_ms,
+            .external_confidence_bps = external_confidence_for_risk_bps,
             .active_quotes_for_asset = static_cast<std::uint32_t>(
                 runtime->execution_adapter.quote_book().active_quote_count()
             ),
@@ -4733,6 +5394,64 @@ void process_depth_update(
             .now_ns = now
         });
         observe_risk_decision(stats, risk_result.decision.decision);
+        if (canonical_quote_logger != nullptr && tradable_fair_output.ok) {
+            auto log_quote_side = std::string{"both"};
+            auto log_quote_price = std::int64_t{0};
+            auto log_quote_size = std::int64_t{0};
+            if (quote.has_bid && !quote.has_ask) {
+                log_quote_side = "bid";
+                log_quote_price = quote.bid.price_tick;
+                log_quote_size = quote.bid.quantity_lots;
+            } else if (quote.has_ask && !quote.has_bid) {
+                log_quote_side = "ask";
+                log_quote_price = quote.ask.price_tick;
+                log_quote_size = quote.ask.quantity_lots;
+            } else if (quote.has_bid && quote.has_ask) {
+                log_quote_price = (quote.bid.price_tick + quote.ask.price_tick) / 2;
+                log_quote_size =
+                    quote.bid.quantity_lots + quote.ask.quantity_lots;
+            }
+            canonical_quote_logger->log(mm_research::CanonicalQuoteResearchRow{
+                .ts_ms = unix_ms,
+                .state = canonical_state,
+                .canonical_yes_market_mid_tick =
+                    market_implied_output.canonical_yes_market_mid_tick,
+                .canonical_yes_external_raw_tick =
+                    external_fair_output.canonical_yes_raw_fair_tick,
+                .canonical_yes_tradable_fair_tick =
+                    tradable_fair_output.canonical_yes_tradable_fair_tick,
+                .asset_external_raw_tick =
+                    external_fair_output.asset_raw_fair_tick,
+                .asset_tradable_fair_tick =
+                    tradable_fair_output.asset_tradable_fair_tick,
+                .basis_raw_tick =
+                    external_fair_output.canonical_yes_raw_fair_tick -
+                    market_implied_output.canonical_yes_market_mid_tick,
+                .basis_tradable_tick =
+                    tradable_fair_output.canonical_yes_tradable_fair_tick -
+                    market_implied_output.canonical_yes_market_mid_tick,
+                .buy_edge_tick =
+                    tradable_fair_output.asset_tradable_fair_tick -
+                    canonical_state.book_ask_tick,
+                .sell_edge_tick =
+                    canonical_state.book_bid_tick -
+                    tradable_fair_output.asset_tradable_fair_tick,
+                .current_inventory_asset = post_taker_position,
+                .current_inventory_canonical_yes = canonical_yes_position_lots,
+                .target_inventory_canonical_yes =
+                    quote.target_canonical_yes_lots,
+                .portfolio_touch_exposure =
+                    std::llabs(canonical_yes_position_lots),
+                .quote_side = log_quote_side,
+                .quote_price_tick = log_quote_price,
+                .quote_size_lots = log_quote_size,
+                .quote_reason = quote.reason,
+                .risk_decision = risk::quote_risk_decision_type_name(
+                    risk_result.decision.decision
+                ),
+                .risk_reject_reason = risk_result.decision.reason
+            });
+        }
         if (!risk_result.approved_quote) {
             (void)engine->remove_active_quote(quote.asset_index);
             stats->risk_rejected.fetch_add(1);
@@ -4781,6 +5500,54 @@ int run(const Config& config) {
     const auto policy = quote_risk_policy(config);
     RuntimeState runtime(config);
     BtcOracleState btc_oracle;
+    mm::InMemorySpotOracle sol_spot_oracle;
+    const auto startup_unix_ms = current_unix_ms();
+    if (config.sol_spot_feed == "manual" &&
+        config.sol_spot_bid > 0.0 &&
+        config.sol_spot_ask > 0.0) {
+        sol_spot_oracle.update_sol_book_ticker(
+            config.sol_spot_bid,
+            config.sol_spot_ask,
+            startup_unix_ms,
+            startup_unix_ms
+        );
+    }
+    mm::FixedVolProvider sol_vol_provider(
+        config.sol_fixed_vol_annualized,
+        startup_unix_ms
+    );
+    mm::ExternalFairRuntime sol_external_fair_runtime(
+        sol_spot_oracle,
+        sol_vol_provider
+    );
+    std::unordered_map<std::string, mm::ExternalFairMarketSpec>
+        sol_external_fair_specs_by_token_id;
+    const auto asset_outcome_side =
+        parse_outcome_side(config.sol_external_fair_outcome_side);
+    mm::ExternalFairMarketSpec asset_spec;
+    if (populate_sol_external_fair_spec(
+            config,
+            config.asset_id,
+            asset_outcome_side,
+            &asset_spec
+        )) {
+        sol_external_fair_specs_by_token_id.emplace(
+            asset_spec.token_id,
+            asset_spec
+        );
+    }
+    mm::ExternalFairMarketSpec complement_spec;
+    if (populate_sol_external_fair_spec(
+            config,
+            config.complement_asset_id,
+            opposite_outcome_side(asset_outcome_side),
+            &complement_spec
+        )) {
+        sol_external_fair_specs_by_token_id.emplace(
+            complement_spec.token_id,
+            complement_spec
+        );
+    }
 
     Stats stats;
     std::mutex state_mutex;
@@ -4790,7 +5557,37 @@ int run(const Config& config) {
 
     feed::WebSocketClient market_ws(config.endpoint);
     std::unique_ptr<feed::WebSocketClient> btc_ws;
+    std::unique_ptr<feed::WebSocketClient> sol_spot_ws;
     std::thread btc_thread;
+    std::thread sol_spot_thread;
+    std::unique_ptr<mm_research::ExternalFairBasisLogger>
+        external_fair_basis_logger;
+    std::unique_ptr<mm_research::CanonicalQuoteResearchLogger>
+        canonical_quote_logger;
+    if (config.external_fair_basis_log) {
+        external_fair_basis_logger =
+            std::make_unique<mm_research::ExternalFairBasisLogger>(
+                external_fair_basis_log_path(config)
+            );
+        if (!external_fair_basis_logger->ok()) {
+            fail(
+                "failed to open external fair basis log: " +
+                external_fair_basis_logger->path().string()
+            );
+        }
+    }
+    if (config.canonical_quote_research_log) {
+        canonical_quote_logger =
+            std::make_unique<mm_research::CanonicalQuoteResearchLogger>(
+                canonical_quote_research_log_path(config)
+            );
+        if (!canonical_quote_logger->ok()) {
+            fail(
+                "failed to open canonical quote research log: " +
+                canonical_quote_logger->path().string()
+            );
+        }
+    }
 
     market_ws.set_on_open([&]() {
         market_ws.send(
@@ -4886,6 +5683,12 @@ int run(const Config& config) {
                         depth_batch.views[0],
                         complement_depth,
                         oracle_snapshot,
+                        &sol_external_fair_runtime,
+                        &sol_external_fair_specs_by_token_id,
+                        &sol_spot_oracle,
+                        &sol_vol_provider,
+                        external_fair_basis_logger.get(),
+                        canonical_quote_logger.get(),
                         &mm_engine,
                         &risk_evaluator,
                         policy,
@@ -4936,6 +5739,56 @@ int run(const Config& config) {
         }
     }
 
+    if (config.sol_spot_feed == "binance_book_ticker") {
+        sol_spot_ws = std::make_unique<feed::WebSocketClient>(
+            config.sol_spot_feed_endpoint
+        );
+        sol_spot_ws->set_on_message([&](const std::string& payload) {
+            double bid = 0.0;
+            double ask = 0.0;
+            std::int64_t exchange_ts_ms = 0;
+            if (parse_binance_book_ticker(
+                    payload,
+                    &bid,
+                    &ask,
+                    &exchange_ts_ms
+                ) &&
+                sol_book_ticker_spread_ok(
+                    bid,
+                    ask,
+                    config.sol_spot_max_spread_bps
+                )) {
+                const auto recv_ts_ms = current_unix_ms();
+                if (exchange_ts_ms <= 0) {
+                    exchange_ts_ms = recv_ts_ms;
+                }
+                sol_spot_oracle.update_sol_book_ticker(
+                    bid,
+                    ask,
+                    exchange_ts_ms,
+                    recv_ts_ms
+                );
+            }
+        });
+        sol_spot_ws->set_on_error([&](const std::string&) {
+            stats.transport_errors.fetch_add(1);
+        });
+        try {
+            sol_spot_ws->connect();
+            sol_spot_thread = std::thread([&]() {
+                try {
+                    sol_spot_ws->run();
+                } catch (...) {
+                    stats.transport_errors.fetch_add(1);
+                }
+            });
+        } catch (const std::exception& error) {
+            stats.transport_errors.fetch_add(1);
+            std::cerr << "sol_spot_feed_connect_error: "
+                      << error.what() << '\n';
+        }
+    }
+
     const auto start_ns = now_ns();
     write_dashboard_snapshot(
         config,
@@ -4950,8 +5803,14 @@ int run(const Config& config) {
         if (btc_ws) {
             btc_ws->disconnect();
         }
+        if (sol_spot_ws) {
+            sol_spot_ws->disconnect();
+        }
         if (btc_thread.joinable()) {
             btc_thread.join();
+        }
+        if (sol_spot_thread.joinable()) {
+            sol_spot_thread.join();
         }
         throw;
     }
@@ -4997,8 +5856,14 @@ int run(const Config& config) {
     if (btc_ws) {
         btc_ws->disconnect();
     }
+    if (sol_spot_ws) {
+        sol_spot_ws->disconnect();
+    }
     if (btc_thread.joinable()) {
         btc_thread.join();
+    }
+    if (sol_spot_thread.joinable()) {
+        sol_spot_thread.join();
     }
 
     const auto runtime_seconds = (now_ns() - start_ns) / kNsPerSecond;

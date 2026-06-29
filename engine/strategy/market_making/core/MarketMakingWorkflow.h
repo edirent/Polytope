@@ -17,6 +17,12 @@ struct MarketMakingInput {
     const state::MarketDepthView* complement_depth = nullptr;
     std::int64_t current_position_lots = 0;
     std::int64_t external_fair_value_tick = 0;
+    std::int64_t dynamic_target_position_lots = 0;
+    std::int64_t dynamic_min_inventory_lots = 0;
+    std::int64_t dynamic_max_inventory_lots = 0;
+    std::int64_t canonical_yes_fair_value_tick = 0;
+    std::int64_t canonical_yes_position_lots = 0;
+    std::int64_t target_canonical_yes_lots = 0;
     std::int64_t dynamic_half_spread_tick = 0;
     std::int64_t dynamic_min_half_spread_tick = 0;
     std::int64_t dynamic_max_inventory_skew_tick = 0;

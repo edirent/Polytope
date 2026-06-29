@@ -44,6 +44,20 @@ std::uint64_t compute_quote_intent_hash(const QuoteIntent& intent) noexcept {
         hash = fnv1a_mix(hash, compute_quote_leg_hash(intent.ask));
     }
     hash = fnv1a_mix(hash, static_cast<std::uint64_t>(intent.fair_value_tick));
+    hash = fnv1a_mix(hash, static_cast<std::uint64_t>(intent.asset_fair_tick));
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(intent.canonical_yes_fair_tick)
+    );
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(intent.canonical_yes_position_lots)
+    );
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(intent.target_canonical_yes_lots)
+    );
+    hash = fnv1a_mix(hash, static_cast<std::uint64_t>(intent.edge_tick));
     hash = fnv1a_mix(hash, static_cast<std::uint64_t>(intent.half_spread_tick));
     hash =
         fnv1a_mix(hash, static_cast<std::uint64_t>(intent.inventory_skew_tick));
