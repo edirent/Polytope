@@ -1,0 +1,433 @@
+{
+  "schema": "cross-venue-books-v0",
+  "mode": "SYNTHETIC",
+  "pair": {
+    "pair_id": "SYNTHETIC-K-P",
+    "leg_yes": {
+      "venue": "kalshi",
+      "market_id": "SYNTHETIC-K",
+      "instrument_id": "YES",
+      "currency": "SYNTHETIC_USD"
+    },
+    "leg_no": {
+      "venue": "polymarket_international",
+      "market_id": "SYNTHETIC-P",
+      "instrument_id": "NO",
+      "currency": "SYNTHETIC_USD"
+    },
+    "rules_hash_yes": "4a45b7d8d427bda39b4c02358e6391153227fa8ce78260b3e4689f315cc48512",
+    "rules_hash_no": "4412a587ddcee12d8266081737627e04833a4b8ece0524cb6744424c605d9d07",
+    "review_id": "SYNTHETIC-REVIEW-NOT-HUMAN-LIVE-APPROVAL",
+    "approval_revision": 1,
+    "enabled": true,
+    "synthetic": true,
+    "payoffs": [
+      {
+        "name": "YES",
+        "yes": "1",
+        "no": "0"
+      },
+      {
+        "name": "NO",
+        "yes": "0",
+        "no": "1"
+      }
+    ],
+    "artifact_hash": "5ee0b72b89e9eb696272280e2e236a3f5de96234b9d32cb1ec2193cb51b21837"
+  },
+  "starting_cash": [
+    "1000",
+    "1000"
+  ],
+  "fee_quotes": [
+    {
+      "qty": 25,
+      "fees": [
+        "0.437500",
+        "0.435000"
+      ],
+      "slippage": [
+        "0",
+        "0"
+      ],
+      "version": "SYNTHETIC-BUDGET-v1",
+      "pair_artifact_hash": "5ee0b72b89e9eb696272280e2e236a3f5de96234b9d32cb1ec2193cb51b21837",
+      "valid_from_ns": 1,
+      "valid_until_ns": 2000000000
+    },
+    {
+      "qty": 50,
+      "fees": [
+        "0.875000",
+        "0.870000"
+      ],
+      "slippage": [
+        "0",
+        "0"
+      ],
+      "version": "SYNTHETIC-BUDGET-v1",
+      "pair_artifact_hash": "5ee0b72b89e9eb696272280e2e236a3f5de96234b9d32cb1ec2193cb51b21837",
+      "valid_from_ns": 1,
+      "valid_until_ns": 2000000000
+    },
+    {
+      "qty": 100,
+      "fees": [
+        "1.750000",
+        "1.740000"
+      ],
+      "slippage": [
+        "0",
+        "0"
+      ],
+      "version": "SYNTHETIC-BUDGET-v1",
+      "pair_artifact_hash": "5ee0b72b89e9eb696272280e2e236a3f5de96234b9d32cb1ec2193cb51b21837",
+      "valid_from_ns": 1,
+      "valid_until_ns": 2000000000
+    },
+    {
+      "qty": 200,
+      "fees": [
+        "3.500000",
+        "3.480000"
+      ],
+      "slippage": [
+        "0",
+        "0"
+      ],
+      "version": "SYNTHETIC-BUDGET-v1",
+      "pair_artifact_hash": "5ee0b72b89e9eb696272280e2e236a3f5de96234b9d32cb1ec2193cb51b21837",
+      "valid_from_ns": 1,
+      "valid_until_ns": 2000000000
+    },
+    {
+      "qty": 500,
+      "fees": [
+        "8.750000",
+        "8.700000"
+      ],
+      "slippage": [
+        "0",
+        "0"
+      ],
+      "version": "SYNTHETIC-BUDGET-v1",
+      "pair_artifact_hash": "5ee0b72b89e9eb696272280e2e236a3f5de96234b9d32cb1ec2193cb51b21837",
+      "valid_from_ns": 1,
+      "valid_until_ns": 2000000000
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "matched_100",
+      "now_ns": 1000000000,
+      "events": [
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 900000000,
+          "source_ts_ns": 899000000,
+          "sequence": 1,
+          "raw_log_offset": 0,
+          "raw_payload": "{\"asks\":[[\"0.47\",100]],\"bids\":[[\"0.45\",100]],\"complete\":true}",
+          "raw_hash": "f1b4111acad5e03f4b22fe9828abfc94049cce3d4d25d5a937297b6d36d4c127"
+        },
+        {
+          "key": {
+            "venue": "polymarket_international",
+            "market_id": "SYNTHETIC-P",
+            "instrument_id": "NO",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 950000000,
+          "source_ts_ns": 949000000,
+          "sequence": 1,
+          "raw_log_offset": 1,
+          "raw_payload": "{\"asks\":[[\"0.48\",100]],\"bids\":[[\"0.46\",100]],\"complete\":true}",
+          "raw_hash": "9917d9f2391930fae7b1c2c265f8660e1ec34ddf19a9ad0be28352d0f0e6f384"
+        }
+      ]
+    },
+    {
+      "name": "depth_walk",
+      "now_ns": 1000000000,
+      "events": [
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 900000000,
+          "source_ts_ns": 899000000,
+          "sequence": 1,
+          "raw_log_offset": 0,
+          "raw_payload": "{\"asks\":[[\"0.47\",40],[\"0.49\",60]],\"bids\":[[\"0.45\",100]],\"complete\":true}",
+          "raw_hash": "571a13dbbcf9a0dbf85aa9a26ee75f64985ed6df93f8528e0c028ee9d5fc43e9"
+        },
+        {
+          "key": {
+            "venue": "polymarket_international",
+            "market_id": "SYNTHETIC-P",
+            "instrument_id": "NO",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 950000000,
+          "source_ts_ns": 949000000,
+          "sequence": 1,
+          "raw_log_offset": 1,
+          "raw_payload": "{\"asks\":[[\"0.48\",100]],\"bids\":[[\"0.46\",100]],\"complete\":true}",
+          "raw_hash": "9917d9f2391930fae7b1c2c265f8660e1ec34ddf19a9ad0be28352d0f0e6f384"
+        }
+      ]
+    },
+    {
+      "name": "stale",
+      "now_ns": 1500000000,
+      "events": [
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 900000000,
+          "source_ts_ns": 899000000,
+          "sequence": 1,
+          "raw_log_offset": 0,
+          "raw_payload": "{\"asks\":[[\"0.47\",100]],\"bids\":[[\"0.45\",100]],\"complete\":true}",
+          "raw_hash": "f1b4111acad5e03f4b22fe9828abfc94049cce3d4d25d5a937297b6d36d4c127"
+        },
+        {
+          "key": {
+            "venue": "polymarket_international",
+            "market_id": "SYNTHETIC-P",
+            "instrument_id": "NO",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 950000000,
+          "source_ts_ns": 949000000,
+          "sequence": 1,
+          "raw_log_offset": 1,
+          "raw_payload": "{\"asks\":[[\"0.48\",100]],\"bids\":[[\"0.46\",100]],\"complete\":true}",
+          "raw_hash": "9917d9f2391930fae7b1c2c265f8660e1ec34ddf19a9ad0be28352d0f0e6f384"
+        }
+      ]
+    },
+    {
+      "name": "receive_skew",
+      "now_ns": 1000000000,
+      "events": [
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 800000000,
+          "source_ts_ns": 899000000,
+          "sequence": 1,
+          "raw_log_offset": 0,
+          "raw_payload": "{\"asks\":[[\"0.47\",100]],\"bids\":[[\"0.45\",100]],\"complete\":true}",
+          "raw_hash": "f1b4111acad5e03f4b22fe9828abfc94049cce3d4d25d5a937297b6d36d4c127"
+        },
+        {
+          "key": {
+            "venue": "polymarket_international",
+            "market_id": "SYNTHETIC-P",
+            "instrument_id": "NO",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 950000000,
+          "source_ts_ns": 949000000,
+          "sequence": 1,
+          "raw_log_offset": 1,
+          "raw_payload": "{\"asks\":[[\"0.48\",100]],\"bids\":[[\"0.46\",100]],\"complete\":true}",
+          "raw_hash": "9917d9f2391930fae7b1c2c265f8660e1ec34ddf19a9ad0be28352d0f0e6f384"
+        }
+      ]
+    },
+    {
+      "name": "sequence_gap",
+      "now_ns": 1000000000,
+      "events": [
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 900000000,
+          "source_ts_ns": 899000000,
+          "sequence": 1,
+          "raw_log_offset": 0,
+          "raw_payload": "{\"asks\":[[\"0.47\",100]],\"bids\":[[\"0.45\",100]],\"complete\":true}",
+          "raw_hash": "f1b4111acad5e03f4b22fe9828abfc94049cce3d4d25d5a937297b6d36d4c127"
+        },
+        {
+          "key": {
+            "venue": "polymarket_international",
+            "market_id": "SYNTHETIC-P",
+            "instrument_id": "NO",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 950000000,
+          "source_ts_ns": 949000000,
+          "sequence": 1,
+          "raw_log_offset": 1,
+          "raw_payload": "{\"asks\":[[\"0.48\",100]],\"bids\":[[\"0.46\",100]],\"complete\":true}",
+          "raw_hash": "9917d9f2391930fae7b1c2c265f8660e1ec34ddf19a9ad0be28352d0f0e6f384"
+        },
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "delta",
+          "recv_monotonic_ns": 970000000,
+          "source_ts_ns": 969000000,
+          "sequence": 3,
+          "raw_log_offset": 2,
+          "raw_payload": "{\"asks\":[[\"0.46\",100]],\"bids\":[],\"complete\":true}",
+          "raw_hash": "c4194a609db07630d96e41fbab90f3901c545953e095ae1d981d9fe154146941"
+        }
+      ]
+    },
+    {
+      "name": "disconnect",
+      "now_ns": 1000000000,
+      "events": [
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 900000000,
+          "source_ts_ns": 899000000,
+          "sequence": 1,
+          "raw_log_offset": 0,
+          "raw_payload": "{\"asks\":[[\"0.47\",100]],\"bids\":[[\"0.45\",100]],\"complete\":true}",
+          "raw_hash": "f1b4111acad5e03f4b22fe9828abfc94049cce3d4d25d5a937297b6d36d4c127"
+        },
+        {
+          "key": {
+            "venue": "polymarket_international",
+            "market_id": "SYNTHETIC-P",
+            "instrument_id": "NO",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 950000000,
+          "source_ts_ns": 949000000,
+          "sequence": 1,
+          "raw_log_offset": 1,
+          "raw_payload": "{\"asks\":[[\"0.48\",100]],\"bids\":[[\"0.46\",100]],\"complete\":true}",
+          "raw_hash": "9917d9f2391930fae7b1c2c265f8660e1ec34ddf19a9ad0be28352d0f0e6f384"
+        },
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "disconnect",
+          "recv_monotonic_ns": 970000000,
+          "source_ts_ns": 969000000,
+          "sequence": 2,
+          "raw_log_offset": 2,
+          "raw_payload": "{\"asks\":[],\"bids\":[],\"complete\":true}",
+          "raw_hash": "1703d6e4619f53e92b71f2e5a283babfea92f6f67459bb730f9ae72f51d479fd"
+        }
+      ]
+    },
+    {
+      "name": "resnapshot",
+      "now_ns": 1000000000,
+      "events": [
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 900000000,
+          "source_ts_ns": 899000000,
+          "sequence": 1,
+          "raw_log_offset": 0,
+          "raw_payload": "{\"asks\":[[\"0.47\",100]],\"bids\":[[\"0.45\",100]],\"complete\":true}",
+          "raw_hash": "f1b4111acad5e03f4b22fe9828abfc94049cce3d4d25d5a937297b6d36d4c127"
+        },
+        {
+          "key": {
+            "venue": "polymarket_international",
+            "market_id": "SYNTHETIC-P",
+            "instrument_id": "NO",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 950000000,
+          "source_ts_ns": 949000000,
+          "sequence": 1,
+          "raw_log_offset": 1,
+          "raw_payload": "{\"asks\":[[\"0.48\",100]],\"bids\":[[\"0.46\",100]],\"complete\":true}",
+          "raw_hash": "9917d9f2391930fae7b1c2c265f8660e1ec34ddf19a9ad0be28352d0f0e6f384"
+        },
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "delta",
+          "recv_monotonic_ns": 970000000,
+          "source_ts_ns": 969000000,
+          "sequence": 3,
+          "raw_log_offset": 2,
+          "raw_payload": "{\"asks\":[[\"0.46\",100]],\"bids\":[],\"complete\":true}",
+          "raw_hash": "c4194a609db07630d96e41fbab90f3901c545953e095ae1d981d9fe154146941"
+        },
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "kind": "snapshot",
+          "recv_monotonic_ns": 980000000,
+          "source_ts_ns": 979000000,
+          "sequence": 10,
+          "raw_log_offset": 3,
+          "raw_payload": "{\"asks\":[[\"0.47\",100]],\"bids\":[[\"0.45\",100]],\"complete\":true}",
+          "raw_hash": "f1b4111acad5e03f4b22fe9828abfc94049cce3d4d25d5a937297b6d36d4c127"
+        }
+      ]
+    }
+  ]
+}

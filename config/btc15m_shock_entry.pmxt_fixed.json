@@ -1,0 +1,49 @@
+{
+  "strategy": "btc15m_lead_lag",
+  "candidate": "shock_entry",
+  "model_path": "runs/pmxt_shock_fixed_tests_20261006/frozen_model.json",
+  "pm_only_require_external_readiness": false,
+  "market": {
+    "market_id": "0xc1db75489895e06e0f328d20cdea6b177618bd54d1dfeeb70c5b15ed946f07b6",
+    "symbol": "BTCUSDT",
+    "up_token": "75465094548101176228834939180848386625102818352387979067190076228575623311763",
+    "down_token": "84391911381871486862917901382460238131520896897154576603483396885819540813510",
+    "start_ms": 1776729600000,
+    "expiry_ms": 1776730500000
+  },
+  "quote": {
+    "grid_tick": 10000,
+    "buffer_tick": 2500,
+    "inventory_skew_tick_per_lot": 250,
+    "queue_tolerance_tick": 10000,
+    "size_lots": 5,
+    "min_size_lots": 5,
+    "max_net_lots": 50,
+    "max_token_lots": 100,
+    "max_data_age_ms": 1500,
+    "ttl_ms": 5000
+  },
+  "regime": {
+    "calm_tick": 5000,
+    "shock_tick": 15000,
+    "halt_tick": 40000,
+    "quiet_recovery_ms": 1500
+  },
+  "latency_assumptions_ms": {
+    "submit": 25,
+    "cancel": 100,
+    "fill_notice": 50,
+    "terminal_reduce": 275
+  },
+  "queue_factor": 1.0,
+  "decision_interval_ms": 50,
+  "terminal_reduce_request_ms": null,
+  "accounting": {
+    "initial_cash_tick": 100000000,
+    "initial_pairs": 25,
+    "maker_fee_bps": 0,
+    "taker_fee_bps": 0,
+    "operating_cost_tick": 0
+  },
+  "btc_receive_delay_ms": 20
+}

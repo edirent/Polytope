@@ -1,5 +1,7 @@
 #include "engine/risk/quote/QuoteRiskEvaluator.h"
 
+#include "engine/risk/quote/TerminalDigitalQuoteRiskCheck.h"
+
 #include <algorithm>
 #include <cstdlib>
 #include <limits>
@@ -323,6 +325,17 @@ QuoteRiskResult QuoteRiskEvaluator::evaluate(const QuoteRiskInput& input) const 
         );
     }
 
+    const auto terminal_digital = TerminalDigitalQuoteRiskCheck{}.evaluate(input);
+    if (terminal_digital.rejected) {
+        return reject(
+            input,
+            terminal_digital.decision,
+            terminal_digital.reason,
+            bid_notional,
+            ask_notional
+        );
+    }
+
     if (policy->max_spot_age_ms > 0 &&
         input.spot_age_ms > static_cast<std::int64_t>(policy->max_spot_age_ms)) {
         return reject(
@@ -493,6 +506,26 @@ QuoteRiskResult QuoteRiskEvaluator::evaluate(const QuoteRiskInput& input) const 
             input,
             QuoteRiskDecisionType::RejectCrossedBook,
             "quote crosses itself",
+            bid_notional,
+            ask_notional
+        );
+    }
+    if (quote->has_bid &&
+        quote->bid.price_tick >= input.depth->asks[0].price_tick) {
+        return reject(
+            input,
+            QuoteRiskDecisionType::RejectPostOnlyCross,
+            "reject_post_only_cross",
+            bid_notional,
+            ask_notional
+        );
+    }
+    if (quote->has_ask &&
+        quote->ask.price_tick <= input.depth->bids[0].price_tick) {
+        return reject(
+            input,
+            QuoteRiskDecisionType::RejectPostOnlyCross,
+            "reject_post_only_cross",
             bid_notional,
             ask_notional
         );

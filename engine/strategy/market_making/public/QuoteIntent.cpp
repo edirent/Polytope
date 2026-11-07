@@ -67,6 +67,41 @@ std::uint64_t compute_quote_intent_hash(const QuoteIntent& intent) noexcept {
         hash,
         static_cast<std::uint64_t>(intent.current_position_lots)
     );
+    hash = fnv1a_mix(hash, static_cast<std::uint8_t>(intent.product_kind));
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint8_t>(intent.product_asset_direction)
+    );
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint8_t>(intent.product_winning_direction)
+    );
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(intent.product_external_fair_tick)
+    );
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(intent.product_z_score_bps)
+    );
+    hash = fnv1a_mix(hash, intent.product_tau_ms);
+    hash = fnv1a_mix(
+        hash,
+        static_cast<std::uint64_t>(intent.product_dynamic_inventory_cap_lots)
+    );
+    hash = fnv1a_mix(hash, intent.product_opening_allowed ? 1ULL : 0ULL);
+    hash = fnv1a_mix(
+        hash,
+        intent.product_settlement_source_ok ? 1ULL : 0ULL
+    );
+    hash = fnv1a_mix(
+        hash,
+        intent.product_reward_size_lift_allowed ? 1ULL : 0ULL
+    );
+    hash = fnv1a_mix(
+        hash,
+        intent.product_reward_spread_compression_allowed ? 1ULL : 0ULL
+    );
     hash = fnv1a_mix(hash, intent.reward_config_present ? 1ULL : 0ULL);
     hash = fnv1a_mix(hash, intent.reward_eligible ? 1ULL : 0ULL);
     hash = stable_hash_string(hash, intent.reward_condition_id);

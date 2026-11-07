@@ -5,10 +5,10 @@ set(ORACLE_PLACEHOLDER_SOURCE
 )
 
 add_library(oracle_core STATIC
-    OracleJson.cpp
     ${ORACLE_PLACEHOLDER_SOURCE}
 )
 target_compile_features(oracle_core PUBLIC cxx_std_20)
+target_link_libraries(oracle_core PUBLIC polytope_json)
 target_include_directories(oracle_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -95,6 +95,7 @@ target_link_libraries(oracle_enumerate PUBLIC
 
 target_sources(oracle_payoff PRIVATE
     payoff/PayoffMatrixBuilder.cpp
+    payoff/GeneralizedPayoff.cpp
 )
 
 target_link_libraries(oracle_payoff PUBLIC
@@ -161,3 +162,6 @@ target_link_libraries(extract_oracle_rules PRIVATE
 set_target_properties(extract_oracle_rules PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )
+
+# Generalized payoff contracts reuse the engine instrument-key value type.
+target_include_directories(oracle_payoff PUBLIC ${CMAKE_SOURCE_DIR}/engine)

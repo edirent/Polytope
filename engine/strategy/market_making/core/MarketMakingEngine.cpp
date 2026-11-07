@@ -104,6 +104,16 @@ MarketMakingResult MarketMakingEngine::on_market_update(
         effective_config.max_inventory_skew_tick =
             input.dynamic_max_inventory_skew_tick;
     }
+    if (input.dynamic_quote_ttl_ns > 0) {
+        effective_config.quote_ttl_ns = input.dynamic_quote_ttl_ns;
+    }
+    if (input.dynamic_requote_threshold_tick > 0) {
+        effective_config.requote_threshold_tick =
+            input.dynamic_requote_threshold_tick;
+    }
+    if (input.dynamic_max_book_age_ns > 0) {
+        effective_config.max_book_age_ns = input.dynamic_max_book_age_ns;
+    }
     if (input.disable_bid_quotes) {
         effective_config.enable_bid_quotes = false;
     }
@@ -154,6 +164,20 @@ MarketMakingResult MarketMakingEngine::on_market_update(
             .canonical_yes_position_lots = input.canonical_yes_position_lots,
             .target_canonical_yes_lots = input.target_canonical_yes_lots,
             .current_position_lots = input.current_position_lots,
+            .product_kind = input.product_kind,
+            .product_asset_direction = input.product_asset_direction,
+            .product_winning_direction = input.product_winning_direction,
+            .product_external_fair_tick = input.product_external_fair_tick,
+            .product_z_score_bps = input.product_z_score_bps,
+            .product_tau_ms = input.product_tau_ms,
+            .product_dynamic_inventory_cap_lots =
+                input.product_dynamic_inventory_cap_lots,
+            .product_opening_allowed = input.product_opening_allowed,
+            .product_settlement_source_ok = input.product_settlement_source_ok,
+            .product_reward_size_lift_allowed =
+                input.product_reward_size_lift_allowed,
+            .product_reward_spread_compression_allowed =
+                input.product_reward_spread_compression_allowed,
             .now_ns = input.now_ns,
             .intent_type = active ? QuoteIntentType::ReplaceQuote
                                   : QuoteIntentType::PlaceQuote

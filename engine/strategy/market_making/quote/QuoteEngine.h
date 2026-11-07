@@ -30,6 +30,17 @@ struct QuoteBuildInput {
     std::int64_t canonical_yes_position_lots = 0;
     std::int64_t target_canonical_yes_lots = 0;
     std::int64_t current_position_lots = 0;
+    ProductKind product_kind = ProductKind::Generic;
+    ProductDirection product_asset_direction = ProductDirection::Unknown;
+    ProductDirection product_winning_direction = ProductDirection::Unknown;
+    std::int64_t product_external_fair_tick = 0;
+    std::int64_t product_z_score_bps = 0;
+    std::uint64_t product_tau_ms = 0;
+    std::int64_t product_dynamic_inventory_cap_lots = 0;
+    bool product_opening_allowed = true;
+    bool product_settlement_source_ok = true;
+    bool product_reward_size_lift_allowed = true;
+    bool product_reward_spread_compression_allowed = true;
     std::uint64_t now_ns = 0;
     QuoteIntentType intent_type = QuoteIntentType::PlaceQuote;
 };

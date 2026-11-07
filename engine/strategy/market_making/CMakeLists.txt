@@ -9,6 +9,9 @@ add_library(engine_strategy_market_making STATIC
     fair/TradableFairBuilder.cpp
     inventory/DynamicInventoryTargeter.cpp
     metrics/MarketMakingMetrics.cpp
+    products/btc15m_lead_lag/LeadLagEngine.cpp
+    products/up_down_5m/UpDown5mFairProvider.cpp
+    products/up_down_5m/UpDown5mQuoteController.cpp
     public/CancelQuoteIntent.cpp
     public/MarketMakingResult.cpp
     public/QuoteIntent.cpp
@@ -121,6 +124,7 @@ foreach(test_case
     ExternalFairRuntime_VolOutOfBoundsRejects
     ExternalFairRuntime_YesTokenFairEqualsModelFair
     ExternalFairRuntime_NoTokenMapsToOneMinusYesFair
+    ExternalFairRuntime_TerminalAboveSupported
     CanonicalPriceMapper_InvertsNoBook
     CanonicalExposureMapper_NoAssetFlipsSign
     TradableFairBuilder_BlendsTowardExternal
@@ -148,16 +152,34 @@ foreach(test_case
     QuoteSizeModel_ReducesBidNearInventoryLimit
     QuoteEngine_BuildsBidAsk
     QuoteEngine_DisablesBidSide
-    QuoteEngine_AllowsReducingAskBelowFair
+    QuoteEngine_ClampsForcedReducingAskPostOnly
     QuoteEngine_PassiveReduceAskJoinsBestAsk
-    QuoteEngine_UrgentReduceAskMovesToMidpoint
+    QuoteEngine_UrgentReduceAskStaysPostOnly
     QuoteEngine_ReduceOnlyQtyCappedToTarget
     QuoteEngine_ClampsOpeningAskToCorrectSideOfFair
     QuoteEngine_RequiresExternalFairForOpeningQuotes
-    QuoteEngine_DropsOpeningBidWhenReducingAskWouldSelfCross
+    QuoteEngine_MixedQuoteStaysPostOnlyWhenReducingAskPresent
     QuoteEngine_RejectsCrossedQuote
 )
     add_test(NAME ${test_case} COMMAND market_making_quote_model_tests ${test_case})
+endforeach()
+
+add_executable(market_making_up_down_5m_tests
+    ${CMAKE_SOURCE_DIR}/tests/unit/market_making/up_down_5m_test.cpp
+)
+target_link_libraries(market_making_up_down_5m_tests PRIVATE
+    market_making_tools
+)
+
+foreach(test_case
+    UpDown5mFairProvider_AtTheMoneyNearHalf
+    UpDown5mQuoteController_GatesByTauAndZ
+    UpDown5mQuoteController_DropsLosingSideWhenZHigh
+    UpDown5mQuoteController_InventoryCapShrinksNearExpiry
+    RewardConstraintDoesNotLiftOpeningSizeFor5mDigital
+    RewardConstraintDoesNotCompressSpreadWhenZTooHighFor5mDigital
+)
+    add_test(NAME ${test_case} COMMAND market_making_up_down_5m_tests ${test_case})
 endforeach()
 
 add_executable(market_making_refresh_tests

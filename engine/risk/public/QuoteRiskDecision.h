@@ -30,10 +30,11 @@ enum class QuoteRiskDecisionType : std::uint8_t {
     RejectStaleVol,
     RejectLowExternalConfidence,
     RejectCanonicalExposureLimit,
-    RejectPortfolioTouchLimit
+    RejectPortfolioTouchLimit,
+    RejectPostOnlyCross
 };
 
-inline constexpr std::size_t kQuoteRiskDecisionTypeCount = 24;
+inline constexpr std::size_t kQuoteRiskDecisionTypeCount = 25;
 
 [[nodiscard]] inline const char* quote_risk_decision_type_name(
     QuoteRiskDecisionType decision
@@ -87,6 +88,8 @@ inline constexpr std::size_t kQuoteRiskDecisionTypeCount = 24;
             return "reject_canonical_exposure_limit";
         case QuoteRiskDecisionType::RejectPortfolioTouchLimit:
             return "reject_portfolio_touch_limit";
+        case QuoteRiskDecisionType::RejectPostOnlyCross:
+            return "reject_post_only_cross";
     }
     return "unknown";
 }

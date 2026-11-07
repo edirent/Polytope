@@ -22,6 +22,10 @@ std::uint64_t derive_execution_report_id(const FillApplication& fill) noexcept {
     }
 
     std::uint64_t hash = kFnvOffset;
+    if (!fill.report.fill_id.empty()) {
+        for (unsigned char c : fill.report.fill_id) { hash ^= c; hash *= kFnvPrime; }
+        return hash;
+    }
     mix(&hash, fill.report.plan_id);
     mix(&hash, fill.report.child_order_id);
     mix(&hash, fill.report.event_ts_ns);

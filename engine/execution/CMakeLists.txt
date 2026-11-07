@@ -2,6 +2,7 @@ add_library(engine_execution STATIC
     public/ExecutionTypes.cpp
     public/MakerExecutionTypes.cpp
     core/ExecutionGateway.cpp
+    core/MakerLifecycle.cpp
     core/ExecutionWorkflow.cpp
     plan/ExecutionPlanner.cpp
     plan/OrderBuilder.cpp

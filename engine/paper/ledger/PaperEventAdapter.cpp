@@ -120,6 +120,7 @@ PaperEventAdapterResult PaperEventAdapter::observe(
 
     result.has_fill = true;
     result.fill.report = report;
+    result.fill.fee_tick = report.fee_tick;
     result.fill.market_id = order.market_id;
     result.fill.asset_id = order.asset_id;
     result.fill.asset_index = order.asset_index;

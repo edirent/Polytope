@@ -38,3 +38,5 @@ frontend/**/dist/
 
 research/notebooks/.ipynb_checkpoints/
 research/runs/
+__pycache__/
+*.py[cod]

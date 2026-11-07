@@ -1,6 +1,10 @@
 #include "engine/paper/portfolio/PaperPortfolio.h"
 
 namespace trading_engine::paper {
+PositionLedgerApplyResult PaperPortfolio::apply_fill(const PaperFill& fill) {
+    if(fill.side==Side::Sell)return positions_.apply_sell(fill.asset_id,fill.asset_index,fill.qty_lots,fill.fill_price_tick);
+    return positions_.apply_fill(PositionFill{fill.asset_id,fill.asset_index,fill.side,fill.qty_lots,fill.fill_price_tick});
+}
 
 PositionLedgerApplyResult PaperPortfolio::apply_fill(const FillApplication& fill) {
     PositionFill position_fill;

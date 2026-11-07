@@ -115,7 +115,20 @@ struct PaperProcessStatus {
     if (error || !parsed.is_object()) {
         return std::nullopt;
     }
-    return parsed.as_object();
+    auto snapshot=parsed.as_object();
+    if(auto* value=snapshot.if_contains("runtime");value && value->is_object()) {
+        auto& runtime=value->as_object();
+        const auto* stamp=snapshot.if_contains("published_wall_ns");
+        if(stamp && stamp->is_number()) {
+            const auto at=stamp->to_number<std::uint64_t>();
+            const auto now=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+            const auto* life=runtime.if_contains("lifecycle");
+            const bool stale=life && life->is_string() && life->as_string()=="RUNNING" && (at>now || now-at>5'000'000'000ULL);
+            runtime["publisher_stale"]=stale;
+            if(stale)runtime["health"]="DEGRADED";
+        }
+    }
+    return snapshot;
 }
 
 [[nodiscard]] const json::object* nested_object(
@@ -225,14 +238,26 @@ struct PaperProcessStatus {
         }
         return json::serialize(*dashboard);
     }
+    if (path == "/api/v1/runtime") {
+        return json_object_or_default(dashboard, "runtime", R"({"status":"unavailable"})");
+    }
+    if (path == "/api/v1/strategies") {
+        return std::string{"{\"strategies\":"}+json_array_or_default(dashboard,"strategies","[]")+"}";
+    }
+    if (path == "/api/v1/maker-orders") {
+        return std::string{"{\"maker_orders\":"}+json_array_or_default(dashboard,"maker_orders","[]")+"}";
+    }
+    if (path == "/api/v1/portfolio-reservations") {
+        return std::string{"{\"portfolio_reservations\":"}+json_array_or_default(dashboard,"portfolio_reservations","[]")+"}";
+    }
     if (path == "/api/v1/markets") {
-        return R"({"markets":[]})";
+        return std::string{"{\"markets\":"} + json_array_or_default(dashboard,"markets","[]") + "}";
     }
     if (path == "/api/v1/intents") {
-        return R"({"intents":[]})";
+        return std::string{"{\"intents\":"} + json_array_or_default(dashboard,"intents","[]") + "}";
     }
     if (path == "/api/v1/risk-decisions") {
-        return R"({"risk_decisions":[]})";
+        return std::string{"{\"risk_decisions\":"} + json_array_or_default(dashboard,"risk_decisions","[]") + "}";
     }
     if (path == "/api/v1/execution-reports") {
         return std::string{"{\"execution_reports\":"} +

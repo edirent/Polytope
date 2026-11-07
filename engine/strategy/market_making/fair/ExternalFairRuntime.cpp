@@ -14,6 +14,25 @@ constexpr double kSecondsPerYear = 365.25 * 24.0 * 60.0 * 60.0;
            type == ExternalFairEventType::DownTouch;
 }
 
+[[nodiscard]] bool is_terminal_event(ExternalFairEventType type) noexcept {
+    return type == ExternalFairEventType::TerminalAbove ||
+           type == ExternalFairEventType::TerminalBelow;
+}
+
+[[nodiscard]] std::int64_t probability_to_scaled_tick(
+    double probability,
+    std::int64_t price_scale_tick
+) noexcept {
+    return std::clamp<std::int64_t>(
+        static_cast<std::int64_t>(
+            std::llround(std::clamp(probability, 0.0, 1.0) *
+                         static_cast<double>(price_scale_tick))
+        ),
+        0,
+        price_scale_tick
+    );
+}
+
 }  // namespace
 
 ExternalFairRuntime::ExternalFairRuntime(
@@ -70,6 +89,33 @@ ExternalFairResult ExternalFairRuntime::compute(
     const double tte_years = tte_seconds / kSecondsPerYear;
     if (tte_years <= 0.0 || !std::isfinite(tte_years)) {
         return ExternalFairResult::reject("bad_tte");
+    }
+
+    if (is_terminal_event(spec.event_type)) {
+        const auto terminal = digital_option_model_.compute(
+            DigitalOptionFairInput{
+                .spot = spot.spot,
+                .strike = spec.barrier_price,
+                .vol_annual_bps = vol.annualized_vol * 10'000.0,
+                .drift_annual_bps = 0.0,
+                .time_to_expiry_ns = static_cast<std::uint64_t>(
+                    spec.expiry_unix_ms - now_ms
+                ) * 1'000'000ULL,
+                .invert = spec.event_type == ExternalFairEventType::TerminalBelow
+            }
+        );
+        if (!terminal.ok) {
+            return ExternalFairResult::reject("terminal_digital_model_failed");
+        }
+
+        auto token_probability = terminal.probability;
+        if (spec.outcome_side == OutcomeSide::No) {
+            token_probability = 1.0 - token_probability;
+        }
+        return ExternalFairResult::success(
+            probability_to_scaled_tick(token_probability, spec.price_scale_tick),
+            terminal.probability
+        );
     }
 
     if (!is_touch_event(spec.event_type)) {

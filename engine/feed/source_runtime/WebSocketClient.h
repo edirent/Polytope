@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <map>
 
 namespace trading_engine::feed {
 
@@ -47,6 +48,8 @@ public:
     void set_on_message(MessageCallback cb);
     void set_on_close(CloseCallback cb);
     void set_on_error(ErrorCallback cb);
+    void set_handshake_headers(std::map<std::string,std::string> headers);
+    void set_on_control(MessageCallback cb);
 
     /**
      * @brief Establish WebSocket connection.

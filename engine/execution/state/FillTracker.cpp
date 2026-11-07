@@ -32,6 +32,7 @@ FillTracker::FillTracker(const OrderPlan& plan) {
 }
 
 void FillTracker::reset(const OrderPlan& plan) {
+    applied_reports_.clear();
     state_ = {};
     plan_state_ = {};
     plan_state_.plan_id = plan.plan_id;
@@ -51,12 +52,17 @@ void FillTracker::reset(const OrderPlan& plan) {
 }
 
 void FillTracker::apply(const ExecutionReport& report) {
-    const auto fill_lots = std::max<std::int64_t>(0, report.filled_lots);
-    state_.filled_lots += fill_lots;
-    if (report.avg_fill_price_tick > 0) {
-        state_.avg_fill_price_tick = report.avg_fill_price_tick;
-    }
-
+    // ExecutionReport quantities are deltas. Suppress exact redelivery before
+    // mutating either aggregate state or cost. Cumulative exchange counters must
+    // first be normalized by the venue adapter.
+    if (report.plan_id != plan_state_.plan_id || report.filled_lots <= 0 ||
+        (report.status != ChildOrderStatus::Filled &&
+         report.status != ChildOrderStatus::PartiallyFilled)) return;
+    const auto key = !report.fill_id.empty() ? report.fill_id : std::to_string(report.plan_id) + ":" +
+        std::to_string(report.child_order_id) + ":" + std::to_string(report.event_ts_ns) + ":" +
+        std::to_string(static_cast<unsigned>(report.status)) + ":" +
+        std::to_string(report.filled_lots) + ":" + std::to_string(report.avg_fill_price_tick);
+    if (applied_reports_.contains(key)) return;
     ChildFillState* child = nullptr;
     for (std::uint16_t i = 0; i < plan_state_.child_count; ++i) {
         if (plan_state_.children[i].order_id == report.child_order_id) {
@@ -67,6 +73,12 @@ void FillTracker::apply(const ExecutionReport& report) {
     if (child == nullptr) {
         return;
     }
+
+    if (report.filled_lots > child->remaining_qty_lots || report.avg_fill_price_tick < 0) return;
+    applied_reports_.insert(key);
+    const auto fill_lots = report.filled_lots;
+    state_.filled_lots += fill_lots;
+    state_.avg_fill_price_tick = report.avg_fill_price_tick;
 
     child->filled_qty_lots = std::min(
         child->requested_qty_lots,

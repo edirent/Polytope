@@ -9,6 +9,8 @@ namespace trading_engine::strategy::market_making {
 
 namespace {
 
+constexpr std::int64_t kMaxPostOnlyImproveTick = 1;
+
 [[nodiscard]] std::uint64_t quote_group_id(
     std::uint64_t strategy_id,
     std::uint32_t asset_index
@@ -68,6 +70,74 @@ namespace {
     const auto bid = best_bid_tick(input);
     const auto ask = best_ask_tick(input);
     return bid > 0 && ask > 0 && bid <= ask ? (bid + ask) / 2 : 0;
+}
+
+[[nodiscard]] std::int64_t post_only_bid_tick(
+    const QuoteBuildInput& input,
+    std::int64_t price_tick
+) noexcept {
+    if (price_tick <= 0) {
+        return 0;
+    }
+    const auto bid = best_bid_tick(input);
+    const auto ask = best_ask_tick(input);
+    if (bid <= 0 || ask <= 0 || bid >= ask) {
+        return clamp_tick(
+            price_tick,
+            input.config->min_price_tick,
+            input.config->max_price_tick
+        );
+    }
+    const auto floor = std::max(input.config->min_price_tick, bid);
+    const auto same_side_ceiling = bid + kMaxPostOnlyImproveTick;
+    const auto opposite_side_ceiling = ask - 1;
+    const auto ceiling = std::min({
+        input.config->max_price_tick,
+        same_side_ceiling,
+        opposite_side_ceiling
+    });
+    if (ceiling < floor) {
+        return 0;
+    }
+    return clamp_tick(
+        std::clamp(price_tick, floor, ceiling),
+        floor,
+        ceiling
+    );
+}
+
+[[nodiscard]] std::int64_t post_only_ask_tick(
+    const QuoteBuildInput& input,
+    std::int64_t price_tick
+) noexcept {
+    if (price_tick <= 0) {
+        return 0;
+    }
+    const auto bid = best_bid_tick(input);
+    const auto ask = best_ask_tick(input);
+    if (bid <= 0 || ask <= 0 || bid >= ask) {
+        return clamp_tick(
+            price_tick,
+            input.config->min_price_tick,
+            input.config->max_price_tick
+        );
+    }
+    const auto same_side_floor = ask - kMaxPostOnlyImproveTick;
+    const auto opposite_side_floor = bid + 1;
+    const auto floor = std::max({
+        input.config->min_price_tick,
+        same_side_floor,
+        opposite_side_floor
+    });
+    const auto ceiling = std::min(input.config->max_price_tick, ask);
+    if (ceiling < floor) {
+        return 0;
+    }
+    return clamp_tick(
+        std::clamp(price_tick, floor, ceiling),
+        floor,
+        ceiling
+    );
 }
 
 [[nodiscard]] bool bid_reduces_inventory(
@@ -258,12 +328,14 @@ QuoteBuildResult QuoteEngine::build(const QuoteBuildInput& input) const {
         result.reason = "crossed or invalid quote prices";
         return result;
     }
-    const auto bid_tick = bid_reduces_inventory(input)
+    const auto raw_bid_tick = bid_reduces_inventory(input)
         ? prices.bid_tick
         : std::min(prices.bid_tick, input.fair_value.fair_value_tick - 1);
-    const auto ask_tick = ask_reduces_inventory(input)
+    const auto raw_ask_tick = ask_reduces_inventory(input)
         ? prices.ask_tick
         : std::max(prices.ask_tick, input.fair_value.fair_value_tick + 1);
+    const auto bid_tick = post_only_bid_tick(input, raw_bid_tick);
+    const auto ask_tick = post_only_ask_tick(input, raw_ask_tick);
     const auto position_error =
         input.current_position_lots - input.config->target_position_lots;
     const auto excess_lots = inventory_excess_lots(input);
@@ -312,6 +384,20 @@ QuoteBuildResult QuoteEngine::build(const QuoteBuildInput& input) const {
     quote.inventory_skew_tick = input.inventory_skew_tick;
     quote.target_position_lots = input.config->target_position_lots;
     quote.current_position_lots = input.current_position_lots;
+    quote.product_kind = input.product_kind;
+    quote.product_asset_direction = input.product_asset_direction;
+    quote.product_winning_direction = input.product_winning_direction;
+    quote.product_external_fair_tick = input.product_external_fair_tick;
+    quote.product_z_score_bps = input.product_z_score_bps;
+    quote.product_tau_ms = input.product_tau_ms;
+    quote.product_dynamic_inventory_cap_lots =
+        input.product_dynamic_inventory_cap_lots;
+    quote.product_opening_allowed = input.product_opening_allowed;
+    quote.product_settlement_source_ok = input.product_settlement_source_ok;
+    quote.product_reward_size_lift_allowed =
+        input.product_reward_size_lift_allowed;
+    quote.product_reward_spread_compression_allowed =
+        input.product_reward_spread_compression_allowed;
     quote.created_ts_ns = input.now_ns;
     quote.expires_at_ns = input.now_ns + input.config->quote_ttl_ns;
     quote.snapshot_version_hash = input.depth->snapshot_version_hash;
@@ -367,6 +453,7 @@ QuoteBuildResult QuoteEngine::build(const QuoteBuildInput& input) const {
                         input.config->passive_unwind_aggression_tick
                 );
             }
+            final_bid_tick = post_only_bid_tick(input, final_bid_tick);
             if (bid_reduces) {
                 final_bid_qty = std::min(
                     final_bid_qty,
@@ -438,6 +525,7 @@ QuoteBuildResult QuoteEngine::build(const QuoteBuildInput& input) const {
                         input.config->passive_unwind_aggression_tick
                 );
             }
+            final_ask_tick = post_only_ask_tick(input, final_ask_tick);
             if (ask_reduces) {
                 final_ask_qty = std::min(
                     final_ask_qty,

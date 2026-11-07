@@ -1,0 +1,14 @@
+{
+  "schema": "cross-venue-policy-v0",
+  "mode": "shadow",
+  "live_enabled": false,
+  "max_book_age_ns": 250000000,
+  "max_receive_skew_ns": 100000000,
+  "max_total_payout": "500",
+  "max_single_leg_loss": "100",
+  "min_profit": "1",
+  "min_profit_bps": 50,
+  "min_quantity": 1,
+  "quantity_step": 1,
+  "quantities": [25, 50, 100, 200, 500]
+}

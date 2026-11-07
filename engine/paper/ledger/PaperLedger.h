@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace trading_engine::paper {
 
@@ -57,6 +58,7 @@ public:
     [[nodiscard]] PaperPnL pnl_snapshot() const;
 
 private:
+    std::unordered_map<std::string,std::string> receipt_fingerprints_;
     CashLedger cash_;
     PositionLedger positions_;
     std::unordered_set<std::uint64_t> applied_execution_report_ids_;

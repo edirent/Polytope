@@ -1,4 +1,5 @@
 #pragma once
+#include "engine/paper/public/PaperFill.h"
 
 #include "engine/paper/ledger/FillApplication.h"
 #include "engine/paper/ledger/PositionLedger.h"
@@ -11,6 +12,7 @@ namespace trading_engine::paper {
 
 class PaperPortfolio {
 public:
+    PositionLedgerApplyResult apply_fill(const PaperFill& fill);
     [[nodiscard]] PositionLedgerApplyResult apply_fill(const FillApplication& fill);
 
     void mark_mid(const std::string& asset_id, std::int64_t mid_tick);

@@ -1,0 +1,187 @@
+{
+  "schema": "cross-venue-research-v0.1",
+  "mode": "read_only_shadow",
+  "runs_root": "runs/cross_venue",
+  "approved_pairs": "config/cross_venue_approved_pairs.json",
+  "fee_models": "config/cross_venue_fee_models.json",
+  "discovery_limit": 200,
+  "page_size": 200,
+  "capture_markets_per_venue": 9,
+  "candidate_pair_limit": 200,
+  "websocket": true,
+  "rest_poll_ms": 5000,
+  "reconcile_interval_ms": 15000,
+  "heartbeat_timeout_ms": 30000,
+  "authoritative_max_age_ms": 45000,
+  "decision_max_age_ms": 250,
+  "max_receive_skew_ms": 100,
+  "capital": "200000",
+  "venue_allocations": [
+    "100000",
+    "100000"
+  ],
+  "slippage_per_share": "0.001",
+  "execution_risk_per_share": "0.001",
+  "rotate_bytes": 8388608,
+  "max_raw_bytes": 268435456,
+  "reconciliation_policy": "quiet_request_v0.1.1",
+  "require_explicit_revision_review": true,
+  "human_review_manifest": "runs/cross_venue/v0_1_2_20261106/approval_manifest.pending.json",
+  "capture_market_ids": {
+    "kalshi": [
+      "KXALIENS-27",
+      "KXPRESNOMD-28-HJEF",
+      "KXPRESNOMD-28-AHAM",
+      "KXPRESNOMD-28-CHOL",
+      "KXPRESNOMD-28-MLAN",
+      "KXPRESNOMD-28-JCRO",
+      "KXPRESNOMD-28-BORO",
+      "KXPRESNOMD-28-GPLA",
+      "KXPRESNOMD-28-AYAN"
+    ],
+    "polymarket_international": [
+      "0x747dc809fb79e1b05be09c42d6179459a58de2ef3e40f02484a4e1260f741f75",
+      "0x32927476aa07b4ba64858a48799fd5155e0573facb46fdec670134c88b87f696",
+      "0xd2c0cc6a7ad3c0e2590fa55095052e98b1a2b146e9b807138c7421ac0e39c60e",
+      "0xe29ca104ce56feb4c093c133b5dfc0c379e505373b4412cfec54fe2220f20b68",
+      "0xd0e58ada317f9778a221592cfed03405b235b137c8dd916817a39b72bf6dc19a",
+      "0x3cd6e52603d80ddbbdac9b1a4d43f9b7faa6aae4fae4d0fdfad3bd58454da7d3",
+      "0x8ecd1d15e521b7d1020ad5596cc981c8764e9dcfbc3648f582e1a5138aee7185",
+      "0x6685b25cc7c89032efcdf81eb27fdc6bbf04a3e4299bcd99c9f3d62c8471001e",
+      "0x450810ae738a0ff820d3248f2b24937f63fb8c8cf422ed2a915125adb4d9d3c8"
+    ]
+  },
+  "research_seed_markets": [
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXALIENS-27"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/703257"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXPRESNOMD-28-HJEF"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/559698"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXPRESNOMD-28-AHAM"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/559705"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXPRESNOMD-28-CHOL"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/559703"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXPRESNOMD-28-MLAN"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/559704"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXPRESNOMD-28-JCRO"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/559692"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXPRESNOMD-28-BORO"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/559689"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXPRESNOMD-28-GPLA"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/559696"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXPRESNOMD-28-AYAN"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/559688"
+    }
+  ],
+  "diagnostic_reconnect_after_sec": 600,
+  "diagnostic_watch_pairs": [
+    {
+      "label": "KXALIENS-27_pending_review",
+      "kalshi_market": "KXALIENS-27",
+      "polymarket_market": "0x747dc809fb79e1b05be09c42d6179459a58de2ef3e40f02484a4e1260f741f75",
+      "economic_approval": false
+    },
+    {
+      "label": "KXPRESNOMD-28-HJEF_pending_review",
+      "kalshi_market": "KXPRESNOMD-28-HJEF",
+      "polymarket_market": "0x32927476aa07b4ba64858a48799fd5155e0573facb46fdec670134c88b87f696",
+      "economic_approval": false
+    },
+    {
+      "label": "KXPRESNOMD-28-AHAM_pending_review",
+      "kalshi_market": "KXPRESNOMD-28-AHAM",
+      "polymarket_market": "0xd2c0cc6a7ad3c0e2590fa55095052e98b1a2b146e9b807138c7421ac0e39c60e",
+      "economic_approval": false
+    },
+    {
+      "label": "KXPRESNOMD-28-CHOL_pending_review",
+      "kalshi_market": "KXPRESNOMD-28-CHOL",
+      "polymarket_market": "0xe29ca104ce56feb4c093c133b5dfc0c379e505373b4412cfec54fe2220f20b68",
+      "economic_approval": false
+    },
+    {
+      "label": "KXPRESNOMD-28-MLAN_pending_review",
+      "kalshi_market": "KXPRESNOMD-28-MLAN",
+      "polymarket_market": "0xd0e58ada317f9778a221592cfed03405b235b137c8dd916817a39b72bf6dc19a",
+      "economic_approval": false
+    },
+    {
+      "label": "KXPRESNOMD-28-JCRO_pending_review",
+      "kalshi_market": "KXPRESNOMD-28-JCRO",
+      "polymarket_market": "0x3cd6e52603d80ddbbdac9b1a4d43f9b7faa6aae4fae4d0fdfad3bd58454da7d3",
+      "economic_approval": false
+    },
+    {
+      "label": "KXPRESNOMD-28-BORO_pending_review",
+      "kalshi_market": "KXPRESNOMD-28-BORO",
+      "polymarket_market": "0x8ecd1d15e521b7d1020ad5596cc981c8764e9dcfbc3648f582e1a5138aee7185",
+      "economic_approval": false
+    },
+    {
+      "label": "KXPRESNOMD-28-GPLA_pending_review",
+      "kalshi_market": "KXPRESNOMD-28-GPLA",
+      "polymarket_market": "0x6685b25cc7c89032efcdf81eb27fdc6bbf04a3e4299bcd99c9f3d62c8471001e",
+      "economic_approval": false
+    },
+    {
+      "label": "KXPRESNOMD-28-AYAN_pending_review",
+      "kalshi_market": "KXPRESNOMD-28-AYAN",
+      "polymarket_market": "0x450810ae738a0ff820d3248f2b24937f63fb8c8cf422ed2a915125adb4d9d3c8",
+      "economic_approval": false
+    }
+  ],
+  "asof_enabled": true,
+  "book_change_max_age_ms": 15000
+}

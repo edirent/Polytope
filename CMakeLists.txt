@@ -41,6 +41,9 @@ find_package(Threads REQUIRED)
 
 enable_testing()
 
+add_library(polytope_json STATIC oracle/OracleJson.cpp)
+target_compile_features(polytope_json PUBLIC cxx_std_20)
+
 add_subdirectory(engine/decode)
 add_subdirectory(engine/chain_confirm)
 add_subdirectory(engine/state)
@@ -73,6 +76,16 @@ foreach(test_case
 endforeach()
 
 add_subdirectory(engine/paper)
+add_subdirectory(engine/strategy/cross_venue)
+
+add_library(btc15m_lead_lag_replay STATIC replay/market_making/LeadLagReplay.cpp)
+target_link_libraries(btc15m_lead_lag_replay PUBLIC engine_strategy_market_making engine_risk)
+add_executable(run_btc15m_lead_lag_replay tools/run_btc15m_lead_lag_replay.cpp)
+target_link_libraries(run_btc15m_lead_lag_replay PRIVATE btc15m_lead_lag_replay)
+add_executable(btc15m_lead_lag_tests tests/unit/market_making/btc15m_lead_lag_test.cpp)
+target_link_libraries(btc15m_lead_lag_tests PRIVATE btc15m_lead_lag_replay)
+target_compile_definitions(btc15m_lead_lag_tests PRIVATE POLYTOPE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+add_test(NAME Btc15mLeadLag_StrategyAndDelayedReplay COMMAND btc15m_lead_lag_tests)
 
 add_executable(verify_reward_market_making_workflow
     engine/reward/tools/verify_reward_market_making_workflow.cpp
@@ -121,60 +134,26 @@ add_subdirectory(apps/paper_backend)
 # Until a smaller engine_decode_public target exists, downstream targets may
 # link engine_decode. State code may include only decode/public headers.
 
-add_executable(trading_engine
-    engine/main.cpp
+add_library(engine_runtime STATIC
     engine/runtime/Runtime.cpp
-    engine/runtime/ThreadManager.cpp
-    engine/runtime/CpuAffinity.cpp
-    engine/runtime/Shutdown.cpp
-    engine/feed/RealtimeFeedEngine.cpp
-    engine/feed/source_runtime/WebSocketClient.cpp
-    engine/feed/source_runtime/HeartbeatController.cpp
-    engine/feed/source_runtime/ReconnectController.cpp
+    engine/runtime/StrategySupervisor.cpp
+    engine/runtime/DurableJournal.cpp
+    engine/runtime/VenueMarketFacade.cpp
+    engine/runtime/LivePacketSource.cpp
     engine/feed/raw_ingest/RawPacket.cpp
-    engine/feed/raw_ingest/RawLogWriter.cpp
     engine/feed/raw_ingest/RawLogReader.cpp
-    engine/feed/integrity/ConsistencyChecker.cpp
-    engine/feed/integrity/StaleDetector.cpp
-    engine/feed/integrity/RecoveryController.cpp
-    engine/feed/output/EventBus.cpp
-    engine/feed/output/HealthPublisher.cpp
-    engine/feed/output/ReplayRunner.cpp
-    engine/state/LOBEngine.cpp
-    engine/state/SnapshotPublisher.cpp
-    engine/state/SettlementState.cpp
-    engine/state/VersionedState.cpp
-    engine/risk/RiskEngine.cpp
-    engine/risk/VWAPSimulator.cpp
-    engine/risk/ExposureManager.cpp
-    engine/risk/FeeModel.cpp
-    engine/risk/KillSwitch.cpp
-    engine/execution/PaperExecution.cpp
-    engine/execution/SandboxExecution.cpp
-    engine/execution/LiveExecution.cpp
-    engine/execution/OrderStateMachine.cpp
-    engine/execution/FillTracker.cpp
-    engine/memory/SlabAllocator.cpp
-    engine/metrics/Metrics.cpp
-    engine/metrics/LatencyHistogram.cpp
-    engine/metrics/EventCounter.cpp
 )
+target_compile_features(engine_runtime PUBLIC cxx_std_20)
+target_include_directories(engine_runtime PUBLIC ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/engine)
+target_link_libraries(engine_runtime PUBLIC engine_decode engine_state engine_signal
+    engine_order_decision engine_risk engine_execution engine_paper paper_backend_lib engine_cross_venue_research OpenSSL::Crypto)
 
-target_include_directories(trading_engine PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/engine
-)
-
-target_link_libraries(trading_engine PRIVATE
-    engine_state
-    engine_decode
-    engine_signal
-    engine_risk
-    engine_execution
-    Boost::system
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    Threads::Threads
-)
+add_executable(trading_engine engine/main.cpp)
+target_link_libraries(trading_engine PRIVATE engine_runtime)
+add_executable(trading_runtime tools/run_trading_runtime.cpp)
+target_link_libraries(trading_runtime PRIVATE engine_runtime)
+add_executable(runtime_maker_parity tools/runtime_maker_parity.cpp)
+target_link_libraries(runtime_maker_parity PRIVATE engine_runtime)
 
 add_executable(common_vwap_math_tests
     tests/unit/common/vwap_math_test.cpp
@@ -799,6 +778,8 @@ foreach(test_case
     QuoteRiskEvaluator_RejectsLowEdgeToFair
     QuoteRiskEvaluator_RejectsTightBookSpread
     QuoteRiskEvaluator_RejectsWideBookSpread
+    QuoteRiskEvaluator_RejectsPostOnlyCrossingBid
+    QuoteRiskEvaluator_RejectsPostOnlyCrossingAsk
     QuoteRiskEvaluator_RejectsQuoteCrossingFairValue
     QuoteRiskEvaluator_RejectsFairValueDeviationBps
     QuoteRiskEvaluator_AllowsRiskReducingAskThroughFairValue
@@ -811,6 +792,10 @@ foreach(test_case
     QuoteRiskEvaluator_RejectsStaleSpot
     QuoteRiskEvaluator_RejectsCanonicalExposureLimit
     QuoteRiskEvaluator_RejectsLowExternalConfidence
+    QuoteRiskEvaluator_RejectsTerminalDigitalOpeningGateDisabled
+    QuoteRiskEvaluator_AllowsTerminalDigitalUnwindWhenOpeningDisabled
+    QuoteRiskEvaluator_RejectsTerminalDigitalLosingSideHighZ
+    QuoteRiskEvaluator_RejectsTerminalDigitalDynamicCap
     ApprovedQuote_PreservesQuoteFields
     ApprovedQuote_IsNotOrder
 )
@@ -3291,6 +3276,20 @@ target_link_libraries(probe_market_making_e2e_latency PRIVATE
     engine_paper
 )
 
+add_executable(backtest_up_down_5m_30m
+    tools/backtest_up_down_5m_30m.cpp
+)
+
+target_include_directories(backtest_up_down_5m_30m PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/engine
+)
+
+target_link_libraries(backtest_up_down_5m_30m PRIVATE
+    market_making_tools
+    engine_risk
+)
+
 add_executable(probe_polymarket_auth_read
     tools/probe_polymarket_auth_read.cpp
 )
@@ -3546,3 +3545,26 @@ foreach(test_case
 )
     add_test(NAME ${test_case} COMMAND source_runtime_tests ${test_case})
 endforeach()
+
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME RuntimeFoundation_IntegrationFaults
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/integration/runtime/runtime_integration.py
+            --binary $<TARGET_FILE:trading_runtime> --source ${CMAKE_SOURCE_DIR} --backend $<TARGET_FILE:paper_backend>)
+    set_tests_properties(RuntimeFoundation_IntegrationFaults PROPERTIES TIMEOUT 120)
+endif()
+
+add_executable(runtime_lifecycle_tests tests/integration/runtime/runtime_lifecycle_test.cpp)
+target_link_libraries(runtime_lifecycle_tests PRIVATE engine_execution engine_paper)
+add_test(NAME RuntimeFoundation_PartialDuplicateUnknownAck COMMAND runtime_lifecycle_tests)
+
+if(Python3_Interpreter_FOUND)
+    add_test(NAME RuntimeV020_OperationalFaults COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tests/integration/runtime/operational_v020.py
+        --binary $<TARGET_FILE:trading_runtime> --backend $<TARGET_FILE:paper_backend> --source ${CMAKE_SOURCE_DIR})
+    set_tests_properties(RuntimeV020_OperationalFaults PROPERTIES TIMEOUT 180)
+    add_test(NAME RuntimeV021_UnifiedMakerFaults COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_SOURCE_DIR}/tests/integration/runtime/unified_maker_v021.py
+        --binary $<TARGET_FILE:trading_runtime> --source ${CMAKE_SOURCE_DIR})
+    set_tests_properties(RuntimeV021_UnifiedMakerFaults PROPERTIES TIMEOUT 180)
+endif()

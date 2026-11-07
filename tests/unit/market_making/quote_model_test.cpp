@@ -141,8 +141,8 @@ void QuoteEngine_BuildsBidAsk() {
     expect_true(build.ok, "ok");
     expect_true(build.quote.has_bid, "bid");
     expect_true(build.quote.has_ask, "ask");
-    expect_equal(build.quote.bid.price_tick, 495'000LL, "bid price");
-    expect_equal(build.quote.ask.price_tick, 505'000LL, "ask price");
+    expect_equal(build.quote.bid.price_tick, 490'001LL, "bid price");
+    expect_equal(build.quote.ask.price_tick, 509'999LL, "ask price");
 }
 
 void QuoteEngine_DisablesBidSide() {
@@ -172,7 +172,7 @@ void QuoteEngine_DisablesBidSide() {
     expect_true(build.quote.has_ask, "ask");
 }
 
-void QuoteEngine_AllowsReducingAskBelowFair() {
+void QuoteEngine_ClampsForcedReducingAskPostOnly() {
     auto depth = tools::make_depth_view(490'000, 510'000, 20.0, 20.0, 1, 100);
     auto cfg = config();
     cfg.min_half_spread_tick = 1;
@@ -197,7 +197,7 @@ void QuoteEngine_AllowsReducingAskBelowFair() {
     expect_true(build.ok, "ok");
     expect_false(build.quote.has_bid, "bid disabled in unwind");
     expect_true(build.quote.has_ask, "ask");
-    expect_true(build.quote.ask.price_tick < build.quote.fair_value_tick, "reducing ask below fair");
+    expect_equal(build.quote.ask.price_tick, 509'999LL, "ask post-only");
     expect_equal(build.quote.type, QuoteIntentType::ForcedUnwind, "unwind type");
     expect_equal(build.quote.risk_mode, QuoteIntentRiskMode::ForcedReduce, "risk mode");
     expect_true(build.quote.ask.risk_reducing, "ask risk reducing");
@@ -241,7 +241,7 @@ void QuoteEngine_PassiveReduceAskJoinsBestAsk() {
     expect_true(build.quote.ask.risk_reducing, "ask risk reducing");
 }
 
-void QuoteEngine_UrgentReduceAskMovesToMidpoint() {
+void QuoteEngine_UrgentReduceAskStaysPostOnly() {
     auto depth = tools::make_depth_view(490'000, 510'000, 20.0, 20.0, 1, 100);
     auto cfg = config();
     cfg.min_half_spread_tick = 10'000;
@@ -270,7 +270,7 @@ void QuoteEngine_UrgentReduceAskMovesToMidpoint() {
     });
     expect_true(build.ok, "ok");
     expect_true(build.quote.has_ask, "ask");
-    expect_equal(build.quote.ask.price_tick, 500'000LL, "urgent ask at mid");
+    expect_equal(build.quote.ask.price_tick, 509'999LL, "urgent ask post-only");
     expect_equal(build.quote.type, QuoteIntentType::PassiveUnwind, "urgent type");
     expect_equal(build.quote.risk_mode, QuoteIntentRiskMode::ReduceOnly, "risk mode");
 }
@@ -332,7 +332,7 @@ void QuoteEngine_ClampsOpeningAskToCorrectSideOfFair() {
     expect_true(build.ok, "ok");
     expect_true(build.quote.has_ask, "ask");
     expect_true(build.quote.ask.price_tick > build.quote.fair_value_tick, "opening ask above fair");
-    expect_equal(build.quote.ask.price_tick, build.quote.fair_value_tick + 1, "ask clamped");
+    expect_equal(build.quote.ask.price_tick, 509'999LL, "ask clamped");
 }
 
 void QuoteEngine_RequiresExternalFairForOpeningQuotes() {
@@ -361,7 +361,7 @@ void QuoteEngine_RequiresExternalFairForOpeningQuotes() {
     expect_false(build.ok, "opening quotes blocked without external fair");
 }
 
-void QuoteEngine_DropsOpeningBidWhenReducingAskWouldSelfCross() {
+void QuoteEngine_MixedQuoteStaysPostOnlyWhenReducingAskPresent() {
     auto depth = tools::make_depth_view(150'000, 160'000, 20.0, 20.0, 1, 100);
     auto cfg = config();
     cfg.fee_buffer_tick = 0;
@@ -379,8 +379,8 @@ void QuoteEngine_DropsOpeningBidWhenReducingAskWouldSelfCross() {
         .config = &cfg,
         .fair_value = FairValueResult{
             .ok = true,
-            .fair_value_tick = 178'595,
-            .external_fair_value_tick = 178'595,
+            .fair_value_tick = 155'000,
+            .external_fair_value_tick = 155'000,
             .quality = FairValueQuality::Valid,
             .source = FairValueSourceKind::External
         },
@@ -395,13 +395,14 @@ void QuoteEngine_DropsOpeningBidWhenReducingAskWouldSelfCross() {
         .now_ns = 100
     });
     expect_true(build.ok, "ok");
-    expect_false(build.quote.has_bid, "opening bid dropped");
+    expect_true(build.quote.has_bid, "opening bid kept post-only");
     expect_true(build.quote.has_ask, "reducing ask kept");
-    expect_equal(build.quote.ask.price_tick, 159'999LL, "ask joins best ask");
+    expect_equal(build.quote.bid.price_tick, 150'000LL, "bid joins best bid");
+    expect_equal(build.quote.ask.price_tick, 159'999LL, "ask improves best ask");
     expect_true(build.quote.ask.risk_reducing, "ask risk reducing");
     expect_equal(
         build.quote.risk_mode,
-        QuoteIntentRiskMode::ReduceOnly,
+        QuoteIntentRiskMode::Mixed,
         "risk mode"
     );
 }
@@ -438,13 +439,13 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {"QuoteSizeModel_ReducesBidNearInventoryLimit", &QuoteSizeModel_ReducesBidNearInventoryLimit},
         {"QuoteEngine_BuildsBidAsk", &QuoteEngine_BuildsBidAsk},
         {"QuoteEngine_DisablesBidSide", &QuoteEngine_DisablesBidSide},
-        {"QuoteEngine_AllowsReducingAskBelowFair", &QuoteEngine_AllowsReducingAskBelowFair},
+        {"QuoteEngine_ClampsForcedReducingAskPostOnly", &QuoteEngine_ClampsForcedReducingAskPostOnly},
         {"QuoteEngine_PassiveReduceAskJoinsBestAsk", &QuoteEngine_PassiveReduceAskJoinsBestAsk},
-        {"QuoteEngine_UrgentReduceAskMovesToMidpoint", &QuoteEngine_UrgentReduceAskMovesToMidpoint},
+        {"QuoteEngine_UrgentReduceAskStaysPostOnly", &QuoteEngine_UrgentReduceAskStaysPostOnly},
         {"QuoteEngine_ReduceOnlyQtyCappedToTarget", &QuoteEngine_ReduceOnlyQtyCappedToTarget},
         {"QuoteEngine_ClampsOpeningAskToCorrectSideOfFair", &QuoteEngine_ClampsOpeningAskToCorrectSideOfFair},
         {"QuoteEngine_RequiresExternalFairForOpeningQuotes", &QuoteEngine_RequiresExternalFairForOpeningQuotes},
-        {"QuoteEngine_DropsOpeningBidWhenReducingAskWouldSelfCross", &QuoteEngine_DropsOpeningBidWhenReducingAskWouldSelfCross},
+        {"QuoteEngine_MixedQuoteStaysPostOnlyWhenReducingAskPresent", &QuoteEngine_MixedQuoteStaysPostOnlyWhenReducingAskPresent},
         {"QuoteEngine_RejectsCrossedQuote", &QuoteEngine_RejectsCrossedQuote}
     };
     return map;

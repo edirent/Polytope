@@ -1,0 +1,42 @@
+{
+  "strategy": "btc15m_lead_lag",
+  "candidate": "continuous",
+  "model_path": null,
+  "market": {
+    "market_id": "replace-with-btc-15m-market",
+    "symbol": "BTCUSDT",
+    "up_token": "replace-up-token",
+    "down_token": "replace-down-token",
+    "start_ms": 100000,
+    "expiry_ms": 1000000
+  },
+  "quote": {
+    "grid_tick": 10000,
+    "buffer_tick": 2500,
+    "inventory_skew_tick_per_lot": 250,
+    "queue_tolerance_tick": 10000,
+    "size_lots": 5,
+    "min_size_lots": 5,
+    "max_net_lots": 50,
+    "max_token_lots": 100,
+    "max_data_age_ms": 1500,
+    "ttl_ms": 5000
+  },
+  "regime": {
+    "calm_tick": 5000,
+    "shock_tick": 15000,
+    "halt_tick": 40000,
+    "quiet_recovery_ms": 1500
+  },
+  "latency_assumptions_ms": {"submit": 25, "cancel": 100, "fill_notice": 50, "terminal_reduce": 275},
+  "queue_factor": 1.0,
+  "decision_interval_ms": 50,
+  "terminal_reduce_request_ms": null,
+  "accounting": {
+    "initial_cash_tick": 100000000,
+    "initial_pairs": 25,
+    "maker_fee_bps": 0,
+    "taker_fee_bps": 0,
+    "operating_cost_tick": 0
+  }
+}

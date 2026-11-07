@@ -20,6 +20,14 @@ PaperLedger::PaperLedger(std::int64_t starting_cash_tick) {
 }
 
 PaperLedgerApplyResult PaperLedger::apply_fill(const FillApplication& fill) {
+    const auto fingerprint=std::to_string(fill.asset_id.size())+":"+fill.asset_id+":"+
+        std::to_string(static_cast<int>(fill.side))+":"+std::to_string(fill.report.filled_lots)+":"+
+        std::to_string(fill.report.avg_fill_price_tick)+":"+std::to_string(fill.fee_tick);
+    if (!fill.report.fill_id.empty()) {
+        const auto previous=receipt_fingerprints_.find(fill.report.fill_id);
+        if (previous!=receipt_fingerprints_.end() && previous->second!=fingerprint)
+            return {.applied=false,.status=PaperLedgerApplyStatus::InvalidFill,.reason="conflicting economics for existing fill receipt",.snapshot=snapshot()};
+    }
     const auto report_id = derive_execution_report_id(fill);
     if (report_id == 0) {
         return {
@@ -89,6 +97,7 @@ PaperLedgerApplyResult PaperLedger::apply_fill(const FillApplication& fill) {
 
     cash_.fees_paid_tick += fill.fee_tick;
     applied_execution_report_ids_.insert(report_id);
+    if (!fill.report.fill_id.empty()) receipt_fingerprints_.emplace(fill.report.fill_id,fingerprint);
 
     return {
         .applied = true,
@@ -100,6 +109,14 @@ PaperLedgerApplyResult PaperLedger::apply_fill(const FillApplication& fill) {
 }
 
 PaperLedgerApplyResult PaperLedger::apply_fill(const PaperFill& fill) {
+    const auto fingerprint=fill.asset_id+":"+std::to_string(fill.asset_id.size())+":"+std::to_string(static_cast<int>(fill.side))+":"+
+        std::to_string(fill.qty_lots)+":"+std::to_string(fill.fill_price_tick)+":"+std::to_string(fill.fee_tick);
+    if(!fill.receipt_id.empty()) {
+        auto prior=receipt_fingerprints_.find("PAPER:"+fill.receipt_id);
+        if(prior!=receipt_fingerprints_.end())return {.applied=false,
+            .status=prior->second==fingerprint?PaperLedgerApplyStatus::DuplicateIgnored:PaperLedgerApplyStatus::RejectedInvalidFill,
+            .reason=prior->second==fingerprint?"duplicate authoritative paper receipt":"conflicting authoritative paper receipt",.snapshot=snapshot()};
+    }
     const auto supported_liquidity_role =
         fill.liquidity_role == FillLiquidityRole::Maker ||
         fill.liquidity_role == FillLiquidityRole::Taker;
@@ -179,6 +196,7 @@ PaperLedgerApplyResult PaperLedger::apply_fill(const PaperFill& fill) {
     }
 
     applied_fill_ids_.insert(fill.fill_id);
+    if(!fill.receipt_id.empty())receipt_fingerprints_.emplace("PAPER:"+fill.receipt_id,fingerprint);
     if (fill.report_id != 0) {
         applied_maker_report_ids_.insert(fill.report_id);
     }

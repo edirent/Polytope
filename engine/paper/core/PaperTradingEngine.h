@@ -31,9 +31,15 @@ public:
         std::size_t dashboard_capacity = 256
     );
 
+    void set_history_limit(std::size_t limit) { history_limit_ = limit; }
+
+    // Bind the artifact index before the first mark; order plans may arrive later.
+    void bind_asset_index(const std::string& asset_id, std::uint32_t asset_index);
+
     void on_execution_report(
         const trading_engine::execution::ExecutionReport& report
     );
+    PaperLedgerApplyResult on_paper_fill(const PaperFill& fill);
     void on_reservation_disposition(
         const trading_engine::execution::ReservationDisposition& disposition
     );
@@ -50,6 +56,9 @@ public:
     );
 
     [[nodiscard]] DashboardSnapshot latest_dashboard_snapshot() const;
+
+    // Read-only accounting authority for portfolio risk and reconciliation.
+    [[nodiscard]] const PaperLedger& ledger() const noexcept { return ledger_; }
 
 private:
     void handle_observed_event(const PaperEventAdapterResult& result);
@@ -105,6 +114,7 @@ private:
         std::uint64_t updated_ts_ns = 0;
     };
 
+    std::size_t history_limit_ = 0;
     PaperEventAdapter adapter_;
     PaperLedger ledger_;
     PaperPortfolio portfolio_;

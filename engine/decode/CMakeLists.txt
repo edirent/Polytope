@@ -23,3 +23,6 @@ target_include_directories(engine_decode
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
+
+# One Boost.JSON implementation shared by Decode and Oracle in the unified runtime.
+target_link_libraries(engine_decode PUBLIC polytope_json)

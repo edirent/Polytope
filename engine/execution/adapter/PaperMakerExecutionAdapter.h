@@ -38,6 +38,17 @@ public:
 
     [[nodiscard]] const ActivePaperQuoteBook& quote_book() const noexcept;
     [[nodiscard]] PaperMakerFillMode fill_mode() const noexcept;
+    // Central OMS path: pure simulation on an immutable OMS-owned order projection.
+    // Does not populate the legacy research quote_book_.
+    [[nodiscard]] std::vector<MakerFillResult> evaluate_managed(const PaperMakerQuote& quote,
+        const PaperMakerMarketEvent& event,PaperMakerFillMode mode) const {
+        return fill_model_.evaluate(quote,event,mode,config_.allow_partial_fills,
+            config_.max_fill_qty_per_trade,config_.queue_min_rest_ns);
+    }
+    [[nodiscard]] bool accept_managed_submission(const risk::ApprovedQuote& quote,std::uint64_t now) const {
+        return (quote.has_bid || quote.has_ask) && quote.expires_at_ns>now;
+    }
+    [[nodiscard]] bool accept_managed_cancel() const {return true;} // Explicit simulated request acceptance, not terminal ACK.
 
 private:
     [[nodiscard]] MakerExecutionReport make_report(

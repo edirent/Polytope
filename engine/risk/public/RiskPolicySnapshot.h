@@ -37,6 +37,13 @@ struct QuoteRiskPolicy {
     std::int64_t reward_max_spread_tick = 0;
     std::int64_t reward_min_quote_size_lots = 0;
     bool allow_reward_exemption_for_reduce_only = true;
+
+    bool terminal_digital_5m_guard_enabled = true;
+    std::uint64_t terminal_digital_min_quote_tau_ms = 30'000;
+    std::uint64_t terminal_digital_max_oracle_age_ms = 300;
+    std::int64_t terminal_digital_max_opening_z_bps = 10'000;
+    std::int64_t terminal_digital_losing_side_z_cutoff_bps = 15'000;
+    std::int64_t terminal_digital_max_fair_deviation_tick = 50'000;
 };
 
 struct RiskPolicySnapshot {
@@ -157,6 +164,30 @@ inline void mix_double(std::uint64_t* hash, double value) noexcept {
     detail::mix_bool(
         &hash,
         policy.quote_risk.allow_reward_exemption_for_reduce_only
+    );
+    detail::mix_bool(
+        &hash,
+        policy.quote_risk.terminal_digital_5m_guard_enabled
+    );
+    detail::mix_u64(
+        &hash,
+        policy.quote_risk.terminal_digital_min_quote_tau_ms
+    );
+    detail::mix_u64(
+        &hash,
+        policy.quote_risk.terminal_digital_max_oracle_age_ms
+    );
+    detail::mix_i64(
+        &hash,
+        policy.quote_risk.terminal_digital_max_opening_z_bps
+    );
+    detail::mix_i64(
+        &hash,
+        policy.quote_risk.terminal_digital_losing_side_z_cutoff_bps
+    );
+    detail::mix_i64(
+        &hash,
+        policy.quote_risk.terminal_digital_max_fair_deviation_tick
     );
     return hash;
 }

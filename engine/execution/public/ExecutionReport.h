@@ -21,6 +21,8 @@ struct ExecutionReport {
     std::int64_t avg_fill_price_tick = 0;
 
     std::uint64_t event_ts_ns = 0;
+    std::string fill_id;  // venue receipt or explicitly SIMULATED identifier
+    std::int64_t fee_tick = 0;
 };
 
 }  // namespace trading_engine::execution

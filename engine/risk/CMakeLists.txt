@@ -5,6 +5,7 @@ add_library(engine_risk STATIC
     RiskEngine.cpp
     VWAPSimulator.cpp
     core/RiskEngine.cpp
+    core/PortfolioAdmission.cpp
     core/RiskPipeline.cpp
     core/RiskWorkflow.cpp
     guards/DuplicateIntentGuard.cpp
@@ -30,6 +31,7 @@ add_library(engine_risk STATIC
     publish/JsonlRiskDecisionWriter.cpp
     publish/RiskDecisionPublisher.cpp
     quote/QuoteRiskEvaluator.cpp
+    quote/TerminalDigitalQuoteRiskCheck.cpp
     reprice/CostRevalidator.cpp
     reprice/FeeRevalidator.cpp
     reprice/LatencyRevalidator.cpp

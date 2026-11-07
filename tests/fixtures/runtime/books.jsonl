@@ -1,0 +1,2 @@
+{"kind": "packet", "recv_ns": 1000000000, "wall_ns": 1000000000, "connection_id": 1, "payload": {"event_type": "book", "market": "m1", "asset_id": "asset_yes", "timestamp": "1000", "hash": "fixture-0", "bids": [{"price": "0.39", "size": "10"}], "asks": [{"price": "0.40", "size": "10"}]}}
+{"kind": "packet", "recv_ns": 1001000000, "wall_ns": 1001000000, "connection_id": 1, "payload": {"event_type": "book", "market": "m1", "asset_id": "asset_no", "timestamp": "1000", "hash": "fixture-1", "bids": [{"price": "0.39", "size": "10"}], "asks": [{"price": "0.40", "size": "10"}]}}

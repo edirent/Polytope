@@ -5,6 +5,8 @@
 
 #include <array>
 #include <cstdint>
+#include <unordered_set>
+#include <string>
 
 namespace trading_engine::execution {
 
@@ -52,6 +54,7 @@ public:
     ) const noexcept;
 
 private:
+    std::unordered_set<std::string> applied_reports_;
     FillTrackerState state_;
     PlanFillState plan_state_;
 };

@@ -1,6 +1,7 @@
 #include "engine/paper/core/PaperTradingEngine.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <span>
 #include <string>
 #include <string_view>
@@ -63,6 +64,30 @@ PaperTradingEngine::PaperTradingEngine(
 )
     : ledger_(starting_cash_tick),
       dashboard_store_(dashboard_capacity) {}
+
+void PaperTradingEngine::bind_asset_index(
+    const std::string& asset_id, std::uint32_t asset_index
+) {
+    const auto existing = asset_index_by_asset_id_.find(asset_id);
+    if (asset_id.empty() || (existing != asset_index_by_asset_id_.end() && existing->second != asset_index))
+        throw std::runtime_error("conflicting paper asset index");
+    for (const auto& [other, index] : asset_index_by_asset_id_)
+        if (other != asset_id && index == asset_index)
+            throw std::runtime_error("paper asset index belongs to another asset");
+    asset_index_by_asset_id_.insert_or_assign(asset_id, asset_index);
+}
+
+PaperLedgerApplyResult PaperTradingEngine::on_paper_fill(const PaperFill& fill) {
+    auto result=ledger_.apply_fill(fill);
+    if(result.applied) {
+        if(!portfolio_.apply_fill(fill).applied)throw std::runtime_error("paper valuation projection diverged from canonical ledger");
+        for(const auto& [asset,p]:ledger_.position_ledger().positions()) {
+            const auto* projection=portfolio_.positions().find(asset);
+            if(!projection || projection->qty_lots!=p.qty_lots || projection->cost_basis_tick!=p.cost_basis_tick)throw std::runtime_error("canonical/derived paper inventory mismatch");
+        }
+    }
+    publish_dashboard(fill.ts_ns);return result;
+}
 
 void PaperTradingEngine::on_execution_report(
     const trading_engine::execution::ExecutionReport& report
@@ -178,6 +203,12 @@ void PaperTradingEngine::handle_observed_event(
         }
     }
 
+    if (history_limit_ > 0) {
+        auto trim = [this](auto& values) {
+            if (values.size() > history_limit_) values.erase(values.begin(), values.end() - history_limit_);
+        };
+        trim(risk_decisions_); trim(execution_reports_); trim(plan_statuses_); trim(filled_orders_); trim(equity_curve_);
+    }
     publish_dashboard(result.event.ts_ns);
 }
 

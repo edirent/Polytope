@@ -36,6 +36,7 @@ struct PaperFill {
     std::uint64_t ts_ns = 0;
 
     std::uint64_t idempotency_hash = 0;
+    std::string receipt_id; // Authoritative simulated/private receipt when available, never a price/qty tuple.
 };
 
 }  // namespace trading_engine::paper

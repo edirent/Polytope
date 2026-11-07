@@ -1,0 +1,157 @@
+{
+  "schema": "cross-venue-research-v0.1",
+  "mode": "read_only_shadow",
+  "runs_root": "runs/cross_venue",
+  "approved_pairs": "config/cross_venue_approved_pairs.json",
+  "fee_models": "config/cross_venue_fee_models.json",
+  "discovery_limit": 200,
+  "page_size": 100,
+  "capture_markets_per_venue": 12,
+  "candidate_pair_limit": 200,
+  "websocket": true,
+  "rest_poll_ms": 5000,
+  "reconcile_interval_ms": 15000,
+  "heartbeat_timeout_ms": 30000,
+  "authoritative_max_age_ms": 45000,
+  "decision_max_age_ms": 250,
+  "max_receive_skew_ms": 100,
+  "capital": "200000",
+  "venue_allocations": [
+    "100000",
+    "100000"
+  ],
+  "slippage_per_share": "0.001",
+  "execution_risk_per_share": "0.001",
+  "rotate_bytes": 8388608,
+  "max_raw_bytes": 268435456,
+  "reconciliation_policy": "quiet_request_v0.1.1",
+  "require_explicit_revision_review": true,
+  "human_review_manifest": "runs/cross_venue/v0_1_3_20261106/proofs/approval_manifest.pending.json",
+  "diagnostic_reconnect_after_sec": 600,
+  "diagnostic_watch_pairs": [],
+  "asof_enabled": true,
+  "book_change_max_age_ms": 15000,
+  "structured_discovery_only": true,
+  "generalized": {
+    "max_legs": 4,
+    "max_candidate_groups": 512,
+    "max_per_type": 40,
+    "minimum_liquidity_proxy": 1000,
+    "max_observation_horizon_days": 14,
+    "max_solver_evaluations": 10000,
+    "max_solver_runtime_ms": 250,
+    "max_sizing_points_per_leg": 6,
+    "max_quantity_micro": 1000000000,
+    "capital": "200000",
+    "wallets": [
+      "100000",
+      "100000"
+    ],
+    "forward_budget_per_share": "0.002",
+    "conversion_budget_per_share": "0.003",
+    "max_unhedged_cost": "5000",
+    "max_scenario_branches": 81,
+    "minimum_observation_horizon_sec": 3600,
+    "max_capital_lock_seconds": 1209600
+  },
+  "allow_directional_binary_outcomes": true,
+  "historical_captures": [
+    "runs/cross_venue/v0_1_1_authenticated_20261105_3/capture",
+    "runs/cross_venue/v0_1_2_focused_20261106_2/capture"
+  ],
+  "capture_market_ids": {
+    "kalshi": [
+      "KXCPI-26OCT-T0.2",
+      "KXCPI-26OCT-T0.1",
+      "KXNBAGAME-26NOV06PHICLE-CLE",
+      "KXNBAGAME-26NOV06PHICLE-PHI",
+      "KXNBAGAME-26NOV06BOSCHA-BOS",
+      "KXNBAGAME-26NOV06BOSCHA-CHA",
+      "KXRT-CAT-40",
+      "KXRT-CAT-35",
+      "KXRT-CAT-30",
+      "KXRT-WILD-94",
+      "KXRT-WILD-93",
+      "KXRT-WILD-91"
+    ],
+    "polymarket_international": [
+      "0x3677c251947318cc64698988355cb2bbb5fe9a20f8c18c9e614cacc719026338",
+      "0x7ed2e32a42df0a78c8ed00096ba28b603d06972cf773434e98f093a919eba835",
+      "0x8b53f18addab819d2acdbdc94501ac91de7c380f19226c1efab9b27fe9f39436",
+      "0x1996f970326b6b1d764d836fbbb3f7e743c3156cc91a48f0647182703b164b4e",
+      "0xecffb867dc6b5421ec726ff8a44de5a538ccbad7dc1ea5c8b175b00293227cb5"
+    ]
+  },
+  "generalized_relationships": "runs/cross_venue/v0_1_3_20261106/proofs/payoff_proofs.jsonl",
+  "generalized_relationships_sha256": "114929a316f6e028158b2b6816a89d69c46f4ea59f84e9ad793ee5c61df62577",
+  "research_seed_markets": [
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXCPI-26OCT-T0.2"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXCPI-26OCT-T0.1"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/6104883"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/6104889"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/6104894"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNBAGAME-26NOV06PHICLE-CLE"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNBAGAME-26NOV06PHICLE-PHI"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNBAGAME-26NOV06BOSCHA-BOS"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXNBAGAME-26NOV06BOSCHA-CHA"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/6490521"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXRT-CAT-40"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXRT-CAT-35"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXRT-CAT-30"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXRT-WILD-94"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXRT-WILD-93"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXRT-WILD-91"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/2116541"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "schema": "cross-venue-research-v0.1",
+  "mode": "read_only_shadow",
+  "runs_root": "runs/cross_venue",
+  "approved_pairs": "config/cross_venue_approved_pairs.json",
+  "fee_models": "config/cross_venue_fee_models.json",
+  "discovery_limit": 1200,
+  "page_size": 200,
+  "capture_markets_per_venue": 4,
+  "candidate_pair_limit": 200,
+  "websocket": true,
+  "rest_poll_ms": 5000,
+  "reconcile_interval_ms": 15000,
+  "heartbeat_timeout_ms": 30000,
+  "authoritative_max_age_ms": 45000,
+  "decision_max_age_ms": 250,
+  "max_receive_skew_ms": 100,
+  "capital": "200000",
+  "venue_allocations": [
+    "100000",
+    "100000"
+  ],
+  "slippage_per_share": "0.001",
+  "execution_risk_per_share": "0.001",
+  "rotate_bytes": 8388608,
+  "max_raw_bytes": 268435456,
+  "reconciliation_policy": "quiet_request_v0.1.1",
+  "require_explicit_revision_review": true,
+  "human_review_manifest": "runs/cross_venue/v0_1_1_review_final_20261105/approval_manifest.pending.json",
+  "capture_market_ids": {
+    "kalshi": [
+      "KXALIENS-27",
+      "KXPRESNOMD-28-AELS",
+      "KXAAAGASM-26NOV30-3.80",
+      "KXRT-GOD-89"
+    ],
+    "polymarket_international": [
+      "0x747dc809fb79e1b05be09c42d6179459a58de2ef3e40f02484a4e1260f741f75",
+      "0x19d2ff72e389d190c183e6b114817301d29eba651d67d75a38ee201a05188fd9",
+      "0xefa17dee3af09f69f9ddf245b969aa4efbe7c71cdf06ee49d694408bc33e2ed2",
+      "0x8a4196617dcb703e49d9bb36d3847bf6a75fd364dbd19f8d408ac944bf1a03d8"
+    ]
+  },
+  "research_seed_markets": [
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXALIENS-27"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXPRESNOMD-28-AELS"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXAAAGASM-26NOV30-3.80"
+    },
+    {
+      "venue": "kalshi",
+      "metadata_url": "https://external-api.kalshi.com/trade-api/v2/markets/KXRT-GOD-89"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/703257"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/634976"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/2772194"
+    },
+    {
+      "venue": "polymarket_international",
+      "metadata_url": "https://gamma-api.polymarket.com/markets/3215008"
+    }
+  ],
+  "diagnostic_reconnect_after_sec": 300,
+  "diagnostic_watch_pairs": [
+    {
+      "label": "aliens_candidate_pending_review",
+      "kalshi_market": "KXALIENS-27",
+      "polymarket_market": "0x747dc809fb79e1b05be09c42d6179459a58de2ef3e40f02484a4e1260f741f75",
+      "economic_approval": false
+    }
+  ]
+}

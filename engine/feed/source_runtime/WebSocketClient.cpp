@@ -204,6 +204,8 @@ struct WebSocketClient::Impl {
     MessageCallback on_message;
     CloseCallback on_close;
     ErrorCallback on_error;
+    std::map<std::string,std::string> handshake_headers;
+    MessageCallback on_control;
 };
 
 struct ReadLoopGuard {
@@ -252,6 +254,13 @@ void WebSocketClient::set_on_close(CloseCallback cb) {
 void WebSocketClient::set_on_error(ErrorCallback cb) {
     impl_->on_error = std::move(cb);
 }
+void WebSocketClient::set_handshake_headers(std::map<std::string,std::string> headers) {
+    if(connected())throw std::runtime_error("cannot change connected handshake headers");
+    for(const auto& [key,value]:headers) if(key.find_first_of("\r\n")!=std::string::npos || value.find_first_of("\r\n")!=std::string::npos)
+        throw std::invalid_argument("invalid handshake header");
+    impl_->handshake_headers=std::move(headers);
+}
+void WebSocketClient::set_on_control(MessageCallback cb) {impl_->on_control=std::move(cb);}
 
 void WebSocketClient::connect() {
     try {
@@ -302,6 +311,13 @@ void WebSocketClient::connect() {
 
             ws.next_layer().handshake(ssl::stream_base::client);
             configure_websocket(ws);
+            ws.set_option(websocket::stream_base::decorator([this](websocket::request_type& req){
+                req.set(boost::beast::http::field::user_agent,"Polytope-CrossVenue-Research/0.1");
+                for(const auto& [key,value]:impl_->handshake_headers)req.set(key,value);
+            }));
+            ws.control_callback([this](websocket::frame_type kind,beast::string_view){
+                if(impl_->on_control)impl_->on_control(kind==websocket::frame_type::ping?"PING":kind==websocket::frame_type::pong?"PONG":"CLOSE");
+            });
             ws.handshake(host_header, parsed.target);
         } else {
             impl_->using_tls = false;
@@ -315,6 +331,12 @@ void WebSocketClient::connect() {
             beast::get_lowest_layer(ws).connect(results);
 
             configure_websocket(ws);
+            ws.set_option(websocket::stream_base::decorator([this](websocket::request_type& req){
+                for(const auto& [key,value]:impl_->handshake_headers)req.set(key,value);
+            }));
+            ws.control_callback([this](websocket::frame_type kind,beast::string_view){
+                if(impl_->on_control)impl_->on_control(kind==websocket::frame_type::ping?"PING":kind==websocket::frame_type::pong?"PONG":"CLOSE");
+            });
             ws.handshake(host_header, parsed.target);
         }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/strategy/market_making/fair/BarrierTouchFairModel.h"
+#include "engine/strategy/market_making/fair/DigitalOptionFairModel.h"
 #include "engine/strategy/market_making/fair/ExternalFairMarketSpec.h"
 #include "engine/strategy/market_making/fair/SpotOracle.h"
 #include "engine/strategy/market_making/fair/VolProvider.h"
@@ -25,6 +26,7 @@ private:
     const SpotOracle& spot_oracle_;
     const VolProvider& vol_provider_;
     BarrierTouchFairModel barrier_touch_model_;
+    DigitalOptionFairModel digital_option_model_;
 };
 
 }  // namespace trading_engine::strategy::market_making

@@ -32,6 +32,7 @@ struct CapturedSignalEvidence {
 
 class CapturingIntentPublisher final : public IIntentPublisher {
 public:
+    void clear() { intents_.clear(); evidence_.clear(); }
     void publish(const OpportunityIntent& intent) override;
     void publish(
         const OpportunityIntent& intent,

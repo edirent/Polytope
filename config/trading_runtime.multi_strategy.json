@@ -1,0 +1,90 @@
+{
+  "schema_version": 3,
+  "config_version": 1,
+  "mode": "REPLAY",
+  "live_enabled": false,
+  "strategy": "multi_strategy",
+  "input": "tests/fixtures/runtime/books.jsonl",
+  "input_format": "jsonl",
+  "oracle_artifact": "tests/fixtures/runtime/oracle_artifact",
+  "output_dir": "runs/runtime_v021/demo",
+  "starting_cash_tick": 100000000,
+  "max_records": 200000,
+  "max_book_age_ns": 15000000000,
+  "max_order_cost_tick": 10000000,
+  "max_total_exposure_tick": 50000000,
+  "max_market_exposure_tick": 50000000,
+  "max_asset_inventory_lots": 100,
+  "kill_switch_file": "runs/runtime_v021/KILL",
+  "allow_test_faults": false,
+  "replay_execution_policy": "PAPER",
+  "record_strategy_frames": true,
+  "maker_tick_policy": "PASSIVE_OUTWARD",
+  "instruments": [
+    {
+      "asset_id": "asset_yes",
+      "asset_index": 0,
+      "market_id": "m1",
+      "market_index": 0,
+      "venue": "polymarket_international",
+      "account": "PAPER",
+      "settlement_asset": "USDC",
+      "tick_size_tick": 1000,
+      "min_qty_lots": 1
+    },
+    {
+      "asset_id": "asset_no",
+      "asset_index": 1,
+      "market_id": "m1",
+      "market_index": 0,
+      "venue": "polymarket_international",
+      "account": "PAPER",
+      "settlement_asset": "USDC",
+      "tick_size_tick": 1000,
+      "min_qty_lots": 1
+    }
+  ],
+  "maker_execution": {
+    "model": "conservative",
+    "submit_latency_ns": 50000000,
+    "cancel_latency_ns": 100000000,
+    "ack_timeout_ns": 1000000000,
+    "fee_per_lot_tick": 0,
+    "queue_min_rest_ns": 250000000
+  },
+  "strategies": [
+    {
+      "strategy_id": "combinatorial",
+      "strategy_instance_id": "combo",
+      "configuration_epoch": 1,
+      "priority": 0,
+      "budget_tick": 40000000,
+      "callback_budget_ns": 100000000,
+      "assets": [
+        "asset_yes",
+        "asset_no"
+      ],
+      "model": {}
+    },
+    {
+      "strategy_id": "market_making",
+      "strategy_instance_id": "maker",
+      "configuration_epoch": 1,
+      "priority": 1,
+      "budget_tick": 40000000,
+      "callback_budget_ns": 100000000,
+      "assets": [
+        "asset_yes",
+        "asset_no"
+      ],
+      "model": {
+        "base_quote_size_lots": 5,
+        "min_half_spread_tick": 10000,
+        "max_inventory_lots": 100,
+        "max_inventory_skew_tick": 0,
+        "min_requote_interval_ns": 200000000,
+        "quote_ttl_ns": 2000000000
+      }
+    }
+  ]
+}

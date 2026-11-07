@@ -1,0 +1,14 @@
+{
+  "schema": "cross-venue-public-fee-models-v0.1",
+  "kalshi": {
+    "model": "quadratic",
+    "general_taker_coefficient": "0.07",
+    "effective_date": "2026-07-07",
+    "source": "https://kalshi.com/docs/kalshi-fee-schedule.pdf",
+    "rounding_source": "https://docs.kalshi.com/getting_started/fee_rounding",
+    "rounding_assumption": "Conservative non-direct-member one-cent upward budget per visible price-level fragment; no rebate assumed",
+    "required_market_inputs": ["series fee_type", "series fee_multiplier", "non-MVE event series association and overrides"],
+    "unsupported_fee_types": ["flat", "unknown"],
+    "note": "The coefficient is a versioned general model, never a universal market fee. Resolve each selected series/event and reject unsupported or missing metadata."
+  }
+}

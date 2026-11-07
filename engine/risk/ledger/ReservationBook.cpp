@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string_view>
 #include <utility>
+#include <stdexcept>
 
 namespace trading_engine::risk {
 
@@ -239,6 +240,14 @@ void ReservationBook::expire_old(std::uint64_t now_ns) {
 
 RiskLedgerSnapshot ReservationBook::snapshot() const {
     auto out = ledger_.snapshot();
+    for(const auto& [id,r]:portfolio_) if(r.active) {
+        ++out.active_reservations;out.total_reserved_cost_tick+=portfolio_cash(r.remaining);
+        for(const auto& leg:r.remaining) if(leg.buy) {
+            out.reserved_asset_lots[leg.asset]+=leg.quantity;
+            out.total_reserved_exposure_tick+=leg.quantity*leg.price_tick;
+            out.reserved_market_exposure_tick[leg.market]+=leg.quantity*leg.price_tick;
+        }
+    }
 
     for (const auto& reservation : reservations_) {
         switch (reservation.status) {
@@ -300,6 +309,33 @@ RiskLedgerSnapshot ReservationBook::snapshot() const {
     }
 
     return out;
+}
+
+std::uint64_t ReservationBook::reserve_portfolio(const std::string& owner,const std::string& key,const std::vector<PortfolioLeg>& legs) {
+    if(owner.empty() || key.empty() || legs.empty() || portfolio_cash(legs)<0) throw std::runtime_error("invalid portfolio commitment");
+    if(!portfolio_keys_.insert(owner+":"+key).second) throw std::runtime_error("duplicate portfolio commitment");
+    const auto id=next_portfolio_id_++;portfolio_.emplace(id,PortfolioReservation{id,owner,key,legs,true});return id;
+}
+void ReservationBook::resize_portfolio(std::uint64_t id,const std::vector<PortfolioLeg>& remaining) {
+    auto& r=portfolio_.at(id);if(!r.active)throw std::runtime_error("released commitment cannot be resized");
+    if(remaining.size()!=r.remaining.size() || portfolio_cash(remaining)<0)throw std::runtime_error("invalid commitment resize");
+    for(std::size_t n=0;n<remaining.size();++n) {
+        auto old=r.remaining[n],next=remaining[n];old.quantity=next.quantity;
+        if(next.quantity<0 || next.quantity>r.remaining[n].quantity || old.asset!=next.asset || old.market!=next.market ||
+           old.buy!=next.buy || old.price_tick!=next.price_tick || old.fee_per_lot_tick!=next.fee_per_lot_tick ||
+           old.event!=next.event || old.venue!=next.venue || old.account!=next.account || old.settlement_asset!=next.settlement_asset)
+            throw std::runtime_error("commitment resize changed authorization");
+    }
+    r.remaining=remaining;
+}
+void ReservationBook::release_portfolio(std::uint64_t id) {portfolio_.at(id).active=false;}
+void ReservationBook::bind_actual_quantities(std::uint64_t id,const std::vector<std::pair<std::string,std::int64_t>>& quantities) {
+    auto* r=find_reservation(&reservations_,id);
+    if(!r || !is_active(*r) || quantities.empty() || quantities.size()>kMaxReservedLegs)throw std::runtime_error("invalid actual-sized reservation");
+    for(const auto& [asset,qty]:quantities)if(asset.empty() || qty<=0 || qty>1000000)throw std::runtime_error("invalid actual reservation quantity");
+    if(r->ledger_reserved)ledger_.release(*r);
+    r->asset_count=0;r->assets={};for(const auto& [asset,qty]:quantities)add_asset_lot(r,intern_string(asset),qty);
+    ledger_.reserve(*r);r->ledger_reserved=true;
 }
 
 void ReservationBook::build_reservation(

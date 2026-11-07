@@ -19,6 +19,7 @@ struct PaperMakerMarketEvent {
     std::int64_t trade_price_tick = 0;
     std::int64_t trade_qty_lots = 0;
     OrderSide trade_aggressor_side = OrderSide::Buy;
+    std::uint64_t observed_ns = 0; // Physical callback time; queue delay cannot make evidence arrive after an order.
 };
 
 struct MakerFillResult {

@@ -39,6 +39,12 @@ namespace {
            quote.type == QuoteIntentType::ForcedUnwind;
 }
 
+[[nodiscard]] bool is_terminal_digital_5m(
+    const QuoteIntent& quote
+) noexcept {
+    return quote.product_kind == ProductKind::TerminalDigital5m;
+}
+
 void raise_opening_size(
     QuoteIntent* quote,
     std::int64_t min_size_lots
@@ -163,8 +169,18 @@ bool RewardAwareQuoteConstraint::apply(
           )
         : 0;
 
-    raise_opening_size(quote, quote->reward_min_size_lots);
-    if (!clamp_two_sided_spread(quote, config, max_spread_tick)) {
+    const auto size_lift_allowed =
+        !is_terminal_digital_5m(*quote) ||
+        quote->product_reward_size_lift_allowed;
+    const auto spread_compression_allowed =
+        !is_terminal_digital_5m(*quote) ||
+        quote->product_reward_spread_compression_allowed;
+
+    if (size_lift_allowed) {
+        raise_opening_size(quote, quote->reward_min_size_lots);
+    }
+    if (spread_compression_allowed &&
+        !clamp_two_sided_spread(quote, config, max_spread_tick)) {
         quote->reward_eligible = false;
         quote->reward_reason = "reward_spread_constraint_failed";
         return false;
@@ -175,9 +191,13 @@ bool RewardAwareQuoteConstraint::apply(
         quote->reward_min_size_lots,
         max_spread_tick
     );
-    quote->reward_reason = quote->reward_eligible
-        ? "reward_eligible"
-        : "reward_not_eligible";
+    if (quote->reward_eligible) {
+        quote->reward_reason = "reward_eligible";
+    } else if (!size_lift_allowed || !spread_compression_allowed) {
+        quote->reward_reason = "reward_product_gate_not_eligible";
+    } else {
+        quote->reward_reason = "reward_not_eligible";
+    }
     return true;
 }
 

@@ -1,0 +1,207 @@
+{
+  "schema": "cross-venue-fills-v0",
+  "mode": "SYNTHETIC",
+  "pair": {
+    "pair_id": "SYNTHETIC-K-P",
+    "leg_yes": {
+      "venue": "kalshi",
+      "market_id": "SYNTHETIC-K",
+      "instrument_id": "YES",
+      "currency": "SYNTHETIC_USD"
+    },
+    "leg_no": {
+      "venue": "polymarket_international",
+      "market_id": "SYNTHETIC-P",
+      "instrument_id": "NO",
+      "currency": "SYNTHETIC_USD"
+    },
+    "rules_hash_yes": "4a45b7d8d427bda39b4c02358e6391153227fa8ce78260b3e4689f315cc48512",
+    "rules_hash_no": "4412a587ddcee12d8266081737627e04833a4b8ece0524cb6744424c605d9d07",
+    "review_id": "SYNTHETIC-REVIEW-NOT-HUMAN-LIVE-APPROVAL",
+    "approval_revision": 1,
+    "enabled": true,
+    "synthetic": true,
+    "payoffs": [
+      {
+        "name": "YES",
+        "yes": "1",
+        "no": "0"
+      },
+      {
+        "name": "NO",
+        "yes": "0",
+        "no": "1"
+      }
+    ],
+    "artifact_hash": "5ee0b72b89e9eb696272280e2e236a3f5de96234b9d32cb1ec2193cb51b21837"
+  },
+  "starting_cash": [
+    "1000",
+    "1000"
+  ],
+  "scenarios": [
+    {
+      "name": "matched_100",
+      "planned_quantity": 100,
+      "cutoff_ns": 2000000000,
+      "illustrative_outcome": "YES",
+      "fills": [
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "fill_id": "matched_100-YES",
+          "order_id": "matched_100-order-YES",
+          "pair_id": "SYNTHETIC-K-P",
+          "canonical_payoff": "YES",
+          "qty": 100,
+          "price": "0.47",
+          "fee_paid": "1.75",
+          "exchange_time_ns": 1100000000,
+          "received_time_ns": 1150000000,
+          "raw_log_offset": 0,
+          "fee_version": "SYNTHETIC-RECEIPT-v1",
+          "mode": "SIMULATED",
+          "raw_payload": "{\"canonical_payoff\":\"YES\",\"exchange_time_ns\":1100000000,\"fee_paid\":\"1.75\",\"fee_version\":\"SYNTHETIC-RECEIPT-v1\",\"fill_id\":\"matched_100-YES\",\"key\":{\"currency\":\"SYNTHETIC_USD\",\"instrument_id\":\"YES\",\"market_id\":\"SYNTHETIC-K\",\"venue\":\"kalshi\"},\"mode\":\"SIMULATED\",\"order_id\":\"matched_100-order-YES\",\"pair_id\":\"SYNTHETIC-K-P\",\"price\":\"0.47\",\"qty\":100,\"raw_log_offset\":0,\"received_time_ns\":1150000000}",
+          "raw_hash": "f746a6f11d95ad6314527a94399e8baf1e49d2b41881483977708c4b77598705"
+        },
+        {
+          "key": {
+            "venue": "polymarket_international",
+            "market_id": "SYNTHETIC-P",
+            "instrument_id": "NO",
+            "currency": "SYNTHETIC_USD"
+          },
+          "fill_id": "matched_100-NO",
+          "order_id": "matched_100-order-NO",
+          "pair_id": "SYNTHETIC-K-P",
+          "canonical_payoff": "NO",
+          "qty": 100,
+          "price": "0.48",
+          "fee_paid": "1.74",
+          "exchange_time_ns": 1100000000,
+          "received_time_ns": 1150000000,
+          "raw_log_offset": 1,
+          "fee_version": "SYNTHETIC-RECEIPT-v1",
+          "mode": "SIMULATED",
+          "raw_payload": "{\"canonical_payoff\":\"NO\",\"exchange_time_ns\":1100000000,\"fee_paid\":\"1.74\",\"fee_version\":\"SYNTHETIC-RECEIPT-v1\",\"fill_id\":\"matched_100-NO\",\"key\":{\"currency\":\"SYNTHETIC_USD\",\"instrument_id\":\"NO\",\"market_id\":\"SYNTHETIC-P\",\"venue\":\"polymarket_international\"},\"mode\":\"SIMULATED\",\"order_id\":\"matched_100-order-NO\",\"pair_id\":\"SYNTHETIC-K-P\",\"price\":\"0.48\",\"qty\":100,\"raw_log_offset\":1,\"received_time_ns\":1150000000}",
+          "raw_hash": "ca89373b344047077fb47a0017e8a4e7e07615b2981d4dee841cde0a49c6dcbb"
+        }
+      ]
+    },
+    {
+      "name": "partial_hedge_60",
+      "planned_quantity": 100,
+      "cutoff_ns": 2000000000,
+      "illustrative_outcome": "YES",
+      "fills": [
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "fill_id": "partial_hedge_60-YES",
+          "order_id": "partial_hedge_60-order-YES",
+          "pair_id": "SYNTHETIC-K-P",
+          "canonical_payoff": "YES",
+          "qty": 100,
+          "price": "0.47",
+          "fee_paid": "1.75",
+          "exchange_time_ns": 1100000000,
+          "received_time_ns": 1150000000,
+          "raw_log_offset": 0,
+          "fee_version": "SYNTHETIC-RECEIPT-v1",
+          "mode": "SIMULATED",
+          "raw_payload": "{\"canonical_payoff\":\"YES\",\"exchange_time_ns\":1100000000,\"fee_paid\":\"1.75\",\"fee_version\":\"SYNTHETIC-RECEIPT-v1\",\"fill_id\":\"partial_hedge_60-YES\",\"key\":{\"currency\":\"SYNTHETIC_USD\",\"instrument_id\":\"YES\",\"market_id\":\"SYNTHETIC-K\",\"venue\":\"kalshi\"},\"mode\":\"SIMULATED\",\"order_id\":\"partial_hedge_60-order-YES\",\"pair_id\":\"SYNTHETIC-K-P\",\"price\":\"0.47\",\"qty\":100,\"raw_log_offset\":0,\"received_time_ns\":1150000000}",
+          "raw_hash": "8ebccfe76b525868bcddef434084054401befea509cbf8247c7172682cb04353"
+        },
+        {
+          "key": {
+            "venue": "polymarket_international",
+            "market_id": "SYNTHETIC-P",
+            "instrument_id": "NO",
+            "currency": "SYNTHETIC_USD"
+          },
+          "fill_id": "partial_hedge_60-NO",
+          "order_id": "partial_hedge_60-order-NO",
+          "pair_id": "SYNTHETIC-K-P",
+          "canonical_payoff": "NO",
+          "qty": 60,
+          "price": "0.48",
+          "fee_paid": "1.05",
+          "exchange_time_ns": 1100000000,
+          "received_time_ns": 1150000000,
+          "raw_log_offset": 1,
+          "fee_version": "SYNTHETIC-RECEIPT-v1",
+          "mode": "SIMULATED",
+          "raw_payload": "{\"canonical_payoff\":\"NO\",\"exchange_time_ns\":1100000000,\"fee_paid\":\"1.05\",\"fee_version\":\"SYNTHETIC-RECEIPT-v1\",\"fill_id\":\"partial_hedge_60-NO\",\"key\":{\"currency\":\"SYNTHETIC_USD\",\"instrument_id\":\"NO\",\"market_id\":\"SYNTHETIC-P\",\"venue\":\"polymarket_international\"},\"mode\":\"SIMULATED\",\"order_id\":\"partial_hedge_60-order-NO\",\"pair_id\":\"SYNTHETIC-K-P\",\"price\":\"0.48\",\"qty\":60,\"raw_log_offset\":1,\"received_time_ns\":1150000000}",
+          "raw_hash": "6fb5d7bdee3e8369b8c97707848dfa7f66dd2a063973074d033615d6d3c2fd2d"
+        }
+      ]
+    },
+    {
+      "name": "hedge_slippage",
+      "planned_quantity": 100,
+      "cutoff_ns": 2000000000,
+      "illustrative_outcome": "YES",
+      "fills": [
+        {
+          "key": {
+            "venue": "kalshi",
+            "market_id": "SYNTHETIC-K",
+            "instrument_id": "YES",
+            "currency": "SYNTHETIC_USD"
+          },
+          "fill_id": "hedge_slippage-YES",
+          "order_id": "hedge_slippage-order-YES",
+          "pair_id": "SYNTHETIC-K-P",
+          "canonical_payoff": "YES",
+          "qty": 100,
+          "price": "0.47",
+          "fee_paid": "1.75",
+          "exchange_time_ns": 1100000000,
+          "received_time_ns": 1150000000,
+          "raw_log_offset": 0,
+          "fee_version": "SYNTHETIC-RECEIPT-v1",
+          "mode": "SIMULATED",
+          "raw_payload": "{\"canonical_payoff\":\"YES\",\"exchange_time_ns\":1100000000,\"fee_paid\":\"1.75\",\"fee_version\":\"SYNTHETIC-RECEIPT-v1\",\"fill_id\":\"hedge_slippage-YES\",\"key\":{\"currency\":\"SYNTHETIC_USD\",\"instrument_id\":\"YES\",\"market_id\":\"SYNTHETIC-K\",\"venue\":\"kalshi\"},\"mode\":\"SIMULATED\",\"order_id\":\"hedge_slippage-order-YES\",\"pair_id\":\"SYNTHETIC-K-P\",\"price\":\"0.47\",\"qty\":100,\"raw_log_offset\":0,\"received_time_ns\":1150000000}",
+          "raw_hash": "615b197e522ed0e2f381929a3e1a532897702e3da2584938b6cb8372bbe342d2"
+        },
+        {
+          "key": {
+            "venue": "polymarket_international",
+            "market_id": "SYNTHETIC-P",
+            "instrument_id": "NO",
+            "currency": "SYNTHETIC_USD"
+          },
+          "fill_id": "hedge_slippage-NO",
+          "order_id": "hedge_slippage-order-NO",
+          "pair_id": "SYNTHETIC-K-P",
+          "canonical_payoff": "NO",
+          "qty": 100,
+          "price": "0.52",
+          "fee_paid": "1.74",
+          "exchange_time_ns": 1100000000,
+          "received_time_ns": 1150000000,
+          "raw_log_offset": 1,
+          "fee_version": "SYNTHETIC-RECEIPT-v1",
+          "mode": "SIMULATED",
+          "raw_payload": "{\"canonical_payoff\":\"NO\",\"exchange_time_ns\":1100000000,\"fee_paid\":\"1.74\",\"fee_version\":\"SYNTHETIC-RECEIPT-v1\",\"fill_id\":\"hedge_slippage-NO\",\"key\":{\"currency\":\"SYNTHETIC_USD\",\"instrument_id\":\"NO\",\"market_id\":\"SYNTHETIC-P\",\"venue\":\"polymarket_international\"},\"mode\":\"SIMULATED\",\"order_id\":\"hedge_slippage-order-NO\",\"pair_id\":\"SYNTHETIC-K-P\",\"price\":\"0.52\",\"qty\":100,\"raw_log_offset\":1,\"received_time_ns\":1150000000}",
+          "raw_hash": "e3d3ff2a27e1512d4f1ab97d6055975d06332b6b601348cc7f44d339d9c3bb35"
+        }
+      ]
+    },
+    {
+      "name": "signal_no_fills",
+      "planned_quantity": 100,
+      "cutoff_ns": 2000000000,
+      "illustrative_outcome": "YES",
+      "fills": []
+    }
+  ]
+}

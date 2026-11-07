@@ -15,10 +15,13 @@
 #include "engine/execution/state/OrderStateMachine.h"
 #include "engine/execution/state/PartialFillPolicy.h"
 #include "engine/execution/state/PlanStateMachine.h"
+#include "engine/execution/public/MakerOrder.h"
+#include "engine/execution/adapter/PaperMakerExecutionAdapter.h"
 
 #include <functional>
 #include <unordered_map>
 #include <vector>
+#include <set>
 
 namespace trading_engine::execution {
 
@@ -29,6 +32,13 @@ public:
         ExecutionReportPublisher* report_publisher = nullptr,
         ReservationDispositionPublisher* reservation_publisher = nullptr
     );
+
+    // Pure preparation: planner and validator only; no adapter operation.
+    [[nodiscard]] PlanResult prepare(const ApprovedOrderDecisionEnvelope&, const ExecutionContext&) const;
+    // Prepared identity is revalidated against the authorization before sending.
+    [[nodiscard]] ExecutionResult submit_prepared(const OrderPlan&, const ApprovedOrderDecisionEnvelope&, const ExecutionContext&);
+    void set_before_adapter(std::function<void(const OrderPlan&)> hook);
+    static std::string plan_identity(const OrderPlan&);
 
     [[nodiscard]] ExecutionResult submit_approved_intent(
         const ApprovedIntentEnvelope& envelope,
@@ -52,6 +62,18 @@ public:
     [[nodiscard]] const OrderPlan* find_plan(PlanId plan_id) const;
 
     void set_plan_observer(std::function<void(const OrderPlan&)> observer);
+    void configure_maker(PaperMakerExecutionAdapter* adapter,ManagedMakerConfig config,
+        std::function<void(const std::string&,const MakerOrder&)> before_effect,
+        std::function<void(const MakerOrder&,const MakerOrderReport&)> durable_report);
+    MakerOrder prepare_maker(const risk::ApprovedQuote&,const StrategyRequestMetadata&,const risk::PortfolioLeg&,
+        std::uint64_t reservation_id,std::uint64_t now) const;
+    void submit_maker(const MakerOrder&);
+    bool cancel_maker(const std::string& order_id,std::uint64_t now);
+    bool apply_maker_report(const MakerOrderReport&);
+    void advance_maker(std::uint64_t now,const std::vector<PaperMakerMarketEvent>& events={},const std::string& event_id={});
+    void restore_maker_blocked(MakerOrder);
+    const std::map<std::string,MakerOrder>& maker_orders() const {return maker_orders_;}
+    static std::string maker_plan_identity(const MakerOrder&);
 
 private:
     struct PlanRuntimeState {
@@ -96,6 +118,14 @@ private:
     std::unordered_map<PlanId, PlanRuntimeState> runtime_;
     std::vector<ExecutionReport> pending_reports_;
     std::function<void(const OrderPlan&)> plan_observer_;
+    std::function<void(const OrderPlan&)> before_adapter_;
+    PaperMakerExecutionAdapter* maker_adapter_=nullptr;
+    ManagedMakerConfig maker_config_;
+    std::function<void(const std::string&,const MakerOrder&)> maker_before_effect_;
+    std::function<void(const MakerOrder&,const MakerOrderReport&)> maker_durable_report_;
+    std::map<std::string,MakerOrder> maker_orders_;
+    std::map<std::string,std::string> maker_receipts_;
+    std::set<std::string> maker_market_events_;
 };
 
 }  // namespace trading_engine::execution

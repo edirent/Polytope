@@ -1,6 +1,7 @@
 #include "engine/execution/core/ExecutionGateway.h"
 
 #include <string>
+#include <sstream>
 #include <utility>
 
 namespace trading_engine::execution {
@@ -51,6 +52,40 @@ PlanStatus prepare_plan_for_adapter(
 
 }  // namespace
 
+PlanResult ExecutionGateway::prepare(const ApprovedOrderDecisionEnvelope& envelope, const ExecutionContext& context) const {
+    auto result = planner_.build_plan(envelope, context.now_ns, context.config);
+    if (result.ok) {
+        auto valid = validator_.validate(result.plan, context.config);
+        if (!valid.ok) { result.ok = false; result.error = valid.error; }
+    }
+    return result;
+}
+std::string ExecutionGateway::plan_identity(const OrderPlan& p) {
+    // Length-prefix strings; fixed integer separators. Includes every wire/order parameter.
+    std::ostringstream out;
+    auto text = [&](const std::string& v) { out << v.size() << ':' << v << ';'; };
+    out << p.plan_id << ';' << p.source_intent_id << ';' << p.approved_intent_id << ';'
+        << p.reservation_id << ';' << p.bundle_id << ';' << p.order_count << ';'
+        << p.max_total_cost_tick << ';' << p.min_expected_edge_tick << ';' << p.max_slippage_tick << ';'
+        << p.chosen_bundle_qty << ';' << p.guaranteed_payout_tick << ';' << p.expected_terminal_pnl_tick << ';'
+        << p.created_ts_ns << ';' << p.expire_after_ns << ';'; text(p.idempotency_key);
+    if (p.order_count > kMaxChildOrdersPerPlan) return "INVALID";
+    for (std::uint16_t i=0;i<p.order_count;++i) {
+        const auto& o=p.orders[i];
+        out << o.order_id << ';' << o.plan_id << ';'; text(o.client_order_id); text(o.market_id); text(o.asset_id);
+        out << o.market_index << ';' << o.asset_index << ';' << static_cast<int>(o.side) << ';'
+            << o.quantity_lots << ';' << o.limit_price_tick << ';' << o.estimated_vwap_tick << ';' << o.worst_allowed_price_tick << ';';
+    }
+    return out.str();
+}
+ExecutionResult ExecutionGateway::submit_prepared(const OrderPlan& prepared, const ApprovedOrderDecisionEnvelope& envelope, const ExecutionContext& context) {
+    const auto expected=prepare(envelope,context);
+    if (!expected.ok || plan_identity(expected.plan)!=plan_identity(prepared))
+        return {.ok=false,.plan_id=prepared.plan_id,.status=PlanStatus::Failed,.error="prepared plan authorization mismatch"};
+    return submit_approved_decision(envelope,context);
+}
+void ExecutionGateway::set_before_adapter(std::function<void(const OrderPlan&)> hook) { before_adapter_=std::move(hook); }
+
 ExecutionResult ExecutionGateway::submit_approved_intent(
     const ApprovedIntentEnvelope& envelope,
     const ExecutionContext& context
@@ -78,6 +113,13 @@ ExecutionResult ExecutionGateway::submit_approved_intent(
     }
 
     auto plan = std::move(plan_result.plan);
+    // Stable native plan IDs are an idempotency boundary, including unknown ACK.
+    // Do not send an already tracked plan to the adapter a second time.
+    if (const auto* existing = plan_store_.find(plan.plan_id); existing != nullptr) {
+        return {.ok = false, .plan_id = existing->plan_id, .status = existing->status,
+                .error = "duplicate plan; reconcile existing order state without retry"};
+    }
+
     const auto validation = validator_.validate(plan, context.config);
     if (!validation.ok) {
         publish_reservation_disposition(
@@ -108,6 +150,7 @@ ExecutionResult ExecutionGateway::submit_approved_intent(
     }
 
     auto fill_tracker = FillTracker(plan);
+    if (before_adapter_) before_adapter_(plan);
     const auto adapter_result = adapter_->submit_plan(plan, context);
     auto reports = adapter_->poll_reports();
 
@@ -204,6 +247,13 @@ ExecutionResult ExecutionGateway::submit_approved_decision(
     }
 
     auto plan = std::move(plan_result.plan);
+    // Stable native plan IDs are an idempotency boundary, including unknown ACK.
+    // Do not send an already tracked plan to the adapter a second time.
+    if (const auto* existing = plan_store_.find(plan.plan_id); existing != nullptr) {
+        return {.ok = false, .plan_id = existing->plan_id, .status = existing->status,
+                .error = "duplicate plan; reconcile existing order state without retry"};
+    }
+
     const auto validation = validator_.validate(plan, context.config);
     if (!validation.ok) {
         publish_reservation_disposition(
@@ -234,6 +284,7 @@ ExecutionResult ExecutionGateway::submit_approved_decision(
     }
 
     auto fill_tracker = FillTracker(plan);
+    if (before_adapter_) before_adapter_(plan);
     const auto adapter_result = adapter_->submit_plan(plan, context);
     auto reports = adapter_->poll_reports();
 
@@ -315,6 +366,7 @@ ExecutionResult ExecutionGateway::submit(
             .error = "missing execution adapter"
         };
     }
+    if (before_adapter_) before_adapter_(plan);
     const auto result = adapter_->submit_plan(plan, context);
     return {
         .ok = result.ok,

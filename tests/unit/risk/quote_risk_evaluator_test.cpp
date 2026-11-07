@@ -20,6 +20,8 @@ using trading_engine::state::PriceLevel;
 using trading_engine::strategy::market_making::QuoteIntent;
 using trading_engine::strategy::market_making::QuoteIntentType;
 using trading_engine::strategy::market_making::QuoteSide;
+using trading_engine::strategy::market_making::ProductDirection;
+using trading_engine::strategy::market_making::ProductKind;
 
 [[noreturn]] void fail(const std::string& message) {
     throw std::runtime_error(message);
@@ -133,6 +135,24 @@ QuoteRiskInput input(
         .last_replace_ts_ns = 0,
         .now_ns = now_ns
     };
+}
+
+void mark_terminal_digital(
+    QuoteIntent* q,
+    ProductDirection asset_direction = ProductDirection::Up,
+    ProductDirection winning_direction = ProductDirection::Up
+) {
+    q->product_kind = ProductKind::TerminalDigital5m;
+    q->product_asset_direction = asset_direction;
+    q->product_winning_direction = winning_direction;
+    q->product_external_fair_tick = q->fair_value_tick;
+    q->product_z_score_bps = 1'000;
+    q->product_tau_ms = 120'000;
+    q->product_dynamic_inventory_cap_lots = 100;
+    q->product_opening_allowed = true;
+    q->product_settlement_source_ok = true;
+    q->product_reward_size_lift_allowed = false;
+    q->product_reward_spread_compression_allowed = false;
 }
 
 void expect_decision(
@@ -264,6 +284,32 @@ void QuoteRiskEvaluator_RejectsQuoteCrossingFairValue() {
     );
 }
 
+void QuoteRiskEvaluator_RejectsPostOnlyCrossingBid() {
+    auto q = quote();
+    const auto d = depth();
+    auto p = policy();
+    q.has_ask = false;
+    q.bid.price_tick = d.asks[0].price_tick;
+    q.bid.edge_to_fair_tick = q.fair_value_tick - q.bid.price_tick;
+    expect_decision(
+        input(&q, &d, &p),
+        QuoteRiskDecisionType::RejectPostOnlyCross
+    );
+}
+
+void QuoteRiskEvaluator_RejectsPostOnlyCrossingAsk() {
+    auto q = quote();
+    const auto d = depth();
+    auto p = policy();
+    q.has_bid = false;
+    q.ask.price_tick = d.bids[0].price_tick;
+    q.ask.edge_to_fair_tick = q.ask.price_tick - q.fair_value_tick;
+    expect_decision(
+        input(&q, &d, &p),
+        QuoteRiskDecisionType::RejectPostOnlyCross
+    );
+}
+
 void QuoteRiskEvaluator_RejectsFairValueDeviationBps() {
     auto q = quote();
     const auto d = depth();
@@ -303,8 +349,8 @@ void QuoteRiskEvaluator_AllowsRiskReducingAskThroughFairValue() {
     q.has_bid = false;
     q.target_position_lots = 0;
     q.current_position_lots = 10;
-    q.ask.price_tick = 450'000;
-    q.ask.edge_to_fair_tick = -50'000;
+    q.ask.price_tick = 490'001;
+    q.ask.edge_to_fair_tick = -9'999;
     q.ask.risk_reducing = true;
     q.ask.allow_fair_deviation_exemption = true;
     q.ask.allow_spread_exemption = true;
@@ -450,6 +496,65 @@ void QuoteRiskEvaluator_RejectsLowExternalConfidence() {
     expect_decision(in, QuoteRiskDecisionType::RejectLowExternalConfidence);
 }
 
+void QuoteRiskEvaluator_RejectsTerminalDigitalOpeningGateDisabled() {
+    auto q = quote();
+    mark_terminal_digital(&q);
+    q.product_opening_allowed = false;
+    const auto d = depth();
+    const auto p = policy();
+    expect_decision(
+        input(&q, &d, &p),
+        QuoteRiskDecisionType::RejectInvalidQuote
+    );
+}
+
+void QuoteRiskEvaluator_AllowsTerminalDigitalUnwindWhenOpeningDisabled() {
+    auto q = quote(QuoteIntentType::PassiveUnwind);
+    mark_terminal_digital(&q);
+    q.product_opening_allowed = false;
+    q.has_bid = false;
+    q.target_position_lots = 0;
+    q.current_position_lots = 10;
+    q.ask.quantity_lots = 10;
+    q.ask.price_tick = 490'001;
+    q.ask.edge_to_fair_tick = -9'999;
+    q.ask.risk_reducing = true;
+    q.ask.allow_fair_deviation_exemption = true;
+    q.ask.allow_spread_exemption = true;
+    const auto d = depth();
+    const auto p = policy();
+    auto in = input(&q, &d, &p);
+    in.current_position_lots = 10;
+    expect_decision(in, QuoteRiskDecisionType::Approve);
+}
+
+void QuoteRiskEvaluator_RejectsTerminalDigitalLosingSideHighZ() {
+    auto q = quote();
+    mark_terminal_digital(&q, ProductDirection::Down, ProductDirection::Up);
+    q.product_z_score_bps = 16'000;
+    const auto d = depth();
+    auto p = policy();
+    p.terminal_digital_max_opening_z_bps = 20'000;
+    expect_decision(
+        input(&q, &d, &p),
+        QuoteRiskDecisionType::RejectFairValueDeviation
+    );
+}
+
+void QuoteRiskEvaluator_RejectsTerminalDigitalDynamicCap() {
+    auto q = quote();
+    mark_terminal_digital(&q);
+    q.product_dynamic_inventory_cap_lots = 5;
+    const auto d = depth();
+    const auto p = policy();
+    auto in = input(&q, &d, &p);
+    in.projected_canonical_yes_position_lots = 6;
+    expect_decision(
+        in,
+        QuoteRiskDecisionType::RejectCanonicalExposureLimit
+    );
+}
+
 using TestFn = void (*)();
 
 const std::unordered_map<std::string, TestFn>& tests() {
@@ -468,6 +573,8 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {"QuoteRiskEvaluator_RejectsTightBookSpread", &QuoteRiskEvaluator_RejectsTightBookSpread},
         {"QuoteRiskEvaluator_RejectsWideBookSpread", &QuoteRiskEvaluator_RejectsWideBookSpread},
         {"QuoteRiskEvaluator_RejectsQuoteCrossingFairValue", &QuoteRiskEvaluator_RejectsQuoteCrossingFairValue},
+        {"QuoteRiskEvaluator_RejectsPostOnlyCrossingBid", &QuoteRiskEvaluator_RejectsPostOnlyCrossingBid},
+        {"QuoteRiskEvaluator_RejectsPostOnlyCrossingAsk", &QuoteRiskEvaluator_RejectsPostOnlyCrossingAsk},
         {"QuoteRiskEvaluator_RejectsFairValueDeviationBps", &QuoteRiskEvaluator_RejectsFairValueDeviationBps},
         {"QuoteRiskEvaluator_RejectsFairValueDeviationTick", &QuoteRiskEvaluator_RejectsFairValueDeviationTick},
         {"QuoteRiskEvaluator_AllowsRiskReducingAskThroughFairValue", &QuoteRiskEvaluator_AllowsRiskReducingAskThroughFairValue},
@@ -480,6 +587,10 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {"QuoteRiskEvaluator_RejectsStaleSpot", &QuoteRiskEvaluator_RejectsStaleSpot},
         {"QuoteRiskEvaluator_RejectsCanonicalExposureLimit", &QuoteRiskEvaluator_RejectsCanonicalExposureLimit},
         {"QuoteRiskEvaluator_RejectsLowExternalConfidence", &QuoteRiskEvaluator_RejectsLowExternalConfidence},
+        {"QuoteRiskEvaluator_RejectsTerminalDigitalOpeningGateDisabled", &QuoteRiskEvaluator_RejectsTerminalDigitalOpeningGateDisabled},
+        {"QuoteRiskEvaluator_AllowsTerminalDigitalUnwindWhenOpeningDisabled", &QuoteRiskEvaluator_AllowsTerminalDigitalUnwindWhenOpeningDisabled},
+        {"QuoteRiskEvaluator_RejectsTerminalDigitalLosingSideHighZ", &QuoteRiskEvaluator_RejectsTerminalDigitalLosingSideHighZ},
+        {"QuoteRiskEvaluator_RejectsTerminalDigitalDynamicCap", &QuoteRiskEvaluator_RejectsTerminalDigitalDynamicCap},
         {"ApprovedQuote_PreservesQuoteFields", &ApprovedQuote_PreservesQuoteFields},
         {"ApprovedQuote_IsNotOrder", &ApprovedQuote_IsNotOrder}
     };

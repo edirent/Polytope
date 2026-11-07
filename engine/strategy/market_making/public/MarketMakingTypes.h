@@ -76,6 +76,17 @@ enum class FairValueSourceKind : std::uint8_t {
     ConservativeFallback
 };
 
+enum class ProductKind : std::uint8_t {
+    Generic,
+    TerminalDigital5m
+};
+
+enum class ProductDirection : std::uint8_t {
+    Unknown,
+    Up,
+    Down
+};
+
 enum class NoQuoteReason : std::uint8_t {
     None,
     MissingDepth,

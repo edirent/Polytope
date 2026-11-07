@@ -2,6 +2,7 @@
 
 #include "engine/risk/ledger/RiskLedger.h"
 #include "engine/risk/public/RiskDecision.h"
+#include "engine/risk/public/PortfolioRisk.h"
 #include "engine/signal/public/OpportunityIntent.h"
 
 #include <cstdint>
@@ -48,6 +49,13 @@ public:
     void expire_old(std::uint64_t now_ns);
 
     [[nodiscard]] RiskLedgerSnapshot snapshot() const;
+    // Managed OMS commitments do not expire on a local timer.
+    std::uint64_t reserve_portfolio(const std::string& owner,const std::string& key,const std::vector<PortfolioLeg>& legs);
+    void resize_portfolio(std::uint64_t id,const std::vector<PortfolioLeg>& remaining);
+    void release_portfolio(std::uint64_t id);
+    void bind_actual_quantities(std::uint64_t id,const std::vector<std::pair<std::string,std::int64_t>>& quantities);
+    void restore_portfolio(PortfolioReservation r) {next_portfolio_id_=std::max(next_portfolio_id_,r.id+1);portfolio_keys_.insert(r.owner+":"+r.key);portfolio_.insert_or_assign(r.id,std::move(r));}
+    [[nodiscard]] const std::map<std::uint64_t,PortfolioReservation>& portfolio_reservations() const { return portfolio_; }
 
 private:
     void build_reservation(
@@ -65,6 +73,9 @@ private:
         active_reservation_keys_;
     std::unordered_set<std::string> interned_strings_;
     RiskLedger ledger_;
+    std::map<std::uint64_t,PortfolioReservation> portfolio_;
+    std::unordered_set<std::string> portfolio_keys_;
+    std::uint64_t next_portfolio_id_=1ULL<<62;
 };
 
 }  // namespace trading_engine::risk

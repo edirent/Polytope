@@ -431,6 +431,22 @@ void ExternalFairRuntime_NoTokenMapsToOneMinusYesFair() {
     expect_equal(no.fair_value_tick, 10'000LL - yes.fair_value_tick, "no fair");
 }
 
+void ExternalFairRuntime_TerminalAboveSupported() {
+    constexpr std::int64_t now_ms = 1'000'000;
+    InMemorySpotOracle spot_oracle;
+    spot_oracle.update_sol_book_ticker(71.9, 72.1, now_ms, now_ms);
+    FixedVolProvider vol_provider(0.90, now_ms);
+    auto spec = make_runtime_spec(OutcomeSide::Yes, now_ms);
+    spec.event_type = ExternalFairEventType::TerminalAbove;
+    spec.barrier_price = 72.0;
+
+    const auto result =
+        ExternalFairRuntime{spot_oracle, vol_provider}.compute(spec, now_ms);
+    expect_true(result.ok, "terminal above ok");
+    expect_true(result.fair_value_tick > 4'000, "fair lower");
+    expect_true(result.fair_value_tick < 6'000, "fair upper");
+}
+
 void CanonicalPriceMapper_InvertsNoBook() {
     const auto yes = canonical_yes_top_of_book(
         OutcomeSide::No,
@@ -576,6 +592,7 @@ const std::unordered_map<std::string, TestFn>& tests() {
         {"ExternalFairRuntime_VolOutOfBoundsRejects", &ExternalFairRuntime_VolOutOfBoundsRejects},
         {"ExternalFairRuntime_YesTokenFairEqualsModelFair", &ExternalFairRuntime_YesTokenFairEqualsModelFair},
         {"ExternalFairRuntime_NoTokenMapsToOneMinusYesFair", &ExternalFairRuntime_NoTokenMapsToOneMinusYesFair},
+        {"ExternalFairRuntime_TerminalAboveSupported", &ExternalFairRuntime_TerminalAboveSupported},
         {"CanonicalPriceMapper_InvertsNoBook", &CanonicalPriceMapper_InvertsNoBook},
         {"CanonicalExposureMapper_NoAssetFlipsSign", &CanonicalExposureMapper_NoAssetFlipsSign},
         {"TradableFairBuilder_BlendsTowardExternal", &TradableFairBuilder_BlendsTowardExternal},
